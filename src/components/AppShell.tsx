@@ -79,18 +79,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Menu
               mode="horizontal"
               selectedKeys={
-                pathname.startsWith("/sandboxes") ? ["sandboxes"] : []
+                pathname.startsWith("/templates")
+                  ? ["templates"]
+                  : pathname.startsWith("/sandboxes")
+                    ? ["sandboxes"]
+                    : []
               }
               items={[
                 {
                   key: "sandboxes",
                   label: <Link href="/sandboxes">沙箱</Link>,
                 },
+                {
+                  key: "templates",
+                  label: <Link href="/templates">模板</Link>,
+                },
               ]}
               style={{
                 border: "none",
                 background: "transparent",
-                minWidth: 120,
+                minWidth: 200,
                 lineHeight: "54px",
               }}
             />

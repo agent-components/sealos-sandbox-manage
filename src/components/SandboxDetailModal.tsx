@@ -159,10 +159,19 @@ export function SandboxDetailModal({
                 ),
               },
               {
+                key: "template",
+                label: "模板",
+                children: sandbox.templateId || "—",
+              },
+              {
+                key: "image",
+                label: "镜像",
+                children: sandbox.image || "—",
+              },
+              {
                 key: "spec",
                 label: "当前规格",
-                children: `${sandbox.cpu} 核 · ${memoryLabel(sandbox.memoryGi)} · ${sandbox.diskGi}Gi${sandbox.image ? ` · ${sandbox.image}` : ""
-                  }`,
+                children: `${sandbox.cpu} 核 · ${memoryLabel(sandbox.memoryGi)} · ${sandbox.diskGi}Gi`,
               },
             ]}
           />

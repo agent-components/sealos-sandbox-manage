@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -10,6 +11,7 @@ import {
   Form,
   Input,
   Modal,
+  Select,
   Space,
   Table,
   Typography,
@@ -25,6 +27,7 @@ import {
   memoryLabel,
   type ResourceSpec,
 } from "@/lib/sealos/resources";
+import type { Template } from "@/lib/template/schema";
 
 function canStop(state: Sandbox["state"]) {
   return state === "running" || state === "starting";
@@ -39,8 +42,10 @@ export default function SandboxesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [sandboxes, setSandboxes] = useState<Sandbox[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [resources, setResources] =
     useState<ResourceSpec>(DEFAULT_RESOURCES);
+  const [templateId, setTemplateId] = useState<string | null>(null);
   const [createName, setCreateName] = useState("");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -70,21 +75,61 @@ export default function SandboxesPage() {
     }
   }, [message]);
 
+  const loadTemplates = useCallback(async () => {
+    try {
+      const res = await boatClient.listTemplates();
+      setTemplates(res.templates);
+      return res.templates;
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "加载模板失败");
+      return [] as Template[];
+    }
+  }, [message]);
+
   useEffect(() => {
     void refresh();
+    void loadTemplates();
     const timer = setInterval(() => {
       void refresh();
     }, 5000);
     return () => clearInterval(timer);
-  }, [refresh]);
+  }, [refresh, loadTemplates]);
 
-  function openCreate() {
-    setResources(DEFAULT_RESOURCES);
+  async function openCreate() {
+    const list = await loadTemplates();
+    if (list.length === 0) {
+      message.warning("请先创建模板，再创建沙箱");
+      router.push("/templates");
+      return;
+    }
+    const first = list[0]!;
+    setTemplateId(first.id);
+    setResources({
+      cpu: first.cpu,
+      memoryGi: first.memoryGi,
+      diskGi: first.diskGi,
+    });
     setCreateName("");
     setCreateOpen(true);
   }
 
+  function onSelectTemplate(id: string) {
+    setTemplateId(id);
+    const tpl = templates.find((t) => t.id === id);
+    if (tpl) {
+      setResources({
+        cpu: tpl.cpu,
+        memoryGi: tpl.memoryGi,
+        diskGi: tpl.diskGi,
+      });
+    }
+  }
+
   async function create() {
+    if (!templateId) {
+      message.error("请选择模板");
+      return;
+    }
     const name = createName.trim();
     if (name) {
       if (
@@ -100,7 +145,10 @@ export default function SandboxesPage() {
     setCreating(true);
     try {
       await boatClient.createSandbox({
-        ...resources,
+        templateId,
+        cpu: resources.cpu,
+        memoryGi: resources.memoryGi,
+        diskGi: resources.diskGi,
         ...(name ? { name } : {}),
       });
       setCreateOpen(false);
@@ -151,6 +199,8 @@ export default function SandboxesPage() {
     }
   }
 
+  const selectedTemplate = templates.find((t) => t.id === templateId);
+
   const columns: ColumnsType<Sandbox> = useMemo(
     () => [
       {
@@ -164,6 +214,13 @@ export default function SandboxesPage() {
         ),
       },
       {
+        title: "模板",
+        dataIndex: "templateId",
+        key: "templateId",
+        width: 120,
+        render: (id?: string) => id || "—",
+      },
+      {
         title: "镜像",
         dataIndex: "image",
         key: "image",
@@ -172,7 +229,7 @@ export default function SandboxesPage() {
           <Typography.Text
             type="secondary"
             ellipsis={{ tooltip: image }}
-            style={{ maxWidth: 280 }}
+            style={{ maxWidth: 240 }}
           >
             {image || "—"}
           </Typography.Text>
@@ -181,7 +238,7 @@ export default function SandboxesPage() {
       {
         title: "规格",
         key: "spec",
-        width: 200,
+        width: 180,
         render: (_, sb) => (
           <Typography.Text type="secondary">
             {sb.cpu} 核 · {memoryLabel(sb.memoryGi)} · {sb.diskGi}Gi
@@ -263,10 +320,10 @@ export default function SandboxesPage() {
             沙箱
           </Typography.Title>
           <Typography.Text type="secondary">
-            管理云端沙箱实例 · 状态每 5 秒刷新
+            基于模板创建 · 状态每 5 秒刷新
           </Typography.Text>
         </div>
-        <Button type="primary" onClick={openCreate}>
+        <Button type="primary" onClick={() => void openCreate()}>
           新建沙箱
         </Button>
       </Flex>
@@ -290,7 +347,7 @@ export default function SandboxesPage() {
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description="还没有沙箱"
             >
-              <Button type="primary" onClick={openCreate}>
+              <Button type="primary" onClick={() => void openCreate()}>
                 新建沙箱
               </Button>
             </Empty>
@@ -305,24 +362,37 @@ export default function SandboxesPage() {
         centered
         destroyOnHidden
         width={560}
-        styles={{ body: { minHeight: 280 } }}
+        styles={{ body: { minHeight: 320 } }}
         confirmLoading={creating}
         okText="创建"
         cancelText="取消"
+        okButtonProps={{ disabled: !templateId }}
         onOk={() => void create()}
       >
-        <Typography.Text
-          type="secondary"
-          style={{ display: "block", marginBottom: 16 }}
-        >
-          {resources.cpu} 核 · {memoryLabel(resources.memoryGi)} ·{" "}
-          {resources.diskGi}Gi
-        </Typography.Text>
         <Form layout="vertical" disabled={creating}>
+          <Form.Item
+            label="模板"
+            required
+            extra={
+              selectedTemplate
+                ? `镜像 ${selectedTemplate.image} · 端口 ${selectedTemplate.port}`
+                : undefined
+            }
+          >
+            <Select
+              value={templateId}
+              placeholder="请选择模板"
+              options={templates.map((t) => ({
+                value: t.id,
+                label: `${t.name}（${t.id}）`,
+              }))
+              }
+              onChange={onSelectTemplate}
+            />
+          </Form.Item>
           <Form.Item
             label="沙箱 ID"
             extra="可选。留空则自动生成；仅小写字母、数字和连字符"
-            style={{ marginBottom: 16 }}
           >
             <Input
               value={createName}
@@ -331,12 +401,20 @@ export default function SandboxesPage() {
               onChange={(e) => setCreateName(e.target.value.toLowerCase())}
             />
           </Form.Item>
+          <Form.Item label="规格" style={{ marginBottom: 0 }}>
+            <Typography.Text
+              type="secondary"
+              style={{ display: "block", marginBottom: 8 }}
+            >
+              默认来自模板，可按需调整
+            </Typography.Text>
+            <ResourceConfig
+              value={resources}
+              onChange={setResources}
+              disabled={creating}
+            />
+          </Form.Item>
         </Form>
-        <ResourceConfig
-          value={resources}
-          onChange={setResources}
-          disabled={creating}
-        />
       </Modal>
 
       <SandboxDetailModal
@@ -380,6 +458,13 @@ export default function SandboxesPage() {
           onPressEnter={() => void confirmDelete()}
         />
       </Modal>
+
+      {templates.length === 0 && !loading ? (
+        <Typography.Paragraph type="secondary" style={{ marginTop: 16 }}>
+          还没有模板时无法创建沙箱，请先去{" "}
+          <Link href="/templates">模板</Link> 页面创建。
+        </Typography.Paragraph>
+      ) : null}
     </>
   );
 }
