@@ -2,13 +2,20 @@ import type { SandboxState } from "@/lib/sandbox/schema";
 import { cn } from "@/lib/cn";
 
 const styles: Record<SandboxState, string> = {
-  running: "border-brand/25 bg-brand-soft text-brand-deep",
-  starting: "border-warn/30 bg-warn-soft text-warn",
-  stopped: "border-line bg-canvas text-muted",
-  error: "border-danger/25 bg-danger-soft text-danger",
+  running: "text-success",
+  starting: "text-warning",
+  stopped: "text-gray-500",
+  error: "text-danger",
 };
 
 const labels: Record<SandboxState, string> = {
+  running: "Running",
+  starting: "Starting",
+  stopped: "Stopped",
+  error: "Error",
+};
+
+const labelsZh: Record<SandboxState, string> = {
   running: "运行中",
   starting: "启动中",
   stopped: "已停止",
@@ -19,7 +26,7 @@ export function StateBadge({ state }: { state: SandboxState }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex items-center gap-1.5 text-xs font-medium",
         styles[state],
       )}
     >
@@ -29,7 +36,8 @@ export function StateBadge({ state }: { state: SandboxState }) {
           state === "starting" && "animate-pulse-dot",
         )}
       />
-      {labels[state]}
+      {labelsZh[state]}
+      <span className="sr-only">{labels[state]}</span>
     </span>
   );
 }

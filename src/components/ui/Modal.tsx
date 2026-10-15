@@ -34,7 +34,7 @@ export function Modal({
 
   return (
     <div
-      className="animate-fade fixed inset-0 z-50 flex items-end justify-center bg-ink/30 p-4 backdrop-blur-[2px] sm:items-center"
+      className="animate-fade fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
       onClick={() => {
         if (!closeDisabled) onClose();
       }}
@@ -44,34 +44,37 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         className={cn(
-          "animate-rise w-full max-w-xl rounded-2xl border border-line bg-surface p-6 shadow-[0_24px_64px_rgba(16,32,51,0.14)]",
+          "animate-rise w-full max-w-lg rounded-lg border border-gray-300 bg-background shadow-2xl",
           className,
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-6 flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-4 border-b border-gray-300 px-5 py-4">
           <div>
-            <h2
-              id={titleId}
-              className="text-lg font-semibold tracking-tight text-ink"
-            >
+            <h2 id={titleId} className="text-base font-semibold tracking-tight">
               {title}
             </h2>
             {description ? (
-              <p className="mt-1 font-mono text-xs text-muted">{description}</p>
+              <p className="mt-1 font-mono text-xs text-gray-600">
+                {description}
+              </p>
             ) : null}
           </div>
           <button
             type="button"
             disabled={closeDisabled}
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-sm text-muted transition hover:bg-canvas hover:text-ink disabled:opacity-40"
+            className="text-sm text-gray-500 transition hover:text-foreground disabled:opacity-40"
           >
             关闭
           </button>
         </div>
-        {children}
-        {footer ? <div className="mt-8 flex flex-wrap items-center gap-3">{footer}</div> : null}
+        <div className="px-5 py-5">{children}</div>
+        {footer ? (
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-300 bg-gray-50 px-5 py-3">
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>
   );

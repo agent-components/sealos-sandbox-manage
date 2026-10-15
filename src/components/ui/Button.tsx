@@ -10,18 +10,18 @@ type Props = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const variants: Record<Variant, string> = {
   primary:
-    "border-transparent bg-brand text-white shadow-sm hover:bg-brand-deep disabled:opacity-45",
+    "border-transparent bg-foreground text-background hover:bg-gray-700 disabled:bg-gray-400",
   secondary:
-    "border-line bg-surface text-ink hover:border-line-strong hover:bg-canvas disabled:opacity-45",
+    "border-gray-300 bg-background text-foreground hover:bg-gray-50 disabled:opacity-50",
   ghost:
-    "border-transparent bg-transparent text-muted hover:bg-canvas hover:text-ink disabled:opacity-40",
+    "border-transparent bg-transparent text-gray-600 hover:bg-gray-100 hover:text-foreground disabled:opacity-50",
   danger:
-    "border-danger/30 bg-danger-soft text-danger hover:border-danger/50 disabled:opacity-45",
+    "border-danger/20 bg-danger-soft text-danger hover:bg-danger/10 disabled:opacity-50",
 };
 
 const sizes: Record<Size, string> = {
-  md: "px-4 py-2.5 text-sm",
-  sm: "px-3 py-1.5 text-xs",
+  md: "h-10 px-4 text-sm",
+  sm: "h-8 px-3 text-xs",
 };
 
 export function Button({
@@ -35,7 +35,7 @@ export function Button({
     <button
       type={type}
       className={cn(
-        "inline-flex items-center justify-center rounded-xl border font-semibold tracking-tight transition duration-200 ease-out enabled:active:translate-y-px enabled:hover:-translate-y-px disabled:cursor-not-allowed",
+        "inline-flex items-center justify-center rounded-md border font-medium transition-colors disabled:cursor-not-allowed",
         variants[variant],
         sizes[size],
         className,

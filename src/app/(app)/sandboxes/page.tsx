@@ -65,67 +65,75 @@ export default function SandboxesPage() {
   }
 
   return (
-    <main className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <main>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-[-0.03em] text-ink">
-            沙箱
-          </h1>
-          <p className="mt-2 text-sm text-muted">
-            状态约每 5 秒自动刷新。点击「新建」配置算力并创建。
+          <h1 className="text-2xl font-semibold tracking-tight">沙箱</h1>
+          <p className="mt-1 text-sm text-gray-600">
+            管理云端沙箱实例 · 状态每 5 秒刷新
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <p className="font-mono text-xs text-muted">{sandboxes.length} 台</p>
-          <Button onClick={openCreate}>新建</Button>
-        </div>
+        <Button onClick={openCreate}>新建沙箱</Button>
       </div>
 
-      {error ? <p className="text-sm text-danger">{error}</p> : null}
+      {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
 
-      <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-sm">
+      <div className="overflow-hidden rounded-lg border border-gray-300">
+        <div className="grid grid-cols-[1fr_auto] gap-4 border-b border-gray-300 bg-gray-50 px-4 py-2 text-xs font-medium text-gray-600 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_120px_100px]">
+          <span>名称</span>
+          <span className="hidden sm:block">规格</span>
+          <span className="hidden sm:block">状态</span>
+          <span className="text-right tabular-nums">{sandboxes.length} 台</span>
+        </div>
+
         {loading ? (
-          <p className="animate-pulse-dot px-5 py-12 text-sm text-muted">
-            加载中…
-          </p>
+          <p className="px-4 py-10 text-sm text-gray-600">加载中…</p>
         ) : sandboxes.length === 0 ? (
-          <div className="px-5 py-16 text-center">
-            <p className="text-sm font-medium text-ink">还没有沙箱</p>
-            <p className="mt-2 text-sm text-muted">
-              点击「新建」配置算力并创建第一台。
+          <div className="px-4 py-16 text-center">
+            <p className="text-sm font-medium">还没有沙箱</p>
+            <p className="mt-1 text-sm text-gray-600">
+              创建第一台沙箱以开始使用
             </p>
-            <Button onClick={openCreate} className="mt-6">
-              新建
+            <Button onClick={openCreate} className="mt-5">
+              新建沙箱
             </Button>
           </div>
         ) : (
-          <ul className="divide-y divide-line">
-            {sandboxes.map((sb) => (
+          <ul>
+            {sandboxes.map((sb, i) => (
               <li key={sb.id}>
                 <Link
                   href={`/sandboxes/${sb.id}`}
-                  className="group flex flex-col gap-3 px-5 py-4 transition duration-200 hover:bg-brand-soft/40 sm:flex-row sm:items-center sm:justify-between"
+                  className={`grid grid-cols-[1fr_auto] items-center gap-4 px-4 py-3.5 transition hover:bg-gray-50 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_120px_100px] ${
+                    i < sandboxes.length - 1 ? "border-b border-gray-300" : ""
+                  }`}
                 >
-                  <div className="min-w-0 space-y-1">
-                    <p className="font-mono text-sm font-medium tracking-tight text-ink transition group-hover:text-brand-deep">
+                  <div className="min-w-0">
+                    <p className="truncate font-mono text-sm font-medium">
                       {sb.id}
                     </p>
-                    <p className="truncate text-xs text-muted">
+                    <p className="mt-0.5 truncate text-xs text-gray-500">
                       {sb.publicUrl ?? "公网地址准备中…"}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
-                    <span className="font-mono">
-                      {sb.cpu} 核 · {memoryLabel(sb.memoryGi)} · {sb.diskGi}Gi
-                    </span>
+                  <p className="hidden font-mono text-xs text-gray-600 sm:block">
+                    {sb.cpu} 核 · {memoryLabel(sb.memoryGi)} · {sb.diskGi}Gi
+                  </p>
+                  <div className="hidden sm:block">
                     <StateBadge state={sb.state} />
                   </div>
+                  <div className="flex justify-end sm:hidden">
+                    <StateBadge state={sb.state} />
+                  </div>
+                  <span className="hidden text-right text-xs text-gray-400 sm:block">
+                    查看 →
+                  </span>
                 </Link>
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </div>
 
       {open ? (
         <Modal
@@ -136,9 +144,9 @@ export default function SandboxesPage() {
           closeDisabled={creating}
           footer={
             <>
-              <Button onClick={create} disabled={creating}>
-                {creating ? "创建中…" : "立即创建"}
-              </Button>
+              {formError ? (
+                <p className="mr-auto text-sm text-danger">{formError}</p>
+              ) : null}
               <Button
                 variant="secondary"
                 disabled={creating}
@@ -146,9 +154,9 @@ export default function SandboxesPage() {
               >
                 取消
               </Button>
-              {formError ? (
-                <p className="text-sm text-danger">{formError}</p>
-              ) : null}
+              <Button onClick={create} disabled={creating}>
+                {creating ? "创建中…" : "创建"}
+              </Button>
             </>
           }
         >

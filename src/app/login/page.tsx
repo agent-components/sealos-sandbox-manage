@@ -30,33 +30,30 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative mx-auto flex min-h-full w-full max-w-lg flex-col justify-center px-6 py-20">
+    <main className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-6 py-16">
       <div className="animate-rise">
         <Brand large />
       </div>
-      <form
-        onSubmit={onSubmit}
-        className="animate-rise-late mt-14 space-y-5 rounded-2xl border border-line bg-surface/90 p-6 shadow-sm backdrop-blur-sm sm:p-8"
-      >
-        <label className="block space-y-2">
-          <span className="text-sm text-muted">用户名</span>
+      <form onSubmit={onSubmit} className="animate-rise mt-10 space-y-4">
+        <label className="block space-y-1.5">
+          <span className="text-sm text-gray-600">用户名</span>
           <Input
             required
             autoComplete="username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="请输入用户名"
+            placeholder="用户名"
           />
         </label>
-        <label className="block space-y-2">
-          <span className="text-sm text-muted">密码</span>
+        <label className="block space-y-1.5">
+          <span className="text-sm text-gray-600">密码</span>
           <Input
             required
             type="password"
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="请输入密码"
+            placeholder="密码"
           />
         </label>
         {error ? <p className="text-sm text-danger">{error}</p> : null}
@@ -65,7 +62,7 @@ export default function LoginPage() {
           className="w-full"
           disabled={loading || !username.trim() || !password}
         >
-          {loading ? "登录中…" : "进入控制台"}
+          {loading ? "登录中…" : "登录"}
         </Button>
       </form>
     </main>

@@ -10,6 +10,7 @@
     "db:init": "node --env-file=.env.local scripts/init-db.mjs"
   },
   "dependencies": {
+    "geist": "^1.7.2",
     "mongodb": "^7.7.0",
     "next": "16.4.1",
     "react": "19.3.0",

@@ -5,7 +5,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <Suspense
       fallback={
-        <main className="mx-auto flex min-h-full max-w-5xl items-center px-6 py-20 text-muted">
+        <main className="mx-auto flex min-h-full max-w-5xl items-center px-6 py-24 text-base text-muted">
           加载中…
         </main>
       }

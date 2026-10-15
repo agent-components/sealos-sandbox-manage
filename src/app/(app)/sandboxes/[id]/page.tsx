@@ -68,7 +68,7 @@ export default function SandboxDetailPage() {
 
   if (!sandbox && !error) {
     return (
-      <p className="animate-pulse-dot text-sm text-muted">加载中…</p>
+      <p className="animate-pulse-dot text-[15px] text-muted">加载中…</p>
     );
   }
 
@@ -77,18 +77,18 @@ export default function SandboxDetailPage() {
       <div>
         <Link
           href="/sandboxes"
-          className="text-sm text-muted transition hover:text-ink"
+          className="inline-flex items-center gap-1 text-[15px] text-brand transition hover:opacity-80"
         >
-          ← 返回沙箱列表
+          ‹ 沙箱
         </Link>
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          <h1 className="font-mono text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <h1 className="font-mono text-[28px] font-semibold tracking-tight text-ink sm:text-[32px]">
             {id}
           </h1>
           {sandbox ? <StateBadge state={sandbox.state} /> : null}
         </div>
         {sandbox ? (
-          <p className="mt-3 font-mono text-xs text-muted">
+          <p className="mt-2 font-mono text-[14px] text-muted">
             {sandbox.cpu} 核 · {memoryLabel(sandbox.memoryGi)} · {sandbox.diskGi}
             Gi
             {sandbox.image ? ` · ${sandbox.image}` : ""}
@@ -96,50 +96,52 @@ export default function SandboxDetailPage() {
         ) : null}
       </div>
 
-      {error ? <p className="text-sm text-danger">{error}</p> : null}
+      {error ? <p className="text-[15px] text-danger">{error}</p> : null}
 
       {sandbox ? (
         <>
-          <section className="space-y-4 rounded-2xl border border-line bg-surface p-6 shadow-sm">
-            <h2 className="text-sm font-medium tracking-wide text-muted">
+          <section>
+            <p className="mb-2 px-1 text-[13px] font-medium uppercase tracking-wide text-muted">
               公网地址
-            </h2>
-            {sandbox.publicUrl ? (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <a
-                  href={sandbox.publicUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="break-all font-mono text-sm text-brand underline-offset-4 hover:underline"
-                >
-                  {sandbox.publicUrl}
-                </a>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() =>
-                    void navigator.clipboard.writeText(sandbox.publicUrl!)
-                  }
-                >
-                  复制
-                </Button>
-              </div>
-            ) : (
-              <p className="text-sm text-muted">
-                尚未就绪，进入运行中后会自动出现。
-              </p>
-            )}
-            <p className="text-xs leading-relaxed text-muted">
-              容器内 API 请直连该地址。本控制台不代理命令执行。
             </p>
+            <div className="panel space-y-3 px-5 py-5">
+              {sandbox.publicUrl ? (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <a
+                    href={sandbox.publicUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="break-all font-mono text-[15px] text-brand hover:underline"
+                  >
+                    {sandbox.publicUrl}
+                  </a>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      void navigator.clipboard.writeText(sandbox.publicUrl!)
+                    }
+                  >
+                    复制
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-[15px] text-muted">
+                  尚未就绪，进入运行中后会自动出现
+                </p>
+              )}
+              <p className="text-[13px] leading-relaxed text-muted">
+                容器内 API 请直连该地址。本控制台不代理命令执行。
+              </p>
+            </div>
           </section>
 
-          <section className="space-y-6 rounded-2xl border border-line bg-surface p-6 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-medium tracking-wide text-muted">
+          <section>
+            <div className="mb-2 flex items-center justify-between px-1">
+              <p className="text-[13px] font-medium uppercase tracking-wide text-muted">
                 资源配置
-              </h2>
-              <span className="font-mono text-xs text-muted">
+              </p>
+              <span className="font-mono text-[12px] text-muted">
                 {resources.cpu} 核 · {memoryLabel(resources.memoryGi)} ·{" "}
                 {resources.diskGi}Gi
               </span>
@@ -149,21 +151,23 @@ export default function SandboxDetailPage() {
               onChange={setResources}
               disabled={busy !== null}
             />
-            <Button
-              disabled={busy !== null || !dirty}
-              onClick={() =>
-                run("update", () => boatClient.updateSandbox(id, resources))
-              }
-            >
-              {busy === "update" ? "更新中…" : "应用配置"}
-            </Button>
+            <div className="mt-4 flex justify-end">
+              <Button
+                disabled={busy !== null || !dirty}
+                onClick={() =>
+                  run("update", () => boatClient.updateSandbox(id, resources))
+                }
+              >
+                {busy === "update" ? "更新中…" : "应用配置"}
+              </Button>
+            </div>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-sm font-medium tracking-wide text-muted">
+          <section>
+            <p className="mb-2 px-1 text-[13px] font-medium uppercase tracking-wide text-muted">
               生命周期
-            </h2>
-            <div className="flex flex-wrap gap-2">
+            </p>
+            <div className="panel flex flex-wrap gap-2 p-4">
               <Button
                 variant="secondary"
                 disabled={busy !== null}
