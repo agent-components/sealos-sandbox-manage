@@ -1,11 +1,11 @@
 "use client";
 
+import { InputNumber, Slider } from "antd";
 import {
   CPU_OPTIONS,
   MEMORY_OPTIONS,
   type ResourceSpec,
 } from "@/lib/sealos/resources";
-import { Input } from "@/components/ui/Input";
 
 type Props = {
   value: ResourceSpec;
@@ -25,87 +25,79 @@ export function ResourceConfig({ value, onChange, disabled }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <div className="flex items-baseline justify-between">
-          <label className="text-sm font-medium">CPU</label>
+      <div>
+        <div className="mb-2 flex items-baseline justify-between">
+          <span className="text-sm font-medium">CPU</span>
           <span className="font-mono text-sm text-gray-600">
             {value.cpu} 核
           </span>
         </div>
-        <input
-          type="range"
+        <Slider
           min={0}
           max={CPU_OPTIONS.length - 1}
           step={1}
           disabled={disabled}
           value={cpuIndex}
-          onChange={(e) =>
+          tooltip={{
+            formatter: (i) => `${CPU_OPTIONS[i ?? 0]} 核`,
+          }}
+          marks={Object.fromEntries(
+            CPU_OPTIONS.map((c, i) => [i, String(c)]),
+          )}
+          onChange={(i) =>
             onChange({
               ...value,
-              cpu: CPU_OPTIONS[Number(e.target.value)]!,
+              cpu: CPU_OPTIONS[i]!,
             })
           }
-          className="slider"
         />
-        <div className="flex justify-between font-mono text-[11px] text-gray-500">
-          {CPU_OPTIONS.map((c) => (
-            <span key={c}>{c}</span>
-          ))}
-        </div>
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-baseline justify-between">
-          <label className="text-sm font-medium">内存</label>
+      <div>
+        <div className="mb-2 flex items-baseline justify-between">
+          <span className="text-sm font-medium">内存</span>
           <span className="font-mono text-sm text-gray-600">
             {MEMORY_OPTIONS[memoryIndex]?.label}
           </span>
         </div>
-        <input
-          type="range"
+        <Slider
           min={0}
           max={MEMORY_OPTIONS.length - 1}
           step={1}
           disabled={disabled}
           value={memoryIndex}
-          onChange={(e) =>
+          tooltip={{
+            formatter: (i) => MEMORY_OPTIONS[i ?? 0]?.label,
+          }}
+          marks={Object.fromEntries(
+            MEMORY_OPTIONS.map((m, i) => [i, m.label]),
+          )}
+          onChange={(i) =>
             onChange({
               ...value,
-              memoryGi: MEMORY_OPTIONS[Number(e.target.value)]!.gi,
+              memoryGi: MEMORY_OPTIONS[i]!.gi,
             })
           }
-          className="slider"
         />
-        <div className="flex justify-between font-mono text-[11px] text-gray-500">
-          {MEMORY_OPTIONS.map((m) => (
-            <span key={m.label}>{m.label}</span>
-          ))}
-        </div>
       </div>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">磁盘</label>
-        <div className="flex items-center gap-2">
-          <Input
-            type="number"
-            min={1}
-            max={1000}
-            step={1}
-            disabled={disabled}
-            value={value.diskGi}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                diskGi: Math.min(
-                  1000,
-                  Math.max(1, Number(e.target.value) || 1),
-                ),
-              })
-            }
-            className="w-28"
-          />
-          <span className="text-sm text-gray-600">Gi</span>
-        </div>
+      <div>
+        <div className="mb-2 text-sm font-medium">磁盘</div>
+        <InputNumber
+          min={1}
+          max={1000}
+          step={1}
+          disabled={disabled}
+          value={value.diskGi}
+          addonAfter="Gi"
+          style={{ width: 160 }}
+          onChange={(v) =>
+            onChange({
+              ...value,
+              diskGi: Math.min(1000, Math.max(1, Number(v) || 1)),
+            })
+          }
+        />
       </div>
     </div>
   );

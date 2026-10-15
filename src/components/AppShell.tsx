@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Button, Layout, Space, Typography } from "antd";
 import { Brand } from "@/components/Brand";
-import { Button } from "@/components/ui/Button";
 import { boatClient, type BoatUser } from "@/lib/client";
+
+const { Header, Content } = Layout;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -48,37 +50,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-full">
-      <header className="border-b border-gray-300">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
-          <div className="flex items-center gap-6">
-            <Link href="/sandboxes">
-              <Brand />
-            </Link>
-            <nav className="hidden items-center gap-1 sm:flex">
-              <Link
-                href="/sandboxes"
-                className={`rounded-md px-3 py-1.5 text-sm transition ${
-                  pathname.startsWith("/sandboxes")
-                    ? "bg-gray-100 font-medium text-foreground"
-                    : "text-gray-600 hover:text-foreground"
-                }`}
-              >
-                沙箱
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600">{user?.username}</span>
-            <Button variant="secondary" size="sm" onClick={logout}>
-              退出
-            </Button>
-          </div>
-        </div>
-      </header>
-      <div className="mx-auto w-full max-w-5xl px-6 py-10">
-        <div className="animate-rise">{children}</div>
-      </div>
-    </div>
+    <Layout className="min-h-full bg-white">
+      <Header className="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-6 leading-none">
+        <Space size={24}>
+          <Link href="/sandboxes">
+            <Brand />
+          </Link>
+          <Link
+            href="/sandboxes"
+            className={`rounded px-2 py-1 text-sm ${pathname.startsWith("/sandboxes")
+                ? "bg-gray-100 font-medium text-black"
+                : "text-gray-600"
+              }`}
+          >
+            沙箱
+          </Link>
+        </Space>
+        <Space>
+          <Typography.Text type="secondary">{user?.username}</Typography.Text>
+          <Button size="small" onClick={logout}>
+            退出
+          </Button>
+        </Space>
+      </Header>
+      <Content className="mx-auto w-full max-w-5xl px-6 py-8">{children}</Content>
+    </Layout>
   );
 }
