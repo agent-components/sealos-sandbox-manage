@@ -9,7 +9,7 @@ const display = Sora({
 });
 
 const mono = JetBrains_Mono({
-  variable: "--font-mono",
+  variable: "--font-code",
   subsets: ["latin"],
   weight: ["400", "500"],
 });

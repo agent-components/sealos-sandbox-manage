@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Brand } from "@/components/Brand";
+import { Button } from "@/components/ui/Button";
 import { boatClient, type BoatUser } from "@/lib/client";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -40,8 +41,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (!ready) {
     return (
-      <main className="mx-auto flex min-h-full max-w-5xl items-center px-6 py-20 text-[var(--fg-muted)]">
-        <span className="animate-pulse-soft">正在进入控制台…</span>
+      <main className="mx-auto flex min-h-full max-w-5xl items-center px-6 py-20 text-muted">
+        <span className="animate-pulse-dot">正在进入控制台…</span>
       </main>
     );
   }
@@ -50,22 +51,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-6 py-8">
-      <header className="mb-10 flex items-center justify-between gap-4 border-b border-[var(--border)] pb-5">
+      <header className="mb-10 flex items-center justify-between gap-4 border-b border-line pb-5">
         <Link href="/sandboxes" className="transition hover:opacity-90">
           <Brand />
         </Link>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] py-1 pl-1 pr-3">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-glow)] text-xs font-semibold text-[var(--accent)]">
+          <div className="flex items-center gap-2 rounded-full border border-line bg-surface py-1 pl-1 pr-3 shadow-sm">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand">
               {initial}
             </span>
-            <span className="text-sm text-[var(--fg-muted)]">
-              {user?.username}
-            </span>
+            <span className="text-sm text-muted">{user?.username}</span>
           </div>
-          <button type="button" onClick={logout} className="btn-ghost !py-1.5 !px-3 text-sm">
+          <Button variant="secondary" size="sm" onClick={logout}>
             退出
-          </button>
+          </Button>
         </div>
       </header>
       <div className="animate-rise">{children}</div>

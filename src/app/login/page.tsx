@@ -3,6 +3,8 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Brand } from "@/components/Brand";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { boatClient } from "@/lib/client";
 
 export default function LoginPage() {
@@ -34,41 +36,37 @@ export default function LoginPage() {
       </div>
       <form
         onSubmit={onSubmit}
-        className="animate-rise-delay mt-14 space-y-5"
+        className="animate-rise-late mt-14 space-y-5 rounded-2xl border border-line bg-surface/90 p-6 shadow-sm backdrop-blur-sm sm:p-8"
       >
         <label className="block space-y-2">
-          <span className="text-sm text-[var(--fg-muted)]">用户名</span>
-          <input
+          <span className="text-sm text-muted">用户名</span>
+          <Input
             required
             autoComplete="username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="input-field"
             placeholder="请输入用户名"
           />
         </label>
         <label className="block space-y-2">
-          <span className="text-sm text-[var(--fg-muted)]">密码</span>
-          <input
+          <span className="text-sm text-muted">密码</span>
+          <Input
             required
             type="password"
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="input-field"
             placeholder="请输入密码"
           />
         </label>
-        {error ? (
-          <p className="text-sm text-[var(--danger)]">{error}</p>
-        ) : null}
-        <button
+        {error ? <p className="text-sm text-danger">{error}</p> : null}
+        <Button
           type="submit"
+          className="w-full"
           disabled={loading || !username.trim() || !password}
-          className="btn-primary w-full"
         >
           {loading ? "登录中…" : "进入控制台"}
-        </button>
+        </Button>
       </form>
     </main>
   );

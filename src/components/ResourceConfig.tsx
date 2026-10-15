@@ -5,6 +5,7 @@ import {
   MEMORY_OPTIONS,
   type ResourceSpec,
 } from "@/lib/sealos/resources";
+import { Input } from "@/components/ui/Input";
 
 type Props = {
   value: ResourceSpec;
@@ -23,16 +24,14 @@ export function ResourceConfig({ value, onChange, disabled }: Props) {
   );
 
   return (
-    <div className="space-y-7">
-      <div className="grid grid-cols-[3.5rem_1fr] items-center gap-x-5 gap-y-2 sm:grid-cols-[4.5rem_1fr]">
-        <span className="text-sm text-[var(--fg-muted)]">CPU</span>
+    <div className="space-y-8">
+      <div className="grid grid-cols-[3.5rem_1fr] items-center gap-x-5 sm:grid-cols-[4.5rem_1fr]">
+        <span className="text-sm text-muted">CPU</span>
         <div className="space-y-2.5">
-          <div className="flex items-baseline justify-between">
-            <span className="font-mono text-sm text-[var(--accent)]">
-              {value.cpu}
-              <span className="ml-1 text-[var(--fg-muted)]">核</span>
-            </span>
-          </div>
+          <p className="font-mono text-sm text-brand">
+            {value.cpu}
+            <span className="ml-1 text-muted">核</span>
+          </p>
           <input
             type="range"
             min={0}
@@ -46,9 +45,9 @@ export function ResourceConfig({ value, onChange, disabled }: Props) {
                 cpu: CPU_OPTIONS[Number(e.target.value)]!,
               })
             }
-            className="resource-range"
+            className="slider"
           />
-          <div className="flex justify-between font-mono text-[10px] text-[var(--fg-muted)] sm:text-[11px]">
+          <div className="flex justify-between font-mono text-[10px] text-muted sm:text-[11px]">
             {CPU_OPTIONS.map((c) => (
               <span key={c}>{c}</span>
             ))}
@@ -56,14 +55,12 @@ export function ResourceConfig({ value, onChange, disabled }: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-[3.5rem_1fr] items-center gap-x-5 gap-y-2 sm:grid-cols-[4.5rem_1fr]">
-        <span className="text-sm text-[var(--fg-muted)]">内存</span>
+      <div className="grid grid-cols-[3.5rem_1fr] items-center gap-x-5 sm:grid-cols-[4.5rem_1fr]">
+        <span className="text-sm text-muted">内存</span>
         <div className="space-y-2.5">
-          <div className="flex items-baseline justify-between">
-            <span className="font-mono text-sm text-[var(--accent)]">
-              {MEMORY_OPTIONS[memoryIndex]?.label}
-            </span>
-          </div>
+          <p className="font-mono text-sm text-brand">
+            {MEMORY_OPTIONS[memoryIndex]?.label}
+          </p>
           <input
             type="range"
             min={0}
@@ -77,9 +74,9 @@ export function ResourceConfig({ value, onChange, disabled }: Props) {
                 memoryGi: MEMORY_OPTIONS[Number(e.target.value)]!.gi,
               })
             }
-            className="resource-range"
+            className="slider"
           />
-          <div className="flex justify-between font-mono text-[10px] text-[var(--fg-muted)] sm:text-[11px]">
+          <div className="flex justify-between font-mono text-[10px] text-muted sm:text-[11px]">
             {MEMORY_OPTIONS.map((m) => (
               <span key={m.label}>{m.label}</span>
             ))}
@@ -88,9 +85,9 @@ export function ResourceConfig({ value, onChange, disabled }: Props) {
       </div>
 
       <div className="grid grid-cols-[3.5rem_1fr] items-center gap-x-5 sm:grid-cols-[4.5rem_1fr]">
-        <span className="text-sm text-[var(--fg-muted)]">磁盘</span>
+        <span className="text-sm text-muted">磁盘</span>
         <div className="flex items-center gap-2">
-          <input
+          <Input
             type="number"
             min={1}
             max={1000}
@@ -106,9 +103,9 @@ export function ResourceConfig({ value, onChange, disabled }: Props) {
                 ),
               })
             }
-            className="input-field !w-28"
+            className="w-28"
           />
-          <span className="text-sm text-[var(--fg-muted)]">Gi</span>
+          <span className="text-sm text-muted">Gi</span>
         </div>
       </div>
     </div>
