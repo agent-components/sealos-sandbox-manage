@@ -16,8 +16,8 @@ export type CreateSandboxBody = {
 
 export type CreateTemplateBody = Omit<
   Template,
-  "createdAt" | "updatedAt"
->;
+  "id" | "createdAt" | "updatedAt"
+> & { id?: string };
 
 export type UpdateTemplateBody = Partial<
   Omit<CreateTemplateBody, "id">

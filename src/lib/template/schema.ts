@@ -31,6 +31,12 @@ export const TemplateStorageSchema = z.object({
   }),
 });
 
+/** 对齐 Sealos CreateLaunchpadRequest.configMap（path + value） */
+export const TemplateConfigMapSchema = z.object({
+  path: z.string().min(1).max(256),
+  value: z.string().max(1024 * 512).default(""),
+});
+
 /** 对齐 Sealos ImageSchema.imageRegistry */
 export const TemplateImageRegistrySchema = z.object({
   username: z.string().min(1),
@@ -57,6 +63,7 @@ export const TemplateSchema = z.object({
   ports: z.array(TemplatePortSchema).min(1),
   env: z.array(TemplateEnvSchema).default([]),
   storage: z.array(TemplateStorageSchema).default([]),
+  configMap: z.array(TemplateConfigMapSchema).default([]),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
 });
@@ -65,9 +72,11 @@ export type Template = z.infer<typeof TemplateSchema>;
 export type TemplatePort = z.infer<typeof TemplatePortSchema>;
 export type TemplateEnv = z.infer<typeof TemplateEnvSchema>;
 export type TemplateStorage = z.infer<typeof TemplateStorageSchema>;
+export type TemplateConfigMap = z.infer<typeof TemplateConfigMapSchema>;
 
 export const CreateTemplateSchema = z.object({
-  id: slugSchema,
+  /** 可省略；省略时由服务端生成随机英文 ID */
+  id: slugSchema.optional(),
   name: z.string().min(1).max(64),
   description: z.string().max(200).optional(),
   image: z.string().min(1).max(256),
@@ -81,9 +90,8 @@ export const CreateTemplateSchema = z.object({
     .min(1)
     .default([{ number: 80, protocol: "http", isPublic: true }]),
   env: z.array(TemplateEnvSchema).default([]),
-  storage: z
-    .array(TemplateStorageSchema)
-    .default([{ name: "data", path: "/data", size: "3Gi" }]),
+  storage: z.array(TemplateStorageSchema).default([]),
+  configMap: z.array(TemplateConfigMapSchema).default([]),
 });
 
 export const UpdateTemplateSchema = CreateTemplateSchema.omit({
@@ -98,10 +106,27 @@ export function defaultTemplateStorage(): TemplateStorage[] {
   return [{ name: "data", path: "/data", size: "3Gi" }];
 }
 
+/** 解析 Sealos size 字符串（如 3Gi、1Ti）为 Gi 数值 */
+export function parseSizeToGi(size: string | undefined): number {
+  const raw = String(size ?? "3Gi").trim();
+  const gi = raw.match(/^(\d+(?:\.\d+)?)\s*Gi$/i);
+  if (gi) return Math.max(1, Math.min(1000, Math.round(Number(gi[1]))));
+  const ti = raw.match(/^(\d+(?:\.\d+)?)\s*Ti$/i);
+  if (ti) {
+    return Math.max(1, Math.min(1000, Math.round(Number(ti[1]) * 1024)));
+  }
+  const n = Number(raw);
+  if (!Number.isNaN(n) && n > 0) {
+    return Math.max(1, Math.min(1000, Math.round(n)));
+  }
+  return 3;
+}
+
+export function formatSizeGi(gi: number): string {
+  return `${Math.max(1, Math.min(1000, Math.round(gi) || 1))}Gi`;
+}
+
 /** 从 storage 列表取首个 Gi 数值，供创建沙箱时覆盖磁盘 */
 export function primaryDiskGi(storage: TemplateStorage[] | undefined): number {
-  const raw = storage?.[0]?.size ?? "3Gi";
-  const m = String(raw).match(/^(\d+(?:\.\d+)?)\s*Gi$/i);
-  if (m) return Math.max(1, Math.min(1000, Math.round(Number(m[1]))));
-  return 3;
+  return parseSizeToGi(storage?.[0]?.size);
 }

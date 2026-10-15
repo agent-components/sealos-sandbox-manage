@@ -88,13 +88,13 @@ export function createLaunchpadClient(opts: LaunchpadClientOptions) {
         input.resources?.diskGi ?? primaryDiskGi(template.storage);
 
       const storage =
-        template.storage.length > 0
+        (template.storage ?? []).length > 0
           ? template.storage.map((s, i) =>
               i === 0 && input.resources?.diskGi
                 ? { ...s, size: `${diskGi}Gi` }
                 : s,
             )
-          : [{ name: "data", path: "/data", size: `${diskGi}Gi` }];
+          : [];
 
       const userEnv = (template.env ?? []).filter(
         (e) => !["BOAT_SANDBOX", "BOAT_USER", "BOAT_TEMPLATE"].includes(e.name),
@@ -136,7 +136,12 @@ export function createLaunchpadClient(opts: LaunchpadClientOptions) {
           ...userEnv.map((e) => ({ name: e.name, value: e.value ?? "" })),
         ],
         storage,
-        configMap: [],
+        configMap: (template.configMap ?? [])
+          .filter((c) => c.path.trim())
+          .map((c) => ({
+            path: c.path.trim(),
+            value: c.value ?? "",
+          })),
       };
 
       return launchpadFetch<LaunchpadApp>(

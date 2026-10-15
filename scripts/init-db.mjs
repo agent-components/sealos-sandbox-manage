@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { MongoClient } from "mongodb";
 
 const uri = process.env.MONGODB_URI;
@@ -10,6 +11,16 @@ const defaultPort = Number(process.env.SEALOS_DEFAULT_PORT ?? "80") || 80;
 if (!uri) {
   console.error("请设置 MONGODB_URI");
   process.exit(1);
+}
+
+function createTemplateId() {
+  const alphabet = "abcdefghijklmnopqrstuvwxyz";
+  const bytes = randomBytes(10);
+  let id = "tpl-";
+  for (let i = 0; i < 10; i++) {
+    id += alphabet[bytes[i] % alphabet.length];
+  }
+  return id;
 }
 
 const client = new MongoClient(uri);
@@ -42,8 +53,9 @@ try {
   await templates.createIndex({ id: 1 }, { unique: true });
   await templates.deleteMany({});
   const now = new Date();
+  const templateId = createTemplateId();
   await templates.insertOne({
-    id: "nginx",
+    id: templateId,
     name: "Nginx",
     description: "默认 Web 服务模板",
     image: defaultImage,
@@ -54,11 +66,12 @@ try {
     replicas: 1,
     ports: [{ number: defaultPort, protocol: "http", isPublic: true }],
     env: [],
-    storage: [{ name: "data", path: "/data", size: "3Gi" }],
+    storage: [],
+    configMap: [],
     createdAt: now,
     updatedAt: now,
   });
-  console.log(`已写入默认模板 nginx（镜像 ${defaultImage}）`);
+  console.log(`已写入默认模板 ${templateId}（镜像 ${defaultImage}）`);
 
   console.log(
     "集合：",

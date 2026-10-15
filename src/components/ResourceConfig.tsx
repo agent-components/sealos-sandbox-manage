@@ -1,6 +1,6 @@
 "use client";
 
-import { Form, InputNumber, Slider } from "antd";
+import { Flex, InputNumber, Slider, Typography } from "antd";
 import {
   CPU_OPTIONS,
   MEMORY_OPTIONS,
@@ -11,9 +11,33 @@ type Props = {
   value: ResourceSpec;
   onChange: (next: ResourceSpec) => void;
   disabled?: boolean;
+  /** Sealos quota 不含磁盘；模板侧由独立 storage 配置。沙箱创建/改配可保留。 */
+  showDisk?: boolean;
 };
 
-export function ResourceConfig({ value, onChange, disabled }: Props) {
+function FieldLabel({
+  title,
+  value,
+}: {
+  title: string;
+  value: string;
+}) {
+  return (
+    <Flex align="baseline" justify="space-between" style={{ marginBottom: 8 }}>
+      <Typography.Text style={{ color: "rgba(0,0,0,0.88)" }}>{title}</Typography.Text>
+      <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+        {value}
+      </Typography.Text>
+    </Flex>
+  );
+}
+
+export function ResourceConfig({
+  value,
+  onChange,
+  disabled,
+  showDisk = true,
+}: Props) {
   const cpuIndex = Math.max(
     0,
     CPU_OPTIONS.findIndex((c) => c === value.cpu),
@@ -25,12 +49,18 @@ export function ResourceConfig({ value, onChange, disabled }: Props) {
   const memoryLast = MEMORY_OPTIONS.length - 1;
 
   return (
-    <Form layout="vertical" disabled={disabled}>
-      <Form.Item
-        label="CPU"
-        extra={`${value.cpu} 核`}
-        style={{ marginBottom: 20 }}
-      >
+    <div
+      className="resource-config"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 28,
+        pointerEvents: disabled ? "none" : undefined,
+        opacity: disabled ? 0.55 : 1,
+      }}
+    >
+      <div>
+        <FieldLabel title="CPU" value={`${value.cpu} 核`} />
         <Slider
           min={0}
           max={CPU_OPTIONS.length - 1}
@@ -50,13 +80,13 @@ export function ResourceConfig({ value, onChange, disabled }: Props) {
             })
           }
         />
-      </Form.Item>
+      </div>
 
-      <Form.Item
-        label="内存"
-        extra={MEMORY_OPTIONS[memoryIndex]?.label}
-        style={{ marginBottom: 20 }}
-      >
+      <div>
+        <FieldLabel
+          title="内存"
+          value={MEMORY_OPTIONS[memoryIndex]?.label ?? `${value.memoryGi}G`}
+        />
         <Slider
           min={0}
           max={memoryLast}
@@ -74,24 +104,27 @@ export function ResourceConfig({ value, onChange, disabled }: Props) {
             })
           }
         />
-      </Form.Item>
+      </div>
 
-      <Form.Item label="磁盘" style={{ marginBottom: 0 }}>
-        <InputNumber
-          min={1}
-          max={1000}
-          step={1}
-          value={value.diskGi}
-          addonAfter="Gi"
-          style={{ width: 160 }}
-          onChange={(v) =>
-            onChange({
-              ...value,
-              diskGi: Math.min(1000, Math.max(1, Number(v) || 1)),
-            })
-          }
-        />
-      </Form.Item>
-    </Form>
+      {showDisk ? (
+        <div>
+          <FieldLabel title="本地存储" value={`${value.diskGi} Gi`} />
+          <InputNumber
+            min={1}
+            max={1000}
+            step={1}
+            value={value.diskGi}
+            addonAfter="Gi"
+            style={{ width: 160 }}
+            onChange={(v) =>
+              onChange({
+                ...value,
+                diskGi: Math.min(1000, Math.max(1, Number(v) || 1)),
+              })
+            }
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }

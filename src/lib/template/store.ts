@@ -2,6 +2,7 @@ import type { Document } from "mongodb";
 import { getCollection } from "@/lib/db/mongo";
 import type {
   Template,
+  TemplateConfigMap,
   TemplateEnv,
   TemplatePort,
   TemplateStorage,
@@ -24,6 +25,7 @@ type TemplateDoc = Document & {
   ports: TemplatePort[];
   env: TemplateEnv[];
   storage: TemplateStorage[];
+  configMap: TemplateConfigMap[];
   createdAt: Date;
   updatedAt: Date;
 };
@@ -43,9 +45,8 @@ function toTemplate(doc: TemplateDoc): Template {
       ? doc.ports
       : [{ number: 80, protocol: "http", isPublic: true }],
     env: doc.env ?? [],
-    storage: doc.storage?.length
-      ? doc.storage
-      : [{ name: "data", path: "/data", size: "3Gi" }],
+    storage: doc.storage ?? [],
+    configMap: doc.configMap ?? [],
     createdAt: doc.createdAt?.toISOString(),
     updatedAt: doc.updatedAt?.toISOString(),
   };
@@ -81,6 +82,7 @@ export async function createTemplate(
     ports: input.ports,
     env: input.env ?? [],
     storage: input.storage ?? [],
+    configMap: input.configMap ?? [],
     createdAt: now,
     updatedAt: now,
   };
@@ -105,30 +107,4 @@ export async function deleteTemplate(id: string): Promise<boolean> {
   const col = await templates();
   const result = await col.deleteOne({ id });
   return result.deletedCount > 0;
-}
-
-export async function ensureDefaultTemplate(): Promise<void> {
-  const col = await templates();
-  const count = await col.countDocuments();
-  if (count > 0) return;
-
-  const image = process.env.SEALOS_DEFAULT_IMAGE || "nginx:alpine";
-  const port = Number(process.env.SEALOS_DEFAULT_PORT ?? "80") || 80;
-  const now = new Date();
-  await col.insertOne({
-    id: "nginx",
-    name: "Nginx",
-    description: "默认 Web 服务模板",
-    image,
-    imageRegistry: null,
-    launchCommand: {},
-    cpu: 0.5,
-    memoryGi: 0.5,
-    replicas: 1,
-    ports: [{ number: port, protocol: "http", isPublic: true }],
-    env: [],
-    storage: [{ name: "data", path: "/data", size: "3Gi" }],
-    createdAt: now,
-    updatedAt: now,
-  });
 }
