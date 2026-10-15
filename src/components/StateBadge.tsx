@@ -1,11 +1,8 @@
 import { Tag } from "antd";
 import type { SandboxState } from "@/lib/sandbox/schema";
 
-const config: Record<
-  SandboxState,
-  { color: string; label: string }
-> = {
-  running: { color: "success", label: "运行中" },
+const config: Record<SandboxState, { color: string; label: string }> = {
+  running: { color: "processing", label: "运行中" },
   starting: { color: "warning", label: "启动中" },
   stopped: { color: "default", label: "已停止" },
   error: { color: "error", label: "异常" },

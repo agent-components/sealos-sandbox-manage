@@ -1,6 +1,6 @@
 "use client";
 
-import { InputNumber, Slider } from "antd";
+import { Form, InputNumber, Slider } from "antd";
 import {
   CPU_OPTIONS,
   MEMORY_OPTIONS,
@@ -22,28 +22,27 @@ export function ResourceConfig({ value, onChange, disabled }: Props) {
     0,
     MEMORY_OPTIONS.findIndex((m) => m.gi === value.memoryGi),
   );
+  const memoryLast = MEMORY_OPTIONS.length - 1;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <div className="mb-2 flex items-baseline justify-between">
-          <span className="text-sm font-medium">CPU</span>
-          <span className="font-mono text-sm text-gray-600">
-            {value.cpu} 核
-          </span>
-        </div>
+    <Form layout="vertical" disabled={disabled}>
+      <Form.Item
+        label="CPU"
+        extra={`${value.cpu} 核`}
+        style={{ marginBottom: 20 }}
+      >
         <Slider
           min={0}
           max={CPU_OPTIONS.length - 1}
           step={1}
-          disabled={disabled}
           value={cpuIndex}
-          tooltip={{
-            formatter: (i) => `${CPU_OPTIONS[i ?? 0]} 核`,
+          tooltip={{ formatter: (i) => `${CPU_OPTIONS[i ?? 0]} 核` }}
+          marks={{
+            0: String(CPU_OPTIONS[0]),
+            [CPU_OPTIONS.length - 1]: String(
+              CPU_OPTIONS[CPU_OPTIONS.length - 1],
+            ),
           }}
-          marks={Object.fromEntries(
-            CPU_OPTIONS.map((c, i) => [i, String(c)]),
-          )}
           onChange={(i) =>
             onChange({
               ...value,
@@ -51,27 +50,23 @@ export function ResourceConfig({ value, onChange, disabled }: Props) {
             })
           }
         />
-      </div>
+      </Form.Item>
 
-      <div>
-        <div className="mb-2 flex items-baseline justify-between">
-          <span className="text-sm font-medium">内存</span>
-          <span className="font-mono text-sm text-gray-600">
-            {MEMORY_OPTIONS[memoryIndex]?.label}
-          </span>
-        </div>
+      <Form.Item
+        label="内存"
+        extra={MEMORY_OPTIONS[memoryIndex]?.label}
+        style={{ marginBottom: 20 }}
+      >
         <Slider
           min={0}
-          max={MEMORY_OPTIONS.length - 1}
+          max={memoryLast}
           step={1}
-          disabled={disabled}
           value={memoryIndex}
-          tooltip={{
-            formatter: (i) => MEMORY_OPTIONS[i ?? 0]?.label,
+          tooltip={{ formatter: (i) => MEMORY_OPTIONS[i ?? 0]?.label }}
+          marks={{
+            0: MEMORY_OPTIONS[0]!.label,
+            [memoryLast]: MEMORY_OPTIONS[memoryLast]!.label,
           }}
-          marks={Object.fromEntries(
-            MEMORY_OPTIONS.map((m, i) => [i, m.label]),
-          )}
           onChange={(i) =>
             onChange({
               ...value,
@@ -79,15 +74,13 @@ export function ResourceConfig({ value, onChange, disabled }: Props) {
             })
           }
         />
-      </div>
+      </Form.Item>
 
-      <div>
-        <div className="mb-2 text-sm font-medium">磁盘</div>
+      <Form.Item label="磁盘" style={{ marginBottom: 0 }}>
         <InputNumber
           min={1}
           max={1000}
           step={1}
-          disabled={disabled}
           value={value.diskGi}
           addonAfter="Gi"
           style={{ width: 160 }}
@@ -98,7 +91,7 @@ export function ResourceConfig({ value, onChange, disabled }: Props) {
             })
           }
         />
-      </div>
-    </div>
+      </Form.Item>
+    </Form>
   );
 }

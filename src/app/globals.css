@@ -2,24 +2,24 @@
 
 @theme inline {
   --color-background: #ffffff;
-  --color-foreground: #000000;
+  --color-foreground: #1f1f1f;
   --color-gray-50: #fafafa;
   --color-gray-100: #f5f5f5;
-  --color-gray-200: #ebebeb;
-  --color-gray-300: #eaeaea;
-  --color-gray-400: #c9c9c9;
-  --color-gray-500: #999999;
-  --color-gray-600: #666666;
-  --color-gray-700: #444444;
-  --color-gray-900: #171717;
-  --color-accent: #0070f3;
-  --color-accent-soft: #ebf5ff;
-  --color-success: #0a7b46;
-  --color-success-soft: #e8faf0;
-  --color-warning: #a15c00;
-  --color-warning-soft: #fff6e5;
-  --color-danger: #e00;
-  --color-danger-soft: #fcebea;
+  --color-gray-200: #f0f0f0;
+  --color-gray-300: #e8e8e8;
+  --color-gray-400: #d9d9d9;
+  --color-gray-500: #8c8c8c;
+  --color-gray-600: #595959;
+  --color-gray-700: #434343;
+  --color-gray-900: #1f1f1f;
+  --color-accent: #1677ff;
+  --color-accent-soft: #e6f4ff;
+  --color-success: #389e0d;
+  --color-success-soft: #f6ffed;
+  --color-warning: #d48806;
+  --color-warning-soft: #fffbe6;
+  --color-danger: #cf1322;
+  --color-danger-soft: #fff1f0;
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --animate-fade: fade-in 0.18s ease both;
@@ -67,12 +67,23 @@
 
   body {
     margin: 0;
-    background: var(--color-background);
-    color: var(--color-foreground);
+    background: #ffffff !important;
+    color: #1f1f1f;
     font-family: var(--font-sans);
     font-size: 14px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+  }
+
+  /* 避免 antd Layout 默认深色顶栏/灰底残留 */
+  .ant-layout,
+  .ant-layout-header,
+  .ant-layout-content {
+    background: #ffffff !important;
+  }
+
+  .ant-layout-header {
+    color: #1f1f1f !important;
   }
 
   a {
@@ -85,30 +96,5 @@
   select,
   textarea {
     font: inherit;
-  }
-}
-
-@utility slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 4px;
-  border-radius: 9999px;
-  background: var(--color-gray-200);
-  outline: none;
-
-  &::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 16px;
-    height: 16px;
-    border-radius: 9999px;
-    background: var(--color-foreground);
-    border: none;
-    cursor: pointer;
-  }
-
-  &:disabled {
-    opacity: 0.4;
   }
 }

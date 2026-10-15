@@ -3,11 +3,9 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Button, Layout, Space, Typography } from "antd";
+import { Button, Flex, Menu, Typography } from "antd";
 import { Brand } from "@/components/Brand";
 import { boatClient, type BoatUser } from "@/lib/client";
-
-const { Header, Content } = Layout;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -43,37 +41,78 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (!ready) {
     return (
-      <main className="mx-auto flex min-h-full max-w-5xl items-center px-6 py-24 text-sm text-gray-600">
-        正在进入控制台…
-      </main>
+      <Flex
+        align="center"
+        justify="center"
+        style={{ minHeight: "100vh", background: "#fff" }}
+      >
+        <Typography.Text type="secondary">正在进入控制台…</Typography.Text>
+      </Flex>
     );
   }
 
   return (
-    <Layout className="min-h-full bg-white">
-      <Header className="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-6 leading-none">
-        <Space size={24}>
-          <Link href="/sandboxes">
-            <Brand />
-          </Link>
-          <Link
-            href="/sandboxes"
-            className={`rounded px-2 py-1 text-sm ${pathname.startsWith("/sandboxes")
-                ? "bg-gray-100 font-medium text-black"
-                : "text-gray-600"
-              }`}
-          >
-            沙箱
-          </Link>
-        </Space>
-        <Space>
-          <Typography.Text type="secondary">{user?.username}</Typography.Text>
-          <Button size="small" onClick={logout}>
-            退出
-          </Button>
-        </Space>
-      </Header>
-      <Content className="mx-auto w-full max-w-5xl px-6 py-8">{children}</Content>
-    </Layout>
+    <div style={{ minHeight: "100vh", background: "#fff" }}>
+      <div
+        style={{
+          borderBottom: "1px solid #f0f0f0",
+          background: "#fff",
+          position: "sticky",
+          top: 0,
+          zIndex: 50,
+        }}
+      >
+        <Flex
+          align="center"
+          justify="space-between"
+          style={{
+            maxWidth: 1024,
+            margin: "0 auto",
+            padding: "0 24px",
+            height: 56,
+          }}
+        >
+          <Flex align="center" gap={24}>
+            <Link href="/sandboxes">
+              <Brand />
+            </Link>
+            <Menu
+              mode="horizontal"
+              selectedKeys={
+                pathname.startsWith("/sandboxes") ? ["sandboxes"] : []
+              }
+              items={[
+                {
+                  key: "sandboxes",
+                  label: <Link href="/sandboxes">沙箱</Link>,
+                },
+              ]}
+              style={{
+                border: "none",
+                background: "transparent",
+                minWidth: 120,
+                lineHeight: "54px",
+              }}
+            />
+          </Flex>
+          <Flex align="center" gap={12}>
+            <Typography.Text type="secondary">{user?.username}</Typography.Text>
+            <Button size="small" onClick={logout}>
+              退出
+            </Button>
+          </Flex>
+        </Flex>
+      </div>
+      <div
+        style={{
+          maxWidth: 1024,
+          margin: "0 auto",
+          padding: "24px",
+          background: "#fff",
+        }}
+      >
+        {children}
+      </div>
+    </div>
   );
 }
