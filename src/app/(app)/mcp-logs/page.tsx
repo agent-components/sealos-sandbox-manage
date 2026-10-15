@@ -50,6 +50,11 @@ function prettyJson(value: unknown) {
   }
 }
 
+function sandboxIdOf(args: Record<string, unknown> | undefined) {
+  const id = args?.id;
+  return typeof id === "string" && id.trim() ? id : "";
+}
+
 export default function McpLogsPage() {
   const { message } = App.useApp();
   const [logs, setLogs] = useState<McpLogRow[]>([]);
@@ -163,6 +168,24 @@ export default function McpLogsPage() {
         ),
       },
       {
+        title: "沙箱",
+        key: "sandbox",
+        width: 180,
+        ellipsis: true,
+        render: (_, row) => {
+          const id = sandboxIdOf(row.arguments);
+          if (!id) return <Typography.Text type="secondary">—</Typography.Text>;
+          return (
+            <Typography.Text
+              style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}
+              ellipsis={{ tooltip: id }}
+            >
+              {id}
+            </Typography.Text>
+          );
+        },
+      },
+      {
         title: "工具",
         dataIndex: "tool",
         key: "tool",
@@ -170,17 +193,6 @@ export default function McpLogsPage() {
         render: (value: string) => (
           <Typography.Text code style={{ fontSize: 12 }}>
             {value}
-          </Typography.Text>
-        ),
-      },
-      {
-        title: "接口",
-        key: "endpoint",
-        ellipsis: true,
-        render: (_, row) => (
-          <Typography.Text style={{ fontSize: 13 }}>
-            <Typography.Text type="secondary">{row.method}</Typography.Text>{" "}
-            {row.path}
           </Typography.Text>
         ),
       },
@@ -217,7 +229,7 @@ export default function McpLogsPage() {
             调用日志
           </Typography.Title>
           <Typography.Paragraph type="secondary" style={{ margin: "6px 0 0" }}>
-            记录 MCP 与 OpenAPI/REST 沙箱调用；结果存对象存储，获取文件只记元数据不落结果
+            只记录 runSandboxCommand（MCP 与 REST）；命令结果存在对象存储
           </Typography.Paragraph>
         </div>
         <Button onClick={() => void refresh()} loading={loading}>
@@ -283,7 +295,7 @@ export default function McpLogsPage() {
           emptyText: (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={hasFilter ? "没有符合条件的日志" : "还没有调用日志"}
+              description={hasFilter ? "没有符合条件的日志" : "还没有命令日志"}
             />
           ),
         }}
@@ -300,61 +312,6 @@ export default function McpLogsPage() {
           <Typography.Text type="secondary">加载中…</Typography.Text>
         ) : (
           <Space direction="vertical" size={20} style={{ width: "100%" }}>
-            <div>
-              <Typography.Text type="secondary">开始时间</Typography.Text>
-              <div>
-                {formatTime(
-                  detail.log.startedAt ||
-                  detail.log.completedAt ||
-                  detail.log.createdAt,
-                )}
-              </div>
-            </div>
-            <div>
-              <Typography.Text type="secondary">耗时</Typography.Text>
-              <div>{formatDuration(detail.log.durationMs)}</div>
-            </div>
-            <div>
-              <Typography.Text type="secondary">API Key</Typography.Text>
-              <div>
-                {detail.log.apiKeyId ? (
-                  <>
-                    <div>{detail.log.apiKeyName || "—"}</div>
-                    <Typography.Text
-                      type="secondary"
-                      copyable
-                      style={{ fontSize: 12 }}
-                    >
-                      {detail.log.apiKeyId}
-                    </Typography.Text>
-                  </>
-                ) : (
-                  <Typography.Text type="secondary">会话登录</Typography.Text>
-                )}
-              </div>
-            </div>
-            <div>
-              <Typography.Text type="secondary">来源</Typography.Text>
-              <div>
-                <Tag style={{ marginInlineEnd: 0 }}>
-                  {(detail.log.channel ?? "mcp") === "rest" ? "REST" : "MCP"}
-                </Tag>
-              </div>
-            </div>
-            <div>
-              <Typography.Text type="secondary">接口</Typography.Text>
-              <div>
-                {detail.log.method} {detail.log.path}
-              </div>
-            </div>
-            <div>
-              <Typography.Text type="secondary">状态</Typography.Text>
-              <div>
-                <Tag color={detail.log.ok ? "success" : "error"}>
-                  {detail.log.status}
-                </Tag>
-              </div>
-            </div>
             <div>
               <Typography.Text type="secondary">参数</Typography.Text>
               <pre
@@ -383,9 +340,7 @@ export default function McpLogsPage() {
                 />
               ) : !detail.log.resultKey ? (
                 <Typography.Paragraph type="secondary" style={{ margin: "8px 0 0" }}>
-                  {detail.log.tool === "getSandboxArtifact"
-                    ? "获取文件不保存结果内容"
-                    : "无结果"}
+                  无结果
                 </Typography.Paragraph>
               ) : (
                 <pre

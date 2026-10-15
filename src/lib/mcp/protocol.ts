@@ -165,7 +165,7 @@ async function handleRequest(request: Request, message: JsonRpcRequest): Promise
       );
     }
     const toolArgs = args as Record<string, unknown>;
-    // 通用工具转发到同一套 REST handler；日志与空闲计时在 REST 层统一处理
+    // 通用工具转发到同一套 REST handler；空闲计时在 REST 层处理。调用日志只记 runSandboxCommand。
     try {
       const outcome = await callMcpTool(request, name, toolArgs);
       if (outcome.ok) {

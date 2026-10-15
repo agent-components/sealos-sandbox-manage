@@ -19,12 +19,6 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       trackActivity: true,
       run: async () => {
         const artifact = await openSandboxArtifact(id, path, req.signal);
-        // 获取文件只记元数据，结果不落库；此处 result 仅占位
-        const logResult = {
-          path: artifact.path,
-          mediaType: artifact.mediaType,
-          kind: artifact.kind,
-        };
         if (artifact.kind === "image") {
           const body = {
             path: artifact.path,
@@ -34,7 +28,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           };
           return {
             status: 200,
-            result: logResult,
+            result: null,
             value: jsonOk(body, {
               headers: { "X-Artifact-Kind": "image", "Cache-Control": "no-store" },
             }),
@@ -52,7 +46,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         }
         return {
           status: 200,
-          result: logResult,
+          result: null,
           value: new Response(artifact.stream, { headers }),
         };
       },

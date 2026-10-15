@@ -1,6 +1,6 @@
 import { getCollection } from "@/lib/db/mongo";
 import { getMinioClient, minioBucket } from "@/lib/minio/client";
-import type { McpCallLog, McpCallLogView } from "@/lib/mcp/audit";
+import { AUDITED_TOOL, type McpCallLog, type McpCallLogView } from "@/lib/mcp/audit";
 
 let indexesReady = false;
 
@@ -75,11 +75,15 @@ export async function listMcpLogs(
   username: string,
   opts?: ListMcpLogsOpts,
 ): Promise<McpCallLogView[]> {
+  if (opts?.tool && opts.tool !== AUDITED_TOOL) return [];
+
   const col = await mcpLogCollection();
   const limit = Math.min(Math.max(opts?.limit ?? 50, 1), 200);
-  const clauses: Record<string, unknown>[] = [ownedOrLegacy(username)];
 
-  if (opts?.tool) clauses.push({ tool: opts.tool });
+  const clauses: Record<string, unknown>[] = [
+    ownedOrLegacy(username),
+    { tool: AUDITED_TOOL },
+  ];
 
   if (opts?.apiKeyId === "session") {
     clauses.push({
@@ -115,7 +119,11 @@ export async function getMcpLog(
   id: string,
 ): Promise<McpCallLogView | null> {
   const col = await mcpLogCollection();
-  const doc = await col.findOne({ id, ...ownedOrLegacy(username) });
+  const doc = await col.findOne({
+    id,
+    tool: AUDITED_TOOL,
+    ...ownedOrLegacy(username),
+  });
   return doc ? toView(doc) : null;
 }
 

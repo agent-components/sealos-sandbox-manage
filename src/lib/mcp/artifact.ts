@@ -1,5 +1,4 @@
 import { jsonError } from "@/lib/api/response";
-import { recordMcpCall } from "@/lib/mcp/audit";
 import { beginMcpActivity, endMcpActivity } from "@/lib/sandbox/idle";
 import { openSandboxArtifact } from "@/lib/sandbox/artifact";
 import { ExecCancelledError } from "@/lib/sealos/kube";
@@ -37,24 +36,6 @@ async function readStream(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
   return Buffer.concat(parts);
 }
 
-function auditArtifact(
-  args: Record<string, unknown>,
-  status: number,
-  result: unknown,
-  startedAt: number,
-) {
-  return recordMcpCall({
-    tool: "getSandboxArtifact",
-    method: "GET",
-    path: "/sandboxes/{id}/artifacts",
-    arguments: args,
-    status,
-    result,
-    startedAt,
-    channel: "mcp",
-  });
-}
-
 async function apiFailure(error: unknown) {
   const response = jsonError(error);
   return { status: response.status, body: (await response.json()) as unknown };
@@ -72,10 +53,7 @@ export async function callSandboxArtifact(
   progressToken: string | number | undefined,
   stream: boolean,
 ): Promise<ArtifactDispatch> {
-  const startedAt = Date.now();
-
   if (typeof args.id !== "string" || args.id.length === 0) {
-    await auditArtifact(args, 400, { error: "缺少参数 id" }, startedAt);
     return {
       kind: "response",
       status: 200,
@@ -97,19 +75,11 @@ export async function callSandboxArtifact(
     await endMcpActivity(sandboxId, {
       touch: failure.status !== 401 && failure.status !== 403,
     });
-    await auditArtifact(args, failure.status, failure.body, startedAt);
     return { kind: "response", status: 200, body: await failureResult(id, error) };
   }
 
-  const logMeta = {
-    path: artifact.path,
-    mediaType: artifact.mediaType,
-    kind: artifact.kind,
-  };
-
   if (artifact.kind === "image") {
     await endMcpActivity(sandboxId, { touch: true });
-    await auditArtifact(args, 200, logMeta, startedAt);
     return {
       kind: "response",
       status: 200,
@@ -134,7 +104,6 @@ export async function callSandboxArtifact(
   if (artifact.kind === "binary" || !stream) {
     try {
       const bytes = await readStream(artifact.stream);
-      await auditArtifact(args, 200, { ...logMeta, bytes: bytes.length }, startedAt);
       if (artifact.kind === "text") {
         return {
           kind: "response",
@@ -170,11 +139,8 @@ export async function callSandboxArtifact(
       };
     } catch (error) {
       if (error instanceof ExecCancelledError || request.signal.aborted) {
-        await auditArtifact(args, 499, { error: "已取消" }, startedAt);
         return { kind: "response", status: 499, body: rpcResult(id, { content: [{ type: "text", text: "已取消" }], isError: true }) };
       }
-      const failure = await apiFailure(error);
-      await auditArtifact(args, failure.status, failure.body, startedAt);
       return { kind: "response", status: 200, body: await failureResult(id, error) };
     } finally {
       await endMcpActivity(sandboxId, { touch: true });
@@ -231,12 +197,6 @@ export async function callSandboxArtifact(
         const tail = decoder.decode();
         if (tail) collected.push(tail);
         const data = collected.join("");
-        await auditArtifact(
-          args,
-          200,
-          { ...logMeta, bytes: Buffer.byteLength(data, "utf8") },
-          startedAt,
-        );
         send(
           rpcResult(id, {
             content: [{ type: "text", text: data }],
@@ -250,11 +210,8 @@ export async function callSandboxArtifact(
         );
       } catch (error) {
         if (abort.signal.aborted || request.signal.aborted) {
-          await auditArtifact(args, 499, { error: "已取消" }, startedAt);
           return;
         }
-        const failure = await apiFailure(error);
-        await auditArtifact(args, failure.status, failure.body, startedAt);
         send(await failureResult(id, error));
       } finally {
         clearInterval(heartbeat);

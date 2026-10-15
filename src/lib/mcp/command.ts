@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/api/response";
-import { recordMcpCall } from "@/lib/mcp/audit";
+import { AUDITED_TOOL, recordMcpCall } from "@/lib/mcp/audit";
 import { beginMcpActivity, endMcpActivity } from "@/lib/sandbox/idle";
 import { RunSandboxCommandSchema } from "@/lib/sandbox/schema";
 import { resolveSandboxForCommand } from "@/lib/sandbox/command";
@@ -227,7 +227,7 @@ function auditCommand(
   startedAt: number,
 ) {
   return recordMcpCall({
-    tool: "runSandboxCommand",
+    tool: AUDITED_TOOL,
     method: "POST",
     path: "/sandboxes/{id}/commands",
     arguments: args,

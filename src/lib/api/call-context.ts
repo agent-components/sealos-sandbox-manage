@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/api/response";
-import { recordMcpCall, type CallChannel } from "@/lib/mcp/audit";
+import { AUDITED_TOOL, recordMcpCall, type CallChannel } from "@/lib/mcp/audit";
 import {
   beginMcpActivity,
   endMcpActivity,
@@ -14,7 +14,7 @@ export function callChannel(req: Request): CallChannel {
   return req.headers.get(BOAT_CHANNEL_HEADER) === "mcp" ? "mcp" : "rest";
 }
 
-/** 包裹一次沙箱相关请求：可选空闲计时 + 调用日志。 */
+/** 包裹一次沙箱相关请求：可选空闲计时。只有 runSandboxCommand 写调用日志。 */
 export async function runSandboxApiCall<T>(opts: {
   req: Request;
   tool: string;
@@ -37,16 +37,18 @@ export async function runSandboxApiCall<T>(opts: {
   try {
     const outcome = await opts.run();
     touch = outcome.status !== 401 && outcome.status !== 403;
-    await recordMcpCall({
-      tool: opts.tool,
-      method: opts.method,
-      path: opts.path,
-      arguments: opts.arguments,
-      status: outcome.status,
-      result: outcome.result,
-      startedAt,
-      channel,
-    });
+    if (opts.tool === AUDITED_TOOL) {
+      await recordMcpCall({
+        tool: opts.tool,
+        method: opts.method,
+        path: opts.path,
+        arguments: opts.arguments,
+        status: outcome.status,
+        result: outcome.result,
+        startedAt,
+        channel,
+      });
+    }
     return outcome.value;
   } catch (error) {
     const failed = jsonError(error);
@@ -56,16 +58,18 @@ export async function runSandboxApiCall<T>(opts: {
     } catch {
       // ignore
     }
-    await recordMcpCall({
-      tool: opts.tool,
-      method: opts.method,
-      path: opts.path,
-      arguments: opts.arguments,
-      status: failed.status,
-      result,
-      startedAt,
-      channel,
-    });
+    if (opts.tool === AUDITED_TOOL) {
+      await recordMcpCall({
+        tool: opts.tool,
+        method: opts.method,
+        path: opts.path,
+        arguments: opts.arguments,
+        status: failed.status,
+        result,
+        startedAt,
+        channel,
+      });
+    }
     throw error;
   } finally {
     if (track) await endMcpActivity(sandboxId, { touch });

@@ -3,7 +3,8 @@ import { randomBytes } from "crypto";
 import { getCollection } from "@/lib/db/mongo";
 import { getMinioClient, minioBucket } from "@/lib/minio/client";
 
-const FILE_TOOL = "getSandboxArtifact";
+/** 只有执行沙箱命令会写入调用日志。 */
+export const AUDITED_TOOL = "runSandboxCommand";
 
 export type CallChannel = "mcp" | "rest";
 
@@ -60,8 +61,8 @@ async function mcpLogCollection() {
 }
 
 /**
- * 记录一次沙箱 API / MCP 调用。元数据写入 Mongo，请求结果写入 MinIO。
- * 获取文件只记元数据，不落结果。存储失败不影响本次调用。
+ * 记录一次 runSandboxCommand。元数据写入 Mongo，命令结果写入 MinIO。
+ * 其他工具直接返回。存储失败不影响本次调用。
  */
 export async function recordMcpCall(input: {
   tool: string;
@@ -77,6 +78,8 @@ export async function recordMcpCall(input: {
   /** 请求开始时刻；省略则与完成时间相同 */
   startedAt?: Date | number;
 }): Promise<void> {
+  if (input.tool !== AUDITED_TOOL) return;
+
   let username = input.username;
   let apiKeyId = input.apiKeyId;
   let apiKeyName = input.apiKeyName;
@@ -108,14 +111,12 @@ export async function recordMcpCall(input: {
   let resultKey: string | null = null;
   let resultError: string | null = null;
 
-  if (input.tool !== FILE_TOOL) {
-    try {
-      await putResult(key, input.result);
-      resultKey = key;
-    } catch (error) {
-      resultError = error instanceof Error ? error.message : "结果写入对象存储失败";
-      console.error("MCP 结果写入 MinIO 失败", error);
-    }
+  try {
+    await putResult(key, input.result);
+    resultKey = key;
+  } catch (error) {
+    resultError = error instanceof Error ? error.message : "结果写入对象存储失败";
+    console.error("MCP 结果写入 MinIO 失败", error);
   }
 
   try {
