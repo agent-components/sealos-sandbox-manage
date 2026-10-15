@@ -1,19 +1,7 @@
 import { openApiDocument } from "@/lib/openapi/document";
-import { recordMcpCall } from "@/lib/mcp/audit";
 import { callMcpTool, mcpRoutes } from "@/lib/mcp/call";
 import { callSandboxArtifact } from "@/lib/mcp/artifact";
 import { callSandboxCommand } from "@/lib/mcp/command";
-import {
-  beginMcpActivity,
-  endMcpActivity,
-  touchMcpActivity,
-} from "@/lib/sandbox/idle";
-
-const MCP_ACTIVITY_BY_ID = new Set([
-  "getSandbox",
-  "resumeSandbox",
-  "stopSandbox",
-]);
 
 export const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"] as const;
 const DEFAULT_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0];
@@ -59,14 +47,6 @@ function acceptsEventStream(request: Request): boolean {
 function asObject(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
-}
-
-function sandboxIdFromBody(body: unknown): string | null {
-  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
-  const sandbox = (body as Record<string, unknown>).sandbox;
-  if (!sandbox || typeof sandbox !== "object" || Array.isArray(sandbox)) return null;
-  const id = (sandbox as Record<string, unknown>).id;
-  return typeof id === "string" && id ? id : null;
 }
 
 function toolError(message: string) {
@@ -185,48 +165,16 @@ async function handleRequest(request: Request, message: JsonRpcRequest): Promise
       );
     }
     const toolArgs = args as Record<string, unknown>;
-    const route = mcpRoutes().find((item) => item.definition.name === name);
-    const startedAt = Date.now();
-    const activityId =
-      MCP_ACTIVITY_BY_ID.has(name) && typeof toolArgs.id === "string" && toolArgs.id
-        ? toolArgs.id
-        : null;
-
-    if (activityId) await beginMcpActivity(activityId);
-    let activityTouch = false;
-
+    // 通用工具转发到同一套 REST handler；日志与空闲计时在 REST 层统一处理
     try {
       const outcome = await callMcpTool(request, name, toolArgs);
       if (outcome.ok) {
-        activityTouch = outcome.status !== 401 && outcome.status !== 403;
-        if (name === "createSandbox" && outcome.status < 400) {
-          const createdId = sandboxIdFromBody(outcome.body);
-          if (createdId) await touchMcpActivity(createdId);
-        }
-        await recordMcpCall({
-          tool: name,
-          method: route?.method ?? "",
-          path: route?.path ?? "",
-          arguments: toolArgs,
-          status: outcome.status,
-          result: outcome.body,
-          startedAt,
-        });
         return {
           kind: "response",
           status: 200,
           body: rpcResult(id, toolSuccess(outcome.status, outcome.body)),
         };
       }
-      await recordMcpCall({
-        tool: name,
-        method: route?.method ?? "",
-        path: route?.path ?? "",
-        arguments: toolArgs,
-        status: 400,
-        result: { error: outcome.message },
-        startedAt,
-      });
       return {
         kind: "response",
         status: 200,
@@ -234,22 +182,11 @@ async function handleRequest(request: Request, message: JsonRpcRequest): Promise
       };
     } catch (error) {
       console.error(error);
-      await recordMcpCall({
-        tool: name,
-        method: route?.method ?? "",
-        path: route?.path ?? "",
-        arguments: toolArgs,
-        status: 500,
-        result: { error: "服务器内部错误" },
-        startedAt,
-      });
       return {
         kind: "response",
         status: 200,
         body: rpcResult(id, toolError("服务器内部错误")),
       };
-    } finally {
-      if (activityId) await endMcpActivity(activityId, { touch: activityTouch });
     }
   }
 

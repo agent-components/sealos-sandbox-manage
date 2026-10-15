@@ -2,7 +2,7 @@ import { jsonError } from "@/lib/api/response";
 import { recordMcpCall } from "@/lib/mcp/audit";
 import { beginMcpActivity, endMcpActivity } from "@/lib/sandbox/idle";
 import { RunSandboxCommandSchema } from "@/lib/sandbox/schema";
-import { resolveSandboxForMcpCommand } from "@/lib/sandbox/command";
+import { resolveSandboxForCommand } from "@/lib/sandbox/command";
 import { ExecCancelledError, execInPod, type PodExecChunk, type PodExecResult } from "@/lib/sealos/kube";
 
 type JsonRpcId = string | number | null;
@@ -101,9 +101,9 @@ export async function callSandboxCommand(
   const sandboxId = args.id;
   await beginMcpActivity(sandboxId);
 
-  let target: Awaited<ReturnType<typeof resolveSandboxForMcpCommand>>;
+  let target: Awaited<ReturnType<typeof resolveSandboxForCommand>>;
   try {
-    target = await resolveSandboxForMcpCommand(sandboxId, request.signal);
+    target = await resolveSandboxForCommand(sandboxId, request.signal);
   } catch (error) {
     const failure = await apiFailure(error);
     await endMcpActivity(sandboxId, {
@@ -234,6 +234,7 @@ function auditCommand(
     status,
     result,
     startedAt,
+    channel: "mcp",
   });
 }
 

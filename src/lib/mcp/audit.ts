@@ -5,6 +5,8 @@ import { getMinioClient, minioBucket } from "@/lib/minio/client";
 
 const FILE_TOOL = "getSandboxArtifact";
 
+export type CallChannel = "mcp" | "rest";
+
 export type McpCallLog = {
   id: string;
   username?: string;
@@ -12,6 +14,8 @@ export type McpCallLog = {
   apiKeyId?: string | null;
   /** API Key 名称快照；会话登录时为空 */
   apiKeyName?: string | null;
+  /** 调用来源：MCP 或 OpenAPI/REST */
+  channel?: CallChannel;
   tool: string;
   method: string;
   path: string;
@@ -56,8 +60,8 @@ async function mcpLogCollection() {
 }
 
 /**
- * 记录一次 MCP tools/call。日志写入 Mongo，请求结果只写入 MinIO。
- * 获取文件不记录。存储失败不影响本次调用。
+ * 记录一次沙箱 API / MCP 调用。元数据写入 Mongo，请求结果写入 MinIO。
+ * 获取文件只记元数据，不落结果。存储失败不影响本次调用。
  */
 export async function recordMcpCall(input: {
   tool: string;
@@ -69,11 +73,10 @@ export async function recordMcpCall(input: {
   username?: string;
   apiKeyId?: string | null;
   apiKeyName?: string | null;
+  channel?: CallChannel;
   /** 请求开始时刻；省略则与完成时间相同 */
   startedAt?: Date | number;
 }): Promise<void> {
-  if (input.tool === FILE_TOOL) return;
-
   let username = input.username;
   let apiKeyId = input.apiKeyId;
   let apiKeyName = input.apiKeyName;
@@ -105,12 +108,14 @@ export async function recordMcpCall(input: {
   let resultKey: string | null = null;
   let resultError: string | null = null;
 
-  try {
-    await putResult(key, input.result);
-    resultKey = key;
-  } catch (error) {
-    resultError = error instanceof Error ? error.message : "结果写入对象存储失败";
-    console.error("MCP 结果写入 MinIO 失败", error);
+  if (input.tool !== FILE_TOOL) {
+    try {
+      await putResult(key, input.result);
+      resultKey = key;
+    } catch (error) {
+      resultError = error instanceof Error ? error.message : "结果写入对象存储失败";
+      console.error("MCP 结果写入 MinIO 失败", error);
+    }
   }
 
   try {
@@ -120,6 +125,7 @@ export async function recordMcpCall(input: {
       ...(username ? { username } : {}),
       apiKeyId: apiKeyId ?? null,
       apiKeyName: apiKeyName ?? null,
+      channel: input.channel ?? "mcp",
       tool: input.tool,
       method: input.method,
       path: concretePath(input.path, input.arguments),

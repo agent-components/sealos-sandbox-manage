@@ -101,7 +101,7 @@ export function IdleShutdownConfig({
     <>
       <Form.Item
         label="自动关机"
-        extra="仅统计 MCP 请求；关闭后不会因空闲关机"
+        extra="统计 MCP 与 OpenAPI/REST 请求；关闭后不会因空闲关机"
       >
         <Flex align="center" gap={16} wrap="wrap">
           {switchControl}

@@ -38,6 +38,7 @@ function toView(doc: McpCallLog): McpCallLogView {
     username: doc.username,
     apiKeyId: doc.apiKeyId ?? null,
     apiKeyName: doc.apiKeyName ?? null,
+    channel: doc.channel ?? "mcp",
     tool: doc.tool,
     method: doc.method,
     path: doc.path,

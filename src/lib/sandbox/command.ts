@@ -52,10 +52,10 @@ export async function resolveRunningSandbox(id: string) {
 }
 
 /**
- * MCP 命令专用：沙箱已停止时先开机，等到 Pod 就绪再返回。
- * 最长等待 3 分钟。
+ * 执行命令前解析沙箱：已停止时先开机，等到 Pod 就绪再返回。
+ * REST 与 MCP 共用。最长等待 3 分钟。
  */
-export async function resolveSandboxForMcpCommand(
+export async function resolveSandboxForCommand(
   id: string,
   signal?: AbortSignal,
 ) {

@@ -12,7 +12,7 @@ declare global {
   var __boatIdleSweeping: boolean | undefined;
 }
 
-/** 每分钟扫描一次：找出 MCP 空闲超时的运行中沙箱并关机。 */
+/** 每分钟扫描一次：找出空闲超时的运行中沙箱并关机。 */
 export function startIdleSweeper() {
   if (global.__boatIdleCron) return;
   if (!cron.validate("* * * * *")) {
@@ -39,14 +39,14 @@ async function sweepIdleSandboxes() {
         if (mapLaunchpadStatus(app.status) !== "running") continue;
         await client.pauseApp(candidate.sandboxId);
         console.info(
-          `MCP 空闲关机：${candidate.sandboxId}（等待 ${candidate.idleMinutes} 分钟）`,
+          `空闲关机：${candidate.sandboxId}（等待 ${candidate.idleMinutes} 分钟）`,
         );
       } catch (error) {
-        console.error(`MCP 空闲关机失败：${candidate.sandboxId}`, error);
+        console.error(`空闲关机失败：${candidate.sandboxId}`, error);
       }
     }
   } catch (error) {
-    console.error("MCP 空闲扫描失败", error);
+    console.error("空闲扫描失败", error);
   } finally {
     global.__boatIdleSweeping = false;
   }

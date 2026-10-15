@@ -152,6 +152,17 @@ export default function McpLogsPage() {
           ),
       },
       {
+        title: "来源",
+        dataIndex: "channel",
+        key: "channel",
+        width: 72,
+        render: (value: string | undefined) => (
+          <Tag style={{ marginInlineEnd: 0 }}>
+            {(value ?? "mcp") === "rest" ? "REST" : "MCP"}
+          </Tag>
+        ),
+      },
+      {
         title: "工具",
         dataIndex: "tool",
         key: "tool",
@@ -203,10 +214,10 @@ export default function McpLogsPage() {
       <Flex align="center" justify="space-between" style={{ marginBottom: 16 }}>
         <div>
           <Typography.Title level={3} style={{ margin: 0 }}>
-            MCP 日志
+            调用日志
           </Typography.Title>
           <Typography.Paragraph type="secondary" style={{ margin: "6px 0 0" }}>
-            记录 MCP 工具调用；结果存对象存储，获取文件不记录
+            记录 MCP 与 OpenAPI/REST 沙箱调用；结果存对象存储，获取文件只记元数据不落结果
           </Typography.Paragraph>
         </div>
         <Button onClick={() => void refresh()} loading={loading}>
@@ -272,7 +283,7 @@ export default function McpLogsPage() {
           emptyText: (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={hasFilter ? "没有符合条件的日志" : "还没有 MCP 调用日志"}
+              description={hasFilter ? "没有符合条件的日志" : "还没有调用日志"}
             />
           ),
         }}
@@ -323,6 +334,14 @@ export default function McpLogsPage() {
               </div>
             </div>
             <div>
+              <Typography.Text type="secondary">来源</Typography.Text>
+              <div>
+                <Tag style={{ marginInlineEnd: 0 }}>
+                  {(detail.log.channel ?? "mcp") === "rest" ? "REST" : "MCP"}
+                </Tag>
+              </div>
+            </div>
+            <div>
               <Typography.Text type="secondary">接口</Typography.Text>
               <div>
                 {detail.log.method} {detail.log.path}
@@ -362,6 +381,12 @@ export default function McpLogsPage() {
                   style={{ marginTop: 8 }}
                   message={detail.resultLoadError}
                 />
+              ) : !detail.log.resultKey ? (
+                <Typography.Paragraph type="secondary" style={{ margin: "8px 0 0" }}>
+                  {detail.log.tool === "getSandboxArtifact"
+                    ? "获取文件不保存结果内容"
+                    : "无结果"}
+                </Typography.Paragraph>
               ) : (
                 <pre
                   style={{

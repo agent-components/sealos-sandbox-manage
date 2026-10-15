@@ -100,7 +100,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 },
                 {
                   key: "mcp-logs",
-                  label: <Link href="/mcp-logs">MCP 日志</Link>,
+                  label: <Link href="/mcp-logs">调用日志</Link>,
                 },
                 {
                   key: "apikeys",

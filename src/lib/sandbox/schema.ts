@@ -51,7 +51,7 @@ export const TagsSchema = z
 
 export type SandboxTags = z.infer<typeof TagsSchema>;
 
-/** MCP 空闲自动关机的等待分钟数，至少 5 分钟 */
+/** 空闲自动关机的等待分钟数，至少 5 分钟 */
 export const IdleMinutesSchema = z
   .number()
   .int("等待时长须为整数分钟")

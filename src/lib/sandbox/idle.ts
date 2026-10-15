@@ -91,18 +91,18 @@ export async function withSandboxIdle(
   });
 }
 
-/** MCP 请求开始：有空闲配置的沙箱才增加 inflight。 */
+/** 沙箱 API 请求开始：有空闲配置的沙箱才增加 inflight。 */
 export async function beginMcpActivity(sandboxId: string): Promise<void> {
   try {
     const col = await idleCollection();
     await col.updateOne({ sandboxId }, { $inc: { inflight: 1 }, $set: { updatedAt: new Date() } });
   } catch (error) {
-    console.error("MCP 空闲 inflight 增加失败", error);
+    console.error("空闲 inflight 增加失败", error);
   }
 }
 
 /**
- * MCP 请求结束。鉴权失败传 touch: false。
+ * 沙箱 API 请求结束。鉴权失败传 touch: false。
  * 成功时刷新 lastActivityAt，并减少 inflight（下限 0）。
  */
 export async function endMcpActivity(
@@ -125,7 +125,7 @@ export async function endMcpActivity(
       },
     ]);
   } catch (error) {
-    console.error("MCP 空闲活动结束失败", error);
+    console.error("空闲活动结束失败", error);
   }
 }
 
@@ -139,7 +139,7 @@ export async function touchMcpActivity(sandboxId: string): Promise<void> {
       { $set: { lastActivityAt: now, updatedAt: now } },
     );
   } catch (error) {
-    console.error("MCP 空闲活动刷新失败", error);
+    console.error("空闲活动刷新失败", error);
   }
 }
 

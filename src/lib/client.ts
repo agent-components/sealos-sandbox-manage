@@ -164,6 +164,7 @@ export const boatClient = {
         username?: string;
         apiKeyId?: string | null;
         apiKeyName?: string | null;
+        channel?: "mcp" | "rest";
         tool: string;
         method: string;
         path: string;
@@ -186,6 +187,7 @@ export const boatClient = {
         username?: string;
         apiKeyId?: string | null;
         apiKeyName?: string | null;
+        channel?: "mcp" | "rest";
         tool: string;
         method: string;
         path: string;
