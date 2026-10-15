@@ -1,9 +1,33 @@
 import type { Sandbox } from "@/lib/sandbox/schema";
 import type { ResourceSpec } from "@/lib/sealos/resources";
+import type { Template } from "@/lib/template/schema";
 
 export type ApiError = { error: string; details?: unknown };
 
 export type BoatUser = { username: string };
+
+export type CreateSandboxBody = {
+  templateId: string;
+  name?: string;
+  cpu?: number;
+  memoryGi?: number;
+  diskGi?: number;
+};
+
+export type CreateTemplateBody = {
+  id: string;
+  name: string;
+  description?: string;
+  image: string;
+  cpu: number;
+  memoryGi: number;
+  diskGi: number;
+  port?: number;
+};
+
+export type UpdateTemplateBody = Partial<
+  Omit<CreateTemplateBody, "id">
+>;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -30,9 +54,10 @@ export const boatClient = {
       body: JSON.stringify({ username, password }),
     }),
   logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
+
   listSandboxes: () =>
     request<{ sandboxes: Sandbox[] }>("/api/v1/sandboxes"),
-  createSandbox: (body: Partial<ResourceSpec> & { name?: string }) =>
+  createSandbox: (body: CreateSandboxBody) =>
     request<{ sandbox: Sandbox }>("/api/v1/sandboxes", {
       method: "POST",
       body: JSON.stringify(body),
@@ -58,4 +83,21 @@ export const boatClient = {
       `/api/v1/sandboxes/${encodeURIComponent(id)}/resume`,
       { method: "POST" },
     ),
+
+  listTemplates: () =>
+    request<{ templates: Template[] }>("/api/v1/templates"),
+  createTemplate: (body: CreateTemplateBody) =>
+    request<{ template: Template }>("/api/v1/templates", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateTemplate: (id: string, body: UpdateTemplateBody) =>
+    request<{ template: Template }>(
+      `/api/v1/templates/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    ),
+  deleteTemplate: (id: string) =>
+    request<{ ok: true }>(`/api/v1/templates/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
 };
