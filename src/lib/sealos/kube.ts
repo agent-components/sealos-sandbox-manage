@@ -1,6 +1,6 @@
 import https from "https";
 import { URL } from "url";
-import yaml from "js-yaml";
+import { load as loadYaml } from "js-yaml";
 
 export type KubeContext = {
   server: string;
@@ -23,7 +23,7 @@ type KubeconfigFile = {
 };
 
 export function loadKubeContext(kubeconfigYaml: string): KubeContext {
-  const kc = yaml.load(kubeconfigYaml) as KubeconfigFile;
+  const kc = loadYaml(kubeconfigYaml) as KubeconfigFile;
   const ctxName = kc["current-context"];
   const ctx = kc.contexts.find((c) => c.name === ctxName)?.context;
   if (!ctx) throw new Error("kubeconfig 缺少 current-context");

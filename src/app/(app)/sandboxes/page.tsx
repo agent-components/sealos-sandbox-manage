@@ -226,8 +226,13 @@ export default function SandboxesPage() {
         title: "名称",
         dataIndex: "id",
         key: "id",
+        width: 160,
+        fixed: "left",
         render: (id: string) => (
-          <Typography.Text strong style={{ fontFamily: "var(--font-mono)" }}>
+          <Typography.Text
+            strong
+            style={{ fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}
+          >
             {id}
           </Typography.Text>
         ),
@@ -291,6 +296,7 @@ export default function SandboxesPage() {
         key: "actions",
         width: 260,
         align: "right",
+        fixed: "right",
         render: (_, sb) => {
           const rowBusy = busyId === sb.id;
           const powerLabel = canStop(sb.state) ? "关机" : "开机";
@@ -378,10 +384,10 @@ export default function SandboxesPage() {
         dataSource={sandboxes}
         pagination={false}
         showSorterTooltip={false}
+        scroll={{ x: 1120 }}
         style={{
           border: "1px solid #f0f0f0",
           borderRadius: 8,
-          overflow: "hidden",
         }}
         locale={{
           emptyText: (

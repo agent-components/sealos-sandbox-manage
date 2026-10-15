@@ -236,19 +236,23 @@ export default function TemplatesPage() {
         title: "ID",
         dataIndex: "id",
         width: 180,
+        fixed: "left",
         render: (id: string) => (
           <Typography.Text style={{ fontFamily: "var(--font-mono)" }}>
             {id}
           </Typography.Text>
         ),
       },
-      { title: "名称", dataIndex: "name" },
+      { title: "名称", dataIndex: "name", width: 160 },
       {
         title: "镜像",
         dataIndex: "image",
-        ellipsis: true,
+        width: 280,
         render: (image: string) => (
-          <Typography.Text type="secondary" ellipsis={{ tooltip: image }}>
+          <Typography.Text
+            type="secondary"
+            style={{ fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}
+          >
             {image}
           </Typography.Text>
         ),
@@ -302,6 +306,7 @@ export default function TemplatesPage() {
         key: "actions",
         width: 140,
         align: "right",
+        fixed: "right",
         render: (_, tpl) => (
           <Space size={0}>
             <Button
@@ -358,10 +363,10 @@ export default function TemplatesPage() {
         columns={columns}
         dataSource={templates}
         pagination={false}
+        scroll={{ x: 1100 }}
         style={{
           border: "1px solid #f0f0f0",
           borderRadius: 8,
-          overflow: "hidden",
         }}
         locale={{
           emptyText: (
