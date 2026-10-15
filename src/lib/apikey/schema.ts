@@ -29,8 +29,14 @@ export const CreateApiKeySchema = z.object({
   sandboxIds: SandboxIdListSchema.optional().default([]),
 });
 
-export const UpdateApiKeySchema = z.object({
-  sandboxIds: SandboxIdListSchema,
-});
+export const UpdateApiKeySchema = z
+  .object({
+    name: z.string().trim().min(1, "请填写名称").max(64).optional(),
+    sandboxIds: SandboxIdListSchema.optional(),
+  })
+  .refine(
+    (value) => value.name !== undefined || value.sandboxIds !== undefined,
+    { message: "没有可更新的字段" },
+  );
 
 export const MAX_API_KEYS_PER_USER = 20;

@@ -31,14 +31,12 @@ export default function ApiKeysPage() {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<ApiKey | null>(null);
   const [name, setName] = useState("");
   const [sandboxIds, setSandboxIds] = useState<string[]>([]);
   const [sandboxes, setSandboxes] = useState<Sandbox[]>([]);
   const [sandboxesLoading, setSandboxesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [accessKey, setAccessKey] = useState<ApiKey | null>(null);
-  const [accessIds, setAccessIds] = useState<string[]>([]);
-  const [accessSaving, setAccessSaving] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -68,19 +66,22 @@ export default function ApiKeysPage() {
   }, [message]);
 
   function openCreate() {
+    setEditing(null);
     setName("");
     setSandboxIds([]);
     setOpen(true);
     void loadSandboxes();
   }
 
-  function openAccess(item: ApiKey) {
-    setAccessKey(item);
-    setAccessIds(item.sandboxIds ?? []);
+  function openEdit(item: ApiKey) {
+    setEditing(item);
+    setName(item.name);
+    setSandboxIds(item.sandboxIds ?? []);
+    setOpen(true);
     void loadSandboxes();
   }
 
-  async function create() {
+  async function save() {
     const trimmed = name.trim();
     if (!trimmed) {
       message.error("请填写名称");
@@ -88,29 +89,19 @@ export default function ApiKeysPage() {
     }
     setSaving(true);
     try {
-      await boatClient.createApiKey({ name: trimmed, sandboxIds });
-      message.success("API Key 已创建");
+      if (editing) {
+        await boatClient.updateApiKey(editing.id, { name: trimmed, sandboxIds });
+        message.success("已保存");
+      } else {
+        await boatClient.createApiKey({ name: trimmed, sandboxIds });
+        message.success("API Key 已创建");
+      }
       setOpen(false);
-      await refresh();
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "创建失败");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function saveAccess() {
-    if (!accessKey) return;
-    setAccessSaving(true);
-    try {
-      await boatClient.updateApiKeySandboxes(accessKey.id, accessIds);
-      message.success("权限已更新");
-      setAccessKey(null);
       await refresh();
     } catch (err) {
       message.error(err instanceof Error ? err.message : "保存失败");
     } finally {
-      setAccessSaving(false);
+      setSaving(false);
     }
   }
 
@@ -192,9 +183,9 @@ export default function ApiKeysPage() {
               type="link"
               size="small"
               style={{ paddingInline: 4 }}
-              onClick={() => openAccess(item)}
+              onClick={() => openEdit(item)}
             >
-              权限
+              编辑
             </Button>
             <Button
               type="link"
@@ -260,7 +251,7 @@ export default function ApiKeysPage() {
       </div>
 
       <Modal
-        title="新建 API Key"
+        title={editing ? "编辑 API Key" : "新建 API Key"}
         open={open}
         onCancel={() => {
           if (!saving) setOpen(false);
@@ -269,11 +260,11 @@ export default function ApiKeysPage() {
         destroyOnHidden
         width={480}
         confirmLoading={saving}
-        okText="创建"
+        okText={editing ? "保存" : "创建"}
         cancelText="取消"
         mask={{ closable: !saving }}
         cancelButtonProps={{ disabled: saving }}
-        onOk={() => void create()}
+        onOk={() => void save()}
       >
         <Form
           layout="horizontal"
@@ -291,16 +282,16 @@ export default function ApiKeysPage() {
               placeholder="例如 CI、本地脚本"
               autoFocus
               onChange={(e) => setName(e.target.value)}
-              onPressEnter={() => void create()}
+              onPressEnter={() => void save()}
             />
           </Form.Item>
-          <Form.Item label="沙箱" style={{ marginBottom: 0 }}>
+          <Form.Item label="沙箱" extra="用这把 Key 新建的沙箱会自动加入" style={{ marginBottom: 0 }}>
             <Select
               mode="multiple"
               allowClear
               showSearch
               optionFilterProp="label"
-              placeholder="可先不选，之后只能访问用这把 Key 创建的沙箱"
+              placeholder="选择允许访问的沙箱"
               loading={sandboxesLoading}
               value={sandboxIds}
               options={sandboxes.map((item) => ({
@@ -311,43 +302,6 @@ export default function ApiKeysPage() {
             />
           </Form.Item>
         </Form>
-      </Modal>
-
-      <Modal
-        title={accessKey ? `沙箱权限 · ${accessKey.name}` : "沙箱权限"}
-        open={!!accessKey}
-        onCancel={() => {
-          if (!accessSaving) setAccessKey(null);
-        }}
-        centered
-        destroyOnHidden
-        width={480}
-        confirmLoading={accessSaving}
-        okText="保存"
-        cancelText="取消"
-        mask={{ closable: !accessSaving }}
-        cancelButtonProps={{ disabled: accessSaving }}
-        onOk={() => void saveAccess()}
-      >
-        <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
-          只能访问这里列出的沙箱。用这把 Key 新建的沙箱会自动加进来。
-        </Typography.Paragraph>
-        <Select
-          mode="multiple"
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder="选择允许访问的沙箱"
-          style={{ width: "100%" }}
-          loading={sandboxesLoading}
-          value={accessIds}
-          options={sandboxes.map((item) => ({
-            value: item.id,
-            label: item.name || item.id,
-          }))}
-          onChange={setAccessIds}
-          disabled={accessSaving}
-        />
       </Modal>
     </>
   );

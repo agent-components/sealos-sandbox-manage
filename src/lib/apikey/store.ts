@@ -71,15 +71,18 @@ export async function createApiKey(input: {
   return toApiKey(doc);
 }
 
-export async function setApiKeySandboxes(
+export async function updateApiKey(
   id: string,
   username: string,
-  sandboxIds: string[],
+  patch: { name?: string; sandboxIds?: string[] },
 ): Promise<ApiKey | null> {
   const col = await apiKeys();
+  const $set: { name?: string; sandboxIds?: string[] } = {};
+  if (patch.name !== undefined) $set.name = patch.name;
+  if (patch.sandboxIds !== undefined) $set.sandboxIds = patch.sandboxIds;
   const result = await col.findOneAndUpdate(
     { id, username },
-    { $set: { sandboxIds } },
+    { $set },
     { returnDocument: "after" },
   );
   return result ? toApiKey(result) : null;
