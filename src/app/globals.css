@@ -29,6 +29,29 @@
   }
 }
 
+/* 列表表格：固定列 + 横向滚动 */
+.boat-table-wrap {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.boat-table-wrap .ant-table-cell-fix-left,
+.boat-table-wrap .ant-table-cell-fix-right {
+  background: #fff !important;
+}
+
+.boat-table-wrap .ant-table-thead > tr > th.ant-table-cell-fix-left,
+.boat-table-wrap .ant-table-thead > tr > th.ant-table-cell-fix-right {
+  background: #fafafa !important;
+}
+
+.boat-table-wrap .ant-table-cell-fix-left-last::after,
+.boat-table-wrap .ant-table-cell-fix-right-first::after {
+  box-shadow: none !important;
+}
+
 /* 模板抽屉 */
 .template-drawer .ant-drawer-header {
   padding: 16px 24px;

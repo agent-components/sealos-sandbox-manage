@@ -304,7 +304,7 @@ export default function TemplatesPage() {
       {
         title: "操作",
         key: "actions",
-        width: 140,
+        width: 110,
         align: "right",
         fixed: "right",
         render: (_, tpl) => (
@@ -356,31 +356,29 @@ export default function TemplatesPage() {
         </Button>
       </Flex>
 
-      <Table<Template>
-        rowKey="id"
-        size="small"
-        loading={loading}
-        columns={columns}
-        dataSource={templates}
-        pagination={false}
-        scroll={{ x: 1100 }}
-        style={{
-          border: "1px solid #f0f0f0",
-          borderRadius: 8,
-        }}
-        locale={{
-          emptyText: (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="还没有模板"
-            >
-              <Button type="primary" onClick={openCreate}>
-                新建模板
-              </Button>
-            </Empty>
-          ),
-        }}
-      />
+      <div className="boat-table-wrap">
+        <Table<Template>
+          rowKey="id"
+          size="small"
+          loading={loading}
+          columns={columns}
+          dataSource={templates}
+          pagination={false}
+          scroll={{ x: 1070 }}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="还没有模板"
+              >
+                <Button type="primary" onClick={openCreate}>
+                  新建模板
+                </Button>
+              </Empty>
+            ),
+          }}
+        />
+      </div>
 
       <Drawer
         className="template-drawer"

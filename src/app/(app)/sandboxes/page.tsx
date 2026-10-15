@@ -220,6 +220,12 @@ export default function SandboxesPage() {
     }
   }
 
+  const templateNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of templates) map.set(t.id, t.name);
+    return map;
+  }, [templates]);
+
   const columns: ColumnsType<Sandbox> = useMemo(
     () => [
       {
@@ -242,17 +248,15 @@ export default function SandboxesPage() {
         dataIndex: "templateId",
         key: "templateId",
         width: 180,
-        render: (id?: string) =>
-          id ? (
-            <Typography.Text
-              type="secondary"
-              style={{ fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}
-            >
-              {id}
+        render: (id?: string) => {
+          if (!id) return "—";
+          const name = templateNameById.get(id);
+          return (
+            <Typography.Text type="secondary" style={{ whiteSpace: "nowrap" }}>
+              {name || id}
             </Typography.Text>
-          ) : (
-            "—"
-          ),
+          );
+        },
       },
       {
         title: "镜像",
@@ -294,7 +298,7 @@ export default function SandboxesPage() {
       {
         title: "操作",
         key: "actions",
-        width: 260,
+        width: 160,
         align: "right",
         fixed: "right",
         render: (_, sb) => {
@@ -310,7 +314,7 @@ export default function SandboxesPage() {
               <Button
                 type="link"
                 size="small"
-                style={{ paddingInline: 4 }}
+                style={{ paddingInline: 2 }}
                 onClick={() => setViewId(sb.id)}
               >
                 查看
@@ -318,7 +322,7 @@ export default function SandboxesPage() {
               <Button
                 type="link"
                 size="small"
-                style={{ paddingInline: 4 }}
+                style={{ paddingInline: 2 }}
                 onClick={() => setLogsId(sb.id)}
               >
                 日志
@@ -326,7 +330,7 @@ export default function SandboxesPage() {
               <Button
                 type="link"
                 size="small"
-                style={{ paddingInline: 4 }}
+                style={{ paddingInline: 2 }}
                 loading={rowBusy}
                 disabled={powerDisabled && !rowBusy}
                 onClick={() => void runPower(sb)}
@@ -337,7 +341,7 @@ export default function SandboxesPage() {
                 type="link"
                 size="small"
                 danger
-                style={{ paddingInline: 4 }}
+                style={{ paddingInline: 2 }}
                 disabled={rowBusy || deleting}
                 onClick={() => {
                   setDeleteTarget(sb);
@@ -351,7 +355,7 @@ export default function SandboxesPage() {
         },
       },
     ],
-    [busyId, deleting],
+    [busyId, deleting, templateNameById],
   );
 
   return (
@@ -376,32 +380,30 @@ export default function SandboxesPage() {
         </Button>
       </Flex>
 
-      <Table<Sandbox>
-        rowKey="id"
-        size="small"
-        loading={loading}
-        columns={columns}
-        dataSource={sandboxes}
-        pagination={false}
-        showSorterTooltip={false}
-        scroll={{ x: 1120 }}
-        style={{
-          border: "1px solid #f0f0f0",
-          borderRadius: 8,
-        }}
-        locale={{
-          emptyText: (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="还没有沙箱"
-            >
-              <Button type="primary" onClick={() => void openCreate()}>
-                新建沙箱
-              </Button>
-            </Empty>
-          ),
-        }}
-      />
+      <div className="boat-table-wrap">
+        <Table<Sandbox>
+          rowKey="id"
+          size="small"
+          loading={loading}
+          columns={columns}
+          dataSource={sandboxes}
+          pagination={false}
+          showSorterTooltip={false}
+          scroll={{ x: 1060 }}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="还没有沙箱"
+              >
+                <Button type="primary" onClick={() => void openCreate()}>
+                  新建沙箱
+                </Button>
+              </Empty>
+            ),
+          }}
+        />
+      </div>
 
       <Modal
         title="新建沙箱"
