@@ -1,7 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button, Modal, Space, Typography } from "antd";
+import {
+  Alert,
+  Button,
+  Descriptions,
+  Flex,
+  Modal,
+  Skeleton,
+  Space,
+  Typography,
+} from "antd";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { StateBadge } from "@/components/StateBadge";
 import { boatClient } from "@/lib/client";
@@ -43,6 +52,8 @@ export function SandboxDetailModal({
 
   useEffect(() => {
     if (!open) return;
+    setSandbox(null);
+    setResources(null);
     void load();
     const timer = setInterval(() => {
       void load();
@@ -74,25 +85,13 @@ export function SandboxDetailModal({
 
   return (
     <Modal
-      title={
-        <div className="pr-6">
-          <div className="font-mono text-base">{sandboxId}</div>
-          <div className="mt-1 font-mono text-xs font-normal text-gray-500">
-            {sandbox
-              ? `${sandbox.cpu} 核 · ${memoryLabel(sandbox.memoryGi)} · ${sandbox.diskGi}Gi${sandbox.image ? ` · ${sandbox.image}` : ""
-              }`
-              : "加载中…"}
-          </div>
-        </div>
-      }
+      title={sandboxId}
       open={open}
       onCancel={onClose}
       centered
       destroyOnHidden
       width={640}
-      styles={{
-        body: { minHeight: 360 },
-      }}
+      styles={{ body: { minHeight: 380 } }}
       mask={{ closable: busy === null }}
       closable={busy === null}
       footer={
@@ -112,68 +111,74 @@ export function SandboxDetailModal({
       }
     >
       {error ? (
-        <Typography.Text type="danger" className="mb-3 block">
-          {error}
-        </Typography.Text>
+        <Alert
+          type="error"
+          showIcon
+          message={error}
+          style={{ marginBottom: 16 }}
+        />
       ) : null}
 
-      <div className="space-y-6">
-        <div className="flex h-7 items-center gap-3">
-          {sandbox ? (
-            <>
-              <StateBadge state={sandbox.state} />
-              <span className="text-xs text-gray-500">状态约每 5 秒刷新</span>
-            </>
-          ) : (
-            <span className="text-sm text-gray-500">加载中…</span>
-          )}
-        </div>
+      {!sandbox || !resources ? (
+        <Skeleton active paragraph={{ rows: 8 }} />
+      ) : (
+        <Space direction="vertical" size={20} style={{ width: "100%" }}>
+          <Flex align="center" gap={12}>
+            <StateBadge state={sandbox.state} />
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              状态约每 5 秒刷新
+            </Typography.Text>
+          </Flex>
 
-        <section className="space-y-2">
-          <div className="text-sm font-medium">公网地址</div>
-          <div className="min-h-[40px]">
-            {sandbox?.publicUrl ? (
-              <Space wrap>
-                <Typography.Link
-                  href={sandbox.publicUrl}
-                  target="_blank"
-                  className="font-mono"
-                >
-                  {sandbox.publicUrl}
-                </Typography.Link>
-                <Button
-                  size="small"
-                  onClick={() =>
-                    void navigator.clipboard.writeText(sandbox.publicUrl!)
-                  }
-                >
-                  复制
-                </Button>
-              </Space>
-            ) : (
-              <span className="text-sm text-gray-500">
-                {sandbox ? "尚未就绪，进入运行中后会自动出现" : "…"}
-              </span>
-            )}
-          </div>
-          <div className="text-xs text-gray-500">
-            容器内 API 请直连该地址。本控制台不代理命令执行。
-          </div>
-        </section>
+          <Descriptions
+            size="small"
+            column={1}
+            bordered
+            items={[
+              {
+                key: "url",
+                label: "公网地址",
+                children: sandbox.publicUrl ? (
+                  <Space wrap>
+                    <Typography.Link href={sandbox.publicUrl} target="_blank">
+                      {sandbox.publicUrl}
+                    </Typography.Link>
+                    <Button
+                      size="small"
+                      onClick={() =>
+                        void navigator.clipboard.writeText(sandbox.publicUrl!)
+                      }
+                    >
+                      复制
+                    </Button>
+                  </Space>
+                ) : (
+                  <Typography.Text type="secondary">
+                    尚未就绪，进入运行中后会自动出现
+                  </Typography.Text>
+                ),
+              },
+              {
+                key: "spec",
+                label: "当前规格",
+                children: `${sandbox.cpu} 核 · ${memoryLabel(sandbox.memoryGi)} · ${sandbox.diskGi}Gi${sandbox.image ? ` · ${sandbox.image}` : ""
+                  }`,
+              },
+            ]}
+          />
 
-        <section className="space-y-3">
-          <div className="text-sm font-medium">资源配置</div>
-          {resources ? (
+          <div>
+            <Typography.Title level={5} style={{ marginTop: 0 }}>
+              资源配置
+            </Typography.Title>
             <ResourceConfig
               value={resources}
               onChange={setResources}
               disabled={busy !== null}
             />
-          ) : (
-            <div className="h-[220px] animate-pulse rounded-md bg-gray-100" />
-          )}
-        </section>
-      </div>
+          </div>
+        </Space>
+      )}
     </Modal>
   );
 }

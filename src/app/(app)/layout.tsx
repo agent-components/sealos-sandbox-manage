@@ -5,9 +5,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <Suspense
       fallback={
-        <main className="mx-auto flex min-h-full max-w-5xl items-center px-6 py-24 text-sm text-gray-600">
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "100vh",
+            background: "#fff",
+            color: "#8c8c8c",
+            fontSize: 14,
+          }}
+        >
           加载中…
-        </main>
+        </div>
       }
     >
       <AppShell>{children}</AppShell>

@@ -38,9 +38,15 @@ export function AntdProvider({ children }: { children: React.ReactNode }) {
             },
             Table: {
               headerBg: "#fafafa",
-              headerColor: "#595959",
+              headerColor: "#8c8c8c",
+              headerSplitColor: "transparent",
               borderColor: "#f0f0f0",
               rowHoverBg: "#fafafa",
+              cellPaddingBlockSM: 6,
+              cellPaddingInlineSM: 12,
+              cellPaddingBlock: 6,
+              cellPaddingInline: 12,
+              fontWeightStrong: 500,
             },
             Modal: {
               contentBg: "#ffffff",

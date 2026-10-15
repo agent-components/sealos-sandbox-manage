@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   App,
   Button,
+  Empty,
+  Flex,
   Input,
   Modal,
   Space,
@@ -43,6 +45,9 @@ export default function SandboxesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Sandbox | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const view = searchParams.get("view");
@@ -51,9 +56,6 @@ export default function SandboxesPage() {
       router.replace("/sandboxes");
     }
   }, [router, searchParams]);
-  const [deleteTarget, setDeleteTarget] = useState<Sandbox | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState("");
-  const [deleting, setDeleting] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -137,36 +139,33 @@ export default function SandboxesPage() {
         title: "名称",
         dataIndex: "id",
         key: "id",
-        render: (_, sb) => (
-          <div className="min-w-0">
-            <div className="font-mono text-sm font-medium">{sb.id}</div>
-            <div className="truncate text-xs text-gray-500">
-              {sb.publicUrl ?? "公网地址准备中…"}
-            </div>
-          </div>
+        render: (id: string) => (
+          <Typography.Text strong style={{ fontFamily: "var(--font-mono)" }}>
+            {id}
+          </Typography.Text>
         ),
       },
       {
         title: "规格",
         key: "spec",
-        width: 180,
+        width: 220,
         render: (_, sb) => (
-          <span className="font-mono text-xs text-gray-600">
+          <Typography.Text type="secondary">
             {sb.cpu} 核 · {memoryLabel(sb.memoryGi)} · {sb.diskGi}Gi
-          </span>
+          </Typography.Text>
         ),
       },
       {
         title: "状态",
         dataIndex: "state",
         key: "state",
-        width: 100,
+        width: 120,
         render: (state: Sandbox["state"]) => <StateBadge state={state} />,
       },
       {
         title: "操作",
         key: "actions",
-        width: 260,
+        width: 220,
         align: "right",
         render: (_, sb) => {
           const rowBusy = busyId === sb.id;
@@ -177,12 +176,19 @@ export default function SandboxesPage() {
             (!canStop(sb.state) && !canStart(sb.state));
 
           return (
-            <Space size={8} wrap>
-              <Button size="small" onClick={() => setViewId(sb.id)}>
+            <Space size={0}>
+              <Button
+                type="link"
+                size="small"
+                style={{ paddingInline: 4 }}
+                onClick={() => setViewId(sb.id)}
+              >
                 查看
               </Button>
               <Button
+                type="link"
                 size="small"
+                style={{ paddingInline: 4 }}
                 loading={rowBusy}
                 disabled={powerDisabled && !rowBusy}
                 onClick={() => void runPower(sb)}
@@ -190,8 +196,10 @@ export default function SandboxesPage() {
                 {powerLabel}
               </Button>
               <Button
+                type="link"
                 size="small"
                 danger
+                style={{ paddingInline: 4 }}
                 disabled={rowBusy || deleting}
                 onClick={() => {
                   setDeleteTarget(sb);
@@ -209,26 +217,52 @@ export default function SandboxesPage() {
   );
 
   return (
-    <main>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <>
+      <Flex
+        align="flex-start"
+        justify="space-between"
+        gap={16}
+        wrap
+        style={{ marginBottom: 24 }}
+      >
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">沙箱</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <Typography.Title level={3} style={{ margin: 0 }}>
+            沙箱
+          </Typography.Title>
+          <Typography.Text type="secondary">
             管理云端沙箱实例 · 状态每 5 秒刷新
-          </p>
+          </Typography.Text>
         </div>
         <Button type="primary" onClick={openCreate}>
           新建沙箱
         </Button>
-      </div>
+      </Flex>
 
-      <Table
+      <Table<Sandbox>
         rowKey="id"
+        size="small"
         loading={loading}
         columns={columns}
         dataSource={sandboxes}
         pagination={false}
-        locale={{ emptyText: "还没有沙箱，点击右上角新建" }}
+        showSorterTooltip={false}
+        style={{
+          border: "1px solid #f0f0f0",
+          borderRadius: 8,
+          overflow: "hidden",
+        }}
+        locale={{
+          emptyText: (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="还没有沙箱"
+            >
+              <Button type="primary" onClick={openCreate}>
+                新建沙箱
+              </Button>
+            </Empty>
+          ),
+        }}
       />
 
       <Modal
@@ -244,10 +278,10 @@ export default function SandboxesPage() {
         cancelText="取消"
         onOk={() => void create()}
       >
-        <div className="mb-4 font-mono text-xs text-gray-500">
+        <Typography.Text type="secondary" style={{ display: "block", marginBottom: 16 }}>
           {resources.cpu} 核 · {memoryLabel(resources.memoryGi)} ·{" "}
           {resources.diskGi}Gi
-        </div>
+        </Typography.Text>
         <ResourceConfig
           value={resources}
           onChange={setResources}
@@ -296,6 +330,6 @@ export default function SandboxesPage() {
           onPressEnter={() => void confirmDelete()}
         />
       </Modal>
-    </main>
+    </>
   );
 }

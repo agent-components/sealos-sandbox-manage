@@ -1,24 +1,26 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, Form, Input, Typography } from "antd";
+import { Alert, Button, Card, Flex, Form, Input } from "antd";
 import { Brand } from "@/components/Brand";
 import { boatClient } from "@/lib/client";
 
+type LoginValues = {
+  username: string;
+  password: string;
+};
+
 export default function LoginPage() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function onFinish(values: LoginValues) {
     setLoading(true);
     setError(null);
     try {
-      await boatClient.login(username.trim(), password);
+      await boatClient.login(values.username.trim(), values.password);
       router.replace("/sandboxes");
       router.refresh();
     } catch (err) {
@@ -29,33 +31,46 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-6 py-16">
-      <Brand large />
-      <Card className="mt-8" styles={{ body: { padding: 24 } }}>
-        <form onSubmit={onSubmit}>
-          <Form layout="vertical">
-            <Form.Item label="用户名" required>
-              <Input
-                size="large"
-                autoComplete="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="用户名"
-              />
+    <Flex
+      vertical
+      align="center"
+      justify="center"
+      style={{ minHeight: "100vh", background: "#fff", padding: 24 }}
+    >
+      <div style={{ width: "100%", maxWidth: 400 }}>
+        <Brand large />
+        <Card style={{ marginTop: 24 }}>
+          <Form<LoginValues>
+            layout="vertical"
+            requiredMark={false}
+            onFinish={onFinish}
+            initialValues={{ username: "", password: "" }}
+          >
+            <Form.Item
+              label="用户名"
+              name="username"
+              rules={[{ required: true, message: "请输入用户名" }]}
+            >
+              <Input size="large" autoComplete="username" placeholder="用户名" />
             </Form.Item>
-            <Form.Item label="密码" required>
+            <Form.Item
+              label="密码"
+              name="password"
+              rules={[{ required: true, message: "请输入密码" }]}
+            >
               <Input.Password
                 size="large"
                 autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
                 placeholder="密码"
               />
             </Form.Item>
             {error ? (
-              <Typography.Text type="danger" className="mb-3 block">
-                {error}
-              </Typography.Text>
+              <Alert
+                type="error"
+                showIcon
+                message={error}
+                style={{ marginBottom: 16 }}
+              />
             ) : null}
             <Button
               type="primary"
@@ -63,13 +78,12 @@ export default function LoginPage() {
               size="large"
               block
               loading={loading}
-              disabled={!username.trim() || !password}
             >
               登录
             </Button>
           </Form>
-        </form>
-      </Card>
-    </main>
+        </Card>
+      </div>
+    </Flex>
   );
 }
