@@ -15,6 +15,7 @@ import {
   Select,
   Space,
   Table,
+  Tag,
   Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -24,7 +25,7 @@ import { SandboxDetailModal } from "@/components/SandboxDetailModal";
 import { SandboxLogsModal } from "@/components/SandboxLogsModal";
 import { StateBadge } from "@/components/StateBadge";
 import { boatClient } from "@/lib/client";
-import type { Sandbox } from "@/lib/sandbox/schema";
+import { TagsSchema, type Sandbox } from "@/lib/sandbox/schema";
 import {
   DEFAULT_RESOURCES,
   memoryLabel,
@@ -51,6 +52,8 @@ export default function SandboxesPage() {
     useState<ResourceSpec>(DEFAULT_RESOURCES);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [createName, setCreateName] = useState("");
+  const [createTags, setCreateTags] = useState<string[]>([]);
+  const [tagQuery, setTagQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -124,6 +127,7 @@ export default function SandboxesPage() {
         .map((e) => ({ name: e.name, value: e.value ?? "" })),
     );
     setCreateName("");
+    setCreateTags([]);
     setAdvancedOpen(false);
     setCreateOpen(true);
   }

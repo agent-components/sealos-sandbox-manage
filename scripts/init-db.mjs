@@ -49,6 +49,15 @@ try {
     console.log(`数据库「${dbName}」就绪；用户「${username}」已存在`);
   }
 
+  const apiKeys = db.collection("apikeys");
+  await apiKeys.createIndex({ id: 1 }, { unique: true });
+  await apiKeys.createIndex({ key: 1 }, { unique: true });
+  await apiKeys.createIndex({ username: 1 });
+
+  const sandboxTags = db.collection("sandbox_tags");
+  await sandboxTags.createIndex({ owner: 1, sandboxId: 1 }, { unique: true });
+  await sandboxTags.createIndex({ owner: 1, tagsKey: 1 });
+
   const templates = db.collection("templates");
   await templates.createIndex({ id: 1 }, { unique: true });
   await templates.deleteMany({});

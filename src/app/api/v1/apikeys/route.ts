@@ -1,0 +1,56 @@
+import { NextRequest } from "next/server";
+import { requireSessionUser } from "@/lib/auth/resolve";
+import { jsonError, jsonOk } from "@/lib/api/response";
+import { createApiKeyId } from "@/lib/apikey/id";
+import { CreateApiKeySchema, MAX_API_KEYS_PER_USER } from "@/lib/apikey/schema";
+import { createApiKeySecret } from "@/lib/apikey/secret";
+import {
+  apiKeyIdExists,
+  countApiKeys,
+  createApiKey,
+  listApiKeys,
+} from "@/lib/apikey/store";
+
+export async function GET() {
+  try {
+    const user = await requireSessionUser();
+    const apiKeys = await listApiKeys(user.username);
+    return jsonOk({ apiKeys });
+  } catch (error) {
+    return jsonError(error);
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const user = await requireSessionUser();
+    const input = CreateApiKeySchema.parse(await req.json());
+
+    const count = await countApiKeys(user.username);
+    if (count >= MAX_API_KEYS_PER_USER) {
+      return jsonOk(
+        { error: `每个用户最多创建 ${MAX_API_KEYS_PER_USER} 个 API Key` },
+        { status: 400 },
+      );
+    }
+
+    let id = createApiKeyId();
+    for (let i = 0; i < 5; i++) {
+      if (!(await apiKeyIdExists(id))) break;
+      id = createApiKeyId();
+    }
+    if (await apiKeyIdExists(id)) {
+      return jsonOk({ error: "无法生成唯一 API Key ID，请重试" }, { status: 500 });
+    }
+
+    const apiKey = await createApiKey({
+      id,
+      name: input.name,
+      username: user.username,
+      key: createApiKeySecret(),
+    });
+    return jsonOk({ apiKey }, { status: 201 });
+  } catch (error) {
+    return jsonError(error);
+  }
+}

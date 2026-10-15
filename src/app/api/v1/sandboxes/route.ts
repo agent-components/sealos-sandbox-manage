@@ -2,21 +2,65 @@ import { NextRequest } from "next/server";
 import { requireUser, resolveKubeconfig } from "@/lib/auth/resolve";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { createSandboxId } from "@/lib/sandbox/id";
-import { CreateSandboxSchema } from "@/lib/sandbox/schema";
+import { CreateSandboxSchema, TagsSchema } from "@/lib/sandbox/schema";
 import { isOwnedBy } from "@/lib/sandbox/ownership";
+import {
+  findSandboxIdsByTagQuery,
+  findSandboxIdsByTags,
+  setSandboxTags,
+  withSandboxTags,
+} from "@/lib/sandbox/tags";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { toSandbox } from "@/lib/sealos/map";
 import { getTemplate } from "@/lib/template/store";
 
-export async function GET() {
+function intersectIds(current: Set<string> | null, next: string[]): Set<string> {
+  if (!current) return new Set(next);
+  const allowed = new Set(next);
+  return new Set([...current].filter((id) => allowed.has(id)));
+}
+
+export async function GET(req: NextRequest) {
   try {
     const user = await requireUser();
     const kubeconfig = await resolveKubeconfig();
     const client = createLaunchpadClient({ kubeconfig });
     const apps = await client.listApps();
-    const sandboxes = apps
-      .filter((app) => isOwnedBy(app, user.username))
-      .map(toSandbox);
+    let owned = apps.filter((app) => isOwnedBy(app, user.username));
+
+    const tagQuery = req.nextUrl.searchParams
+      .getAll("tag")
+      .flatMap((value) => value.split(","))
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const tags = tagQuery.length > 0 ? TagsSchema.parse(tagQuery) : [];
+
+    const keyword = (req.nextUrl.searchParams.get("q") ?? "")
+      .split(/[\s,]+/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    let matchedIds: Set<string> | null = null;
+    if (tags.length > 0) {
+      matchedIds = intersectIds(
+        matchedIds,
+        await findSandboxIdsByTags(user.username, tags),
+      );
+    }
+    if (keyword.length > 0) {
+      matchedIds = intersectIds(
+        matchedIds,
+        await findSandboxIdsByTagQuery(user.username, keyword),
+      );
+    }
+    if (matchedIds) {
+      owned = owned.filter((app) => matchedIds.has(app.name));
+    }
+
+    const sandboxes = await withSandboxTags(
+      user.username,
+      owned.map(toSandbox),
+    );
     return jsonOk({ sandboxes });
   } catch (error) {
     return jsonError(error);
@@ -50,7 +94,14 @@ export async function POST(req: NextRequest) {
       },
       env: input.env,
     });
-    return jsonOk({ sandbox: toSandbox(app) }, { status: 201 });
+    try {
+      await setSandboxTags(user.username, id, input.tags);
+    } catch (error) {
+      await client.deleteApp(id).catch(() => undefined);
+      throw error;
+    }
+    const [sandbox] = await withSandboxTags(user.username, [toSandbox(app)]);
+    return jsonOk({ sandbox }, { status: 201 });
   } catch (error) {
     return jsonError(error);
   }

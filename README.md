@@ -29,7 +29,9 @@ npm run dev
 
 ## REST API
 
-基路径 `/api/v1`。需先登录获取 session cookie；沙箱按当前用户隔离。服务端另用环境中的 kubeconfig 调用 Sealos。
+基路径 `/api/v1`。需先登录获取 session cookie，或使用控制台创建的 API Key（`Authorization: Bearer boat_...`）。沙箱与 API Key 按当前用户隔离。服务端另用环境中的 kubeconfig 调用 Sealos。
+
+API Key 以明文保存在数据库中，列表接口会返回完整密钥。密钥管理接口（`/api/v1/apikeys`）仅接受登录会话，不接受 API Key 自身调用。
 
 ### 示例
 
@@ -47,6 +49,10 @@ curl -sS -b /tmp/boat.ck -X POST "$BOAT_API_BASE/api/v1/sandboxes" \
 
 # 列表
 curl -sS -b /tmp/boat.ck "$BOAT_API_BASE/api/v1/sandboxes"
+
+# 使用 API Key（在控制台「API Key」页创建）
+curl -sS -H "Authorization: Bearer boat_..." \
+  "$BOAT_API_BASE/api/v1/sandboxes"
 ```
 
 拿到详情中的 `publicUrl` 后，直接对该地址调用容器 API（命令执行不在本项目范围）。

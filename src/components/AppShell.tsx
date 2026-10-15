@@ -79,11 +79,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Menu
               mode="horizontal"
               selectedKeys={
-                pathname.startsWith("/templates")
-                  ? ["templates"]
-                  : pathname.startsWith("/sandboxes")
-                    ? ["sandboxes"]
-                    : []
+                pathname.startsWith("/apikeys")
+                  ? ["apikeys"]
+                  : pathname.startsWith("/templates")
+                    ? ["templates"]
+                    : pathname.startsWith("/sandboxes")
+                      ? ["sandboxes"]
+                      : []
               }
               items={[
                 {
@@ -94,11 +96,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   key: "templates",
                   label: <Link href="/templates">模板</Link>,
                 },
+                {
+                  key: "apikeys",
+                  label: <Link href="/apikeys">API Key</Link>,
+                },
               ]}
               style={{
                 border: "none",
                 background: "transparent",
-                minWidth: 200,
+                minWidth: 280,
                 lineHeight: "54px",
               }}
             />

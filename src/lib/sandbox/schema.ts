@@ -22,6 +22,35 @@ export const ResourceSpecSchema = z.object({
   diskGi: z.number().int().min(1).max(1000),
 });
 
+/** 以字母或数字开头，其余可为字母、数字、点、下划线、连字符 */
+const tagPattern = /^[\p{L}\p{N}][\p{L}\p{N}._-]{0,31}$/u;
+
+export const TagSchema = z
+  .string()
+  .trim()
+  .min(1, "标签不能为空")
+  .max(32, "单个标签最长 32 个字符")
+  .regex(tagPattern, {
+    message: "标签须以字母或数字开头，只能包含字母、数字、.、_、-",
+  });
+
+export const TagsSchema = z
+  .array(TagSchema)
+  .max(20, "最多 20 个标签")
+  .transform((tags) => {
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    for (const tag of tags) {
+      const key = tag.toLocaleLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(tag);
+    }
+    return unique;
+  });
+
+export type SandboxTags = z.infer<typeof TagsSchema>;
+
 export const SandboxSchema = z.object({
   id: z.string(),
   name: z.string().optional(),
@@ -32,6 +61,7 @@ export const SandboxSchema = z.object({
   publicUrl: z.string().nullable(),
   image: z.string().optional(),
   templateId: z.string().optional(),
+  tags: z.array(z.string()).default([]),
   createdAt: z.string().optional(),
   upTime: z.string().optional(),
 });
@@ -49,6 +79,7 @@ export const CreateSandboxSchema = z.object({
   memoryGi: ResourceSpecSchema.shape.memoryGi.optional(),
   diskGi: ResourceSpecSchema.shape.diskGi.optional(),
   env: z.array(CreateSandboxEnvSchema).default([]),
+  tags: TagsSchema.default([]),
   name: z
     .string()
     .min(1)
@@ -59,4 +90,27 @@ export const CreateSandboxSchema = z.object({
     .optional(),
 });
 
-export const UpdateSandboxSchema = ResourceSpecSchema;
+export const UpdateSandboxSchema = z
+  .object({
+    cpu: ResourceSpecSchema.shape.cpu.optional(),
+    memoryGi: ResourceSpecSchema.shape.memoryGi.optional(),
+    diskGi: ResourceSpecSchema.shape.diskGi.optional(),
+    tags: TagsSchema.optional(),
+  })
+  .refine(
+    (value) =>
+      value.cpu !== undefined ||
+      value.memoryGi !== undefined ||
+      value.diskGi !== undefined ||
+      value.tags !== undefined,
+    { message: "没有可更新的字段" },
+  )
+  .refine(
+    (value) => {
+      const count = [value.cpu, value.memoryGi, value.diskGi].filter(
+        (item) => item !== undefined,
+      ).length;
+      return count === 0 || count === 3;
+    },
+    { message: "更新规格时需要同时提供 CPU、内存和磁盘" },
+  );

@@ -1,3 +1,4 @@
+import type { ApiKey } from "@/lib/apikey/schema";
 import type { Sandbox } from "@/lib/sandbox/schema";
 import type { ResourceSpec } from "@/lib/sealos/resources";
 import type { Template } from "@/lib/template/schema";
@@ -13,6 +14,18 @@ export type CreateSandboxBody = {
   memoryGi?: number;
   diskGi?: number;
   env?: { name: string; value: string }[];
+  tags?: string[];
+};
+
+export type UpdateSandboxBody = Partial<ResourceSpec> & {
+  tags?: string[];
+};
+
+export type ListSandboxesQuery = {
+  /** 精确标签，需同时包含 */
+  tag?: string[];
+  /** 标签关键词，空格或逗号分隔，每个词都要能在某个标签中找到 */
+  q?: string;
 };
 
 export type CreateTemplateBody = Omit<
@@ -50,8 +63,15 @@ export const boatClient = {
     }),
   logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
 
-  listSandboxes: () =>
-    request<{ sandboxes: Sandbox[] }>("/api/v1/sandboxes"),
+  listSandboxes: (query?: ListSandboxesQuery) => {
+    const q = new URLSearchParams();
+    for (const tag of query?.tag ?? []) q.append("tag", tag);
+    if (query?.q?.trim()) q.set("q", query.q.trim());
+    const qs = q.toString();
+    return request<{ sandboxes: Sandbox[] }>(
+      `/api/v1/sandboxes${qs ? `?${qs}` : ""}`,
+    );
+  },
   createSandbox: (body: CreateSandboxBody) =>
     request<{ sandbox: Sandbox }>("/api/v1/sandboxes", {
       method: "POST",
@@ -59,7 +79,7 @@ export const boatClient = {
     }),
   getSandbox: (id: string) =>
     request<{ sandbox: Sandbox }>(`/api/v1/sandboxes/${encodeURIComponent(id)}`),
-  updateSandbox: (id: string, body: ResourceSpec) =>
+  updateSandbox: (id: string, body: UpdateSandboxBody) =>
     request<{ sandbox: Sandbox }>(`/api/v1/sandboxes/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(body),
@@ -112,6 +132,17 @@ export const boatClient = {
     ),
   deleteTemplate: (id: string) =>
     request<{ ok: true }>(`/api/v1/templates/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+
+  listApiKeys: () => request<{ apiKeys: ApiKey[] }>("/api/v1/apikeys"),
+  createApiKey: (name: string) =>
+    request<{ apiKey: ApiKey }>("/api/v1/apikeys", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  deleteApiKey: (id: string) =>
+    request<{ ok: true }>(`/api/v1/apikeys/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
 };

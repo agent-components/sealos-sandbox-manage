@@ -72,6 +72,7 @@ export function toSandbox(app: LaunchpadApp): Sandbox {
     publicUrl: pickPublicUrl(app),
     image: app.image?.imageName,
     templateId,
+    tags: [],
     createdAt: app.createdAt,
     upTime: app.upTime,
   };
