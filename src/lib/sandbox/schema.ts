@@ -94,6 +94,14 @@ export const RunSandboxCommandSchema = z.object({
   command: z.string().trim().min(1, "请提供命令").max(16384, "命令最长 16384 个字符"),
 });
 
+export const ArtifactPathSchema = z
+  .string()
+  .trim()
+  .min(1, "请提供文件路径")
+  .max(4096, "路径最长 4096 个字符")
+  .refine((value) => value.startsWith("/"), "路径必须是沙箱内的绝对路径")
+  .refine((value) => !value.includes("\0"), "路径无效");
+
 export type RunSandboxCommand = z.infer<typeof RunSandboxCommandSchema>;
 
 export const UpdateSandboxSchema = z

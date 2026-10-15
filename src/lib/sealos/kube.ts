@@ -254,8 +254,14 @@ export async function execInPod(
     container: string;
     command: string[];
     timeoutMs?: number;
+    /** 标准输出上限。未传时 1MB。 */
+    maxBytes?: number;
+    /** 为 false 时不在内存里攒标准输出，交给 onStdout。 */
+    retainStdout?: boolean;
+    tooLargeMessage?: string;
     signal?: AbortSignal;
     onOutput?: (chunk: PodExecChunk) => void;
+    onStdout?: (chunk: Buffer) => void;
   },
 ): Promise<PodExecResult> {
   const ctx = loadKubeContext(kubeconfigYaml);
@@ -372,12 +378,19 @@ export async function execInPod(
           });
         });
 
+      const stdoutLimit = opts.maxBytes ?? EXEC_MAX_BYTES;
+      const retainStdout = opts.retainStdout !== false;
       const pushStream = (chunks: Buffer[], current: number, data: Buffer, label: "stdout" | "stderr") => {
-        if (current + data.length > EXEC_MAX_BYTES) {
-          fail(new SealosApiError(`命令${label === "stdout" ? "标准输出" : "标准错误"}超过 1MB`, 413));
+        const limit = label === "stdout" ? stdoutLimit : EXEC_MAX_BYTES;
+        if (current + data.length > limit) {
+          const message =
+            label === "stdout" && opts.tooLargeMessage
+              ? opts.tooLargeMessage
+              : `命令${label === "stdout" ? "标准输出" : "标准错误"}超过 1MB`;
+          fail(new SealosApiError(message, 413));
           return current;
         }
-        chunks.push(data);
+        if (label === "stderr" || retainStdout) chunks.push(data);
         return current + data.length;
       };
 
@@ -389,7 +402,8 @@ export async function execInPod(
           const next = pushStream(stdout, stdoutLen, data, "stdout");
           if (next !== stdoutLen) {
             stdoutLen = next;
-            emit("stdout", data, stdoutDecoder);
+            if (opts.onStdout) opts.onStdout(Buffer.from(data));
+            else emit("stdout", data, stdoutDecoder);
           }
         } else if (channel === 2) {
           const next = pushStream(stderr, stderrLen, data, "stderr");

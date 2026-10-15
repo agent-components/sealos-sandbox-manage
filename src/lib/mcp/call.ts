@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { DELETE as deleteSandbox, GET as getSandbox } from "@/app/api/v1/sandboxes/[id]/route";
+import { GET as getSandboxArtifact } from "@/app/api/v1/sandboxes/[id]/artifacts/route";
 import { POST as runSandboxCommand } from "@/app/api/v1/sandboxes/[id]/commands/route";
 import { POST as resumeSandbox } from "@/app/api/v1/sandboxes/[id]/resume/route";
 import { POST as stopSandbox } from "@/app/api/v1/sandboxes/[id]/stop/route";
@@ -17,6 +18,7 @@ const handlers: Record<string, RouteHandler> = {
   "POST /sandboxes/{id}/stop": (req, ctx) => stopSandbox(req, ctx),
   "POST /sandboxes/{id}/resume": (req, ctx) => resumeSandbox(req, ctx),
   "POST /sandboxes/{id}/commands": (req, ctx) => runSandboxCommand(req, ctx),
+  "GET /sandboxes/{id}/artifacts": (req, ctx) => getSandboxArtifact(req, ctx),
 };
 
 let cached: McpRoute[] | undefined;

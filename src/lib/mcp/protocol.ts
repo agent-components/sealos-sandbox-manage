@@ -1,5 +1,6 @@
 import { openApiDocument } from "@/lib/openapi/document";
 import { callMcpTool, mcpRoutes } from "@/lib/mcp/call";
+import { callSandboxArtifact } from "@/lib/mcp/artifact";
 import { callSandboxCommand } from "@/lib/mcp/command";
 
 export const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"] as const;
@@ -147,6 +148,15 @@ async function handleRequest(request: Request, message: JsonRpcRequest): Promise
     }
     if (name === "runSandboxCommand") {
       return callSandboxCommand(
+        request,
+        id,
+        args as Record<string, unknown>,
+        progressToken(input),
+        acceptsEventStream(request),
+      );
+    }
+    if (name === "getSandboxArtifact") {
+      return callSandboxArtifact(
         request,
         id,
         args as Record<string, unknown>,

@@ -304,6 +304,60 @@ export function openApiDocument() {
           },
         },
       },
+      "/sandboxes/{id}/artifacts": {
+        get: {
+          operationId: "getSandboxArtifact",
+          summary: "获取沙箱内的文件",
+          description:
+            "读取运行中沙箱里的绝对路径。HTML、JavaScript、CSS、JSON、Markdown、XML、源代码等文本文件以对应的文本类型流式返回原文。图片返回 JSON，`encoding` 为 base64，`data` 为文件内容。其他文件以 `application/octet-stream` 附件流下载。单文件不超过 32MB。",
+          security: userAuth,
+          parameters: [
+            sandboxId,
+            {
+              name: "path",
+              in: "query",
+              required: true,
+              description: "沙箱内的绝对路径，例如 /tmp/ogb-panel.jpg",
+              schema: { type: "string", minLength: 1, maxLength: 4096 },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "文本流、图片 base64，或附件流",
+              content: {
+                "text/plain": {
+                  schema: { type: "string" },
+                },
+                "text/html": {
+                  schema: { type: "string" },
+                },
+                "text/javascript": {
+                  schema: { type: "string" },
+                },
+                "text/css": {
+                  schema: { type: "string" },
+                },
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["path", "mediaType", "encoding", "data"],
+                    properties: {
+                      path: { type: "string" },
+                      mediaType: { type: "string" },
+                      encoding: { type: "string", const: "base64" },
+                      data: { type: "string", description: "图片的 base64" },
+                    },
+                  },
+                },
+                "application/octet-stream": {
+                  schema: { type: "string", contentMediaType: "application/octet-stream" },
+                },
+              },
+            },
+            ...errors(400, 401, 403, 404, 409, 413, 500),
+          },
+        },
+      },
       "/sandboxes/{id}/resume": {
         post: {
           operationId: "resumeSandbox",

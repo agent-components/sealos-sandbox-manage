@@ -37,6 +37,7 @@ npm run dev
 - `POST /api/v1/sandboxes/{id}/stop` 关机
 - `POST /api/v1/sandboxes/{id}/resume` 开机
 - `POST /api/v1/sandboxes/{id}/commands` 在运行中的沙箱内执行命令，请求体 `{ "command": "..." }`，返回 `{ "ok", "exitCode", "stdout", "stderr" }`
+- `GET /api/v1/sandboxes/{id}/artifacts?path=` 读取沙箱内文件。HTML、JavaScript、CSS、JSON 等文本流式返回原文；图片返回 base64；其他文件以附件流下载
 - `DELETE /api/v1/sandboxes/{id}` 删除沙箱
 
 需先登录获取 session cookie，或使用控制台创建的 API Key（`Authorization: Bearer boat_...`）。沙箱与 API Key 按当前用户隔离。服务端另用环境中的 kubeconfig 调用 Sealos。
@@ -73,7 +74,7 @@ curl -sS -H "Authorization: Bearer boat_..." \
 
 认证与 REST 相同：`Authorization: Bearer boat_...`，或登录会话 cookie。`initialize` 和 `tools/list` 不需要登录；`tools/call` 会按当前用户鉴权。
 
-工具名就是 OpenAPI 的 `operationId`：`listSandboxes`、`getSandbox`、`createSandbox`、`stopSandbox`、`resumeSandbox`、`runSandboxCommand`、`deleteSandbox`。路径参数、查询参数和 JSON 请求体都摊平在工具参数里。
+工具名就是 OpenAPI 的 `operationId`：`listSandboxes`、`getSandbox`、`createSandbox`、`stopSandbox`、`resumeSandbox`、`runSandboxCommand`、`getSandboxArtifact`、`deleteSandbox`。路径参数、查询参数和 JSON 请求体都摊平在工具参数里。
 
 `runSandboxCommand` 在 MCP 里不限执行时间。客户端 `Accept` 含 `text/event-stream` 时，输出会在同一次 POST 的 SSE 里随到随推（`notifications/message`，若带了 `progressToken` 还会发 `notifications/progress`），命令结束再给最终的 `ok` / `exitCode` / `stdout` / `stderr`。客户端断开连接会取消命令。REST 的同一接口仍是 60 秒超时。单路输出上限仍是 1MB。
 
