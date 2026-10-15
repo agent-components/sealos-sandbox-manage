@@ -90,6 +90,12 @@ export const CreateSandboxSchema = z.object({
     .optional(),
 });
 
+export const RunSandboxCommandSchema = z.object({
+  command: z.string().trim().min(1, "请提供命令").max(16384, "命令最长 16384 个字符"),
+});
+
+export type RunSandboxCommand = z.infer<typeof RunSandboxCommandSchema>;
+
 export const UpdateSandboxSchema = z
   .object({
     cpu: ResourceSpecSchema.shape.cpu.optional(),

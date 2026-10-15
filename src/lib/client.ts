@@ -98,6 +98,11 @@ export const boatClient = {
       `/api/v1/sandboxes/${encodeURIComponent(id)}/resume`,
       { method: "POST" },
     ),
+  runSandboxCommand: (id: string, command: string) =>
+    request<{ ok: boolean; exitCode: number; stdout: string; stderr: string }>(
+      `/api/v1/sandboxes/${encodeURIComponent(id)}/commands`,
+      { method: "POST", body: JSON.stringify({ command }) },
+    ),
   getSandboxLogs: (
     id: string,
     opts?: { pod?: string; tailLines?: number; previous?: boolean },

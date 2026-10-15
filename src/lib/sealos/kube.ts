@@ -1,6 +1,9 @@
+import crypto from "crypto";
 import https from "https";
+import type { Socket } from "net";
 import { URL } from "url";
 import { load as loadYaml } from "js-yaml";
+import { SealosApiError } from "@/lib/sealos/errors";
 
 export type KubeContext = {
   server: string;
@@ -157,5 +160,228 @@ export async function getPodLogs(
   }
   throw Object.assign(new Error(message || `获取日志失败（${res.status}）`), {
     status: res.status,
+  });
+}
+
+const EXEC_TIMEOUT_MS = 60_000;
+const EXEC_MAX_BYTES = 1024 * 1024;
+
+export type PodExecResult = {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+};
+
+/** 解析 pods/exec 状态通道。成功为 0，非零退出码取自 ExitCode。 */
+export function parseExecExitCode(raw: string): number {
+  const text = raw.trim();
+  if (!text) return 0;
+  try {
+    const status = JSON.parse(text) as {
+      status?: string;
+      message?: string;
+      details?: { causes?: Array<{ reason?: string; message?: string }> };
+    };
+    if (status.status === "Success") return 0;
+    const cause = status.details?.causes?.find((item) => item.reason === "ExitCode");
+    if (cause?.message && /^\d+$/.test(cause.message)) return Number(cause.message);
+    const match = status.message?.match(/exit code[: ]+(\d+)/i);
+    if (match) return Number(match[1]);
+  } catch {
+    const match = text.match(/exit code[: ]+(\d+)/i);
+    if (match) return Number(match[1]);
+  }
+  return 1;
+}
+
+function takeFrame(buf: Buffer): { rest: Buffer; fin: boolean; opcode: number; payload: Buffer } | null {
+  if (buf.length < 2) return null;
+  const fin = (buf[0]! & 0x80) !== 0;
+  const opcode = buf[0]! & 0x0f;
+  let len = buf[1]! & 0x7f;
+  let offset = 2;
+  if (len === 126) {
+    if (buf.length < 4) return null;
+    len = buf.readUInt16BE(2);
+    offset = 4;
+  } else if (len === 127) {
+    if (buf.length < 10) return null;
+    const wide = buf.readBigUInt64BE(2);
+    if (wide > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new SealosApiError("命令输出帧过大", 413);
+    }
+    len = Number(wide);
+    offset = 10;
+  }
+  if (buf.length < offset + len) return null;
+  return {
+    rest: buf.subarray(offset + len),
+    fin,
+    opcode,
+    payload: buf.subarray(offset, offset + len),
+  };
+}
+
+function sendPong(socket: Socket) {
+  const frame = Buffer.alloc(6);
+  frame[0] = 0x8a;
+  frame[1] = 0x80;
+  socket.write(frame);
+}
+
+/**
+ * 在 Pod 内容一次性执行命令，收回 stdout、stderr 和退出码。
+ * 使用 Kubernetes pods/exec 的 WebSocket 协议（v4.channel.k8s.io）。
+ */
+export async function execInPod(
+  kubeconfigYaml: string,
+  opts: { pod: string; container: string; command: string[]; timeoutMs?: number },
+): Promise<PodExecResult> {
+  const ctx = loadKubeContext(kubeconfigYaml);
+  const params = new URLSearchParams();
+  for (const part of opts.command) params.append("command", part);
+  params.set("container", opts.container);
+  params.set("stdout", "true");
+  params.set("stderr", "true");
+  params.set("stdin", "false");
+  params.set("tty", "false");
+  const url = new URL(
+    `/api/v1/namespaces/${encodeURIComponent(ctx.namespace)}/pods/${encodeURIComponent(opts.pod)}/exec?${params}`,
+    ctx.server,
+  );
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      url,
+      {
+        method: "GET",
+        agent: ctx.agent,
+        headers: {
+          Authorization: `Bearer ${ctx.token}`,
+          Connection: "Upgrade",
+          Upgrade: "websocket",
+          "Sec-WebSocket-Version": "13",
+          "Sec-WebSocket-Key": crypto.randomBytes(16).toString("base64"),
+          "Sec-WebSocket-Protocol": "v4.channel.k8s.io",
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => {
+          const body = Buffer.concat(chunks).toString("utf8");
+          let message = body;
+          try {
+            const err = JSON.parse(body) as { message?: string };
+            if (err.message) message = err.message;
+          } catch {
+            // keep raw
+          }
+          const status = res.statusCode ?? 502;
+          reject(
+            new SealosApiError(
+              message || `执行命令失败（${status}）`,
+              status >= 400 && status < 600 ? status : 502,
+            ),
+          );
+        });
+      },
+    );
+
+    req.on("upgrade", (_res, socket) => {
+      let buf = Buffer.alloc(0);
+      const stdout: Buffer[] = [];
+      const stderr: Buffer[] = [];
+      const statusBytes: Buffer[] = [];
+      let stdoutLen = 0;
+      let stderrLen = 0;
+      let pendingOp = 0;
+      let pending: Buffer[] = [];
+      let settled = false;
+
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        socket.destroy();
+        reject(error);
+      };
+      const succeed = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        socket.destroy();
+        resolve({
+          exitCode: parseExecExitCode(Buffer.concat(statusBytes).toString("utf8")),
+          stdout: Buffer.concat(stdout).toString("utf8"),
+          stderr: Buffer.concat(stderr).toString("utf8"),
+        });
+      };
+      const timer = setTimeout(
+        () => fail(new SealosApiError("命令执行超时", 504)),
+        opts.timeoutMs ?? EXEC_TIMEOUT_MS,
+      );
+
+      const pushStream = (chunks: Buffer[], current: number, data: Buffer, label: "stdout" | "stderr") => {
+        if (current + data.length > EXEC_MAX_BYTES) {
+          fail(new SealosApiError(`命令${label === "stdout" ? "标准输出" : "标准错误"}超过 1MB`, 413));
+          return current;
+        }
+        chunks.push(data);
+        return current + data.length;
+      };
+
+      const dispatch = (opcode: number, payload: Buffer) => {
+        if ((opcode !== 0x1 && opcode !== 0x2) || payload.length === 0) return;
+        const channel = payload[0]!;
+        const data = payload.subarray(1);
+        if (channel === 1) stdoutLen = pushStream(stdout, stdoutLen, data, "stdout");
+        else if (channel === 2) stderrLen = pushStream(stderr, stderrLen, data, "stderr");
+        else if (channel === 3) statusBytes.push(data);
+      };
+
+      socket.on("data", (chunk: Buffer) => {
+        if (settled) return;
+        buf = Buffer.concat([buf, chunk]);
+        try {
+          while (!settled) {
+            const frame = takeFrame(buf);
+            if (!frame) break;
+            buf = frame.rest;
+            if (frame.opcode === 0x9) {
+              sendPong(socket);
+              continue;
+            }
+            if (frame.opcode === 0x8) {
+              succeed();
+              return;
+            }
+            if (frame.opcode === 0x0) {
+              pending.push(frame.payload);
+              if (frame.fin) {
+                dispatch(pendingOp, Buffer.concat(pending));
+                pending = [];
+              }
+              continue;
+            }
+            if (frame.opcode === 0x1 || frame.opcode === 0x2) {
+              if (!frame.fin) {
+                pendingOp = frame.opcode;
+                pending = [frame.payload];
+              } else {
+                dispatch(frame.opcode, frame.payload);
+              }
+            }
+          }
+        } catch (error) {
+          fail(error instanceof Error ? error : new Error("解析命令输出失败"));
+        }
+      });
+      socket.on("end", () => succeed());
+      socket.on("error", (error) => fail(error));
+    });
+
+    req.on("error", reject);
+    req.end();
   });
 }

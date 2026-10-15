@@ -1,6 +1,6 @@
 # boat — Sealos 沙箱
 
-Boat 风格的沙箱控制台与 REST API。每台「虚拟机」对应一个 **Sealos 应用管理** 实例；本项目负责生命周期（增删改查、启停）与公网地址。容器内执行命令由镜像自身暴露的 API 提供，本项目不代理。
+Boat 风格的沙箱控制台与 REST API。每台「虚拟机」对应一个 **Sealos 应用管理** 实例；本项目负责生命周期（增删改查、启停）、公网地址，以及在运行中的沙箱内执行命令。
 
 ## 快速开始
 
@@ -36,6 +36,7 @@ npm run dev
 - `POST /api/v1/sandboxes` 创建沙箱
 - `POST /api/v1/sandboxes/{id}/stop` 关机
 - `POST /api/v1/sandboxes/{id}/resume` 开机
+- `POST /api/v1/sandboxes/{id}/commands` 在运行中的沙箱内执行命令，请求体 `{ "command": "..." }`，返回 `{ "ok", "exitCode", "stdout", "stderr" }`
 - `DELETE /api/v1/sandboxes/{id}` 删除沙箱
 
 需先登录获取 session cookie，或使用控制台创建的 API Key（`Authorization: Bearer boat_...`）。沙箱与 API Key 按当前用户隔离。服务端另用环境中的 kubeconfig 调用 Sealos。
@@ -64,7 +65,7 @@ curl -sS -H "Authorization: Bearer boat_..." \
   "$BOAT_API_BASE/api/v1/sandboxes"
 ```
 
-拿到详情中的 `publicUrl` 后，直接对该地址调用容器 API（命令执行不在本项目范围）。
+拿到详情中的 `publicUrl` 后，可以直接对该地址调用容器自己的 API。在沙箱内执行命令也可以走 `POST /api/v1/sandboxes/{id}/commands`。
 
 ## 资源配置
 
@@ -87,7 +88,8 @@ curl -sS -b /tmp/boat.ck -X POST "$BOAT_API_BASE/api/v1/sandboxes" \
 | 沙箱 CRUD | Sealos Launchpad API | 本项目代理 |
 | stop / resume | pause / start | 本项目代理 |
 | 公网地址 | Launchpad 公网域名 | 详情返回 |
-| exec / 桌面 / fork / 快照 | — | 不做；exec 由容器 API |
+| exec | `POST /sandboxes/{id}/commands` | 一次性命令，返回退出码与输出 |
+| 桌面 / fork / 快照 | — | 不做 |
 | 自定义镜像 | — | 下一版 |
 
 ## 后端映射

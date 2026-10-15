@@ -99,13 +99,16 @@ const createSandboxBody = {
   },
 } as const;
 
-function errors(...codes: Array<400 | 401 | 403 | 404 | 500>) {
+function errors(...codes: Array<400 | 401 | 403 | 404 | 409 | 413 | 500 | 504>) {
   const text: Record<number, string> = {
     400: "参数校验失败",
     401: "未登录或 API Key 无效",
     403: "无权访问该沙箱，或 API Key 未授权",
     404: "沙箱不存在",
+    409: "沙箱未在运行",
+    413: "命令输出超过 1MB",
     500: "服务器错误",
+    504: "命令执行超时",
   };
   return Object.fromEntries(
     codes.map((code) => [
@@ -129,7 +132,7 @@ export function openApiDocument() {
       title: "Boat",
       version: "0.1.0",
       description:
-        "查看、创建、删除沙箱，以及关机、开机。认证为登录会话，或 `Authorization: Bearer boat_...`。会话可操作该用户的全部沙箱。API Key 只能访问其授权列表中的沙箱；用该 Key 创建的沙箱会自动加入授权列表。删除后会从各 Key 的授权列表中移除。",
+        "查看、创建、删除沙箱，关机、开机，以及在运行中的沙箱内执行命令。认证为登录会话，或 `Authorization: Bearer boat_...`。会话可操作该用户的全部沙箱。API Key 只能访问其授权列表中的沙箱；用该 Key 创建的沙箱会自动加入授权列表。删除后会从各 Key 的授权列表中移除。",
     },
     servers: [{ url: "/api/v1" }],
     paths: {
@@ -242,6 +245,62 @@ export function openApiDocument() {
               content: { "application/json": { schema: sandboxResponse } },
             },
             ...errors(401, 403, 404, 500),
+          },
+        },
+      },
+      "/sandboxes/{id}/commands": {
+        post: {
+          operationId: "runSandboxCommand",
+          summary: "在沙箱内执行命令",
+          description:
+            "通过 Pod exec 在运行中的容器里执行 `/bin/sh -c`。命令结束后返回退出码与输出；非零退出码仍是 HTTP 200，`ok` 为 false。超时 60 秒。",
+          security: userAuth,
+          parameters: [sandboxId],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["command"],
+                  properties: {
+                    command: {
+                      type: "string",
+                      minLength: 1,
+                      maxLength: 16384,
+                      description: "交给 /bin/sh -c 的命令",
+                    },
+                  },
+                },
+                example: { command: "echo hello" },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "命令已执行。ok 表示退出码是否为 0",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["ok", "exitCode", "stdout", "stderr"],
+                    properties: {
+                      ok: { type: "boolean" },
+                      exitCode: { type: "integer" },
+                      stdout: { type: "string" },
+                      stderr: { type: "string" },
+                    },
+                  },
+                  example: {
+                    ok: true,
+                    exitCode: 0,
+                    stdout: "1920 1080\n",
+                    stderr: "",
+                  },
+                },
+              },
+            },
+            ...errors(400, 401, 403, 404, 409, 413, 500, 504),
           },
         },
       },
