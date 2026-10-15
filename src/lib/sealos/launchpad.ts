@@ -74,10 +74,11 @@ export function createLaunchpadClient(opts: LaunchpadClientOptions) {
       name: string;
       resources: ResourceSpec;
       owner: string;
-      image?: string;
+      image: string;
       port?: number;
+      templateId: string;
     }): Promise<LaunchpadApp> {
-      const imageName = input.image ?? config.defaultImage;
+      const imageName = input.image;
       const port = input.port ?? config.defaultPort;
       const { cpu, memoryGi, diskGi } = input.resources;
 
@@ -100,6 +101,7 @@ export function createLaunchpadClient(opts: LaunchpadClientOptions) {
         env: [
           { name: "BOAT_SANDBOX", value: "true" },
           { name: "BOAT_USER", value: input.owner },
+          { name: "BOAT_TEMPLATE", value: input.templateId },
         ],
         storage: [
           {

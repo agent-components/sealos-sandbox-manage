@@ -60,6 +60,8 @@ export function isBoatSandbox(app: LaunchpadApp): boolean {
 }
 
 export function toSandbox(app: LaunchpadApp): Sandbox {
+  const templateId =
+    app.env?.find((e) => e.name === "BOAT_TEMPLATE")?.value || undefined;
   return {
     id: app.name,
     name: app.name,
@@ -69,6 +71,7 @@ export function toSandbox(app: LaunchpadApp): Sandbox {
     diskGi: parseDiskGi(app),
     publicUrl: pickPublicUrl(app),
     image: app.image?.imageName,
+    templateId,
     createdAt: app.createdAt,
     upTime: app.upTime,
   };

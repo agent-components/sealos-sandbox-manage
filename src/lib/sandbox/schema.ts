@@ -31,6 +31,7 @@ export const SandboxSchema = z.object({
   diskGi: z.number(),
   publicUrl: z.string().nullable(),
   image: z.string().optional(),
+  templateId: z.string().optional(),
   createdAt: z.string().optional(),
   upTime: z.string().optional(),
 });
@@ -38,9 +39,10 @@ export const SandboxSchema = z.object({
 export type Sandbox = z.infer<typeof SandboxSchema>;
 
 export const CreateSandboxSchema = z.object({
-  cpu: ResourceSpecSchema.shape.cpu.default(0.5),
-  memoryGi: ResourceSpecSchema.shape.memoryGi.default(0.5),
-  diskGi: ResourceSpecSchema.shape.diskGi.default(3),
+  templateId: z.string().min(1, "请选择模板"),
+  cpu: ResourceSpecSchema.shape.cpu.optional(),
+  memoryGi: ResourceSpecSchema.shape.memoryGi.optional(),
+  diskGi: ResourceSpecSchema.shape.diskGi.optional(),
   name: z
     .string()
     .min(1)
