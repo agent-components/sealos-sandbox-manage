@@ -29,17 +29,35 @@
   }
 }
 
-/* 列表表格：固定列 + 横向滚动 */
+/* 列表表格：固定列 + 横向滚动（压掉快速滚动时 sticky 弹跳） */
 .boat-table-wrap {
   border: 1px solid #f0f0f0;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: clip;
   background: #fff;
+}
+
+.boat-table-wrap .ant-table-content,
+.boat-table-wrap .ant-table-body {
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
+}
+
+/* 关掉 ping 阴影：滚动到边缘瞬间出现/消失会像「弹一下」 */
+.boat-table-wrap .ant-table-container::before,
+.boat-table-wrap .ant-table-container::after,
+.boat-table-wrap .ant-table-cell-fix-left-last::after,
+.boat-table-wrap .ant-table-cell-fix-right-first::after {
+  display: none !important;
+  box-shadow: none !important;
+  transition: none !important;
 }
 
 .boat-table-wrap .ant-table-cell-fix-left,
 .boat-table-wrap .ant-table-cell-fix-right {
   background: #fff !important;
+  transition: none !important;
+  animation: none !important;
 }
 
 .boat-table-wrap .ant-table-thead > tr > th.ant-table-cell-fix-left,
@@ -47,9 +65,19 @@
   background: #fafafa !important;
 }
 
-.boat-table-wrap .ant-table-cell-fix-left-last::after,
-.boat-table-wrap .ant-table-cell-fix-right-first::after {
-  box-shadow: none !important;
+.boat-table-wrap .ant-table-cell-fix-left {
+  left: 0 !important;
+  z-index: 3;
+}
+
+.boat-table-wrap .ant-table-cell-fix-right {
+  right: 0 !important;
+  z-index: 3;
+}
+
+.boat-table-wrap .ant-table-thead .ant-table-cell-fix-left,
+.boat-table-wrap .ant-table-thead .ant-table-cell-fix-right {
+  z-index: 4;
 }
 
 /* 模板抽屉 */

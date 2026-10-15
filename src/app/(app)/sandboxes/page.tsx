@@ -448,7 +448,6 @@ export default function SandboxesPage() {
           <Collapse
             ghost
             size="small"
-            style={{ marginInlineStart: 88 }}
             activeKey={advancedOpen ? ["advanced"] : []}
             onChange={(keys) => {
               const next = Array.isArray(keys) ? keys : [keys];
