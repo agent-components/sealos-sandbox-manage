@@ -29,7 +29,7 @@ npm run dev
 
 ## REST API
 
-基路径 `/api/v1`。Agent 读取 `GET /api/openapi.json`（OpenAPI 3.1），当前可调用：
+基路径 `/api/v1`。Agent 可以读 `GET /api/openapi.json`（OpenAPI 3.1），也可以走 MCP（见下文）。当前可调用：
 
 - `GET /api/v1/sandboxes` 查看沙箱列表
 - `GET /api/v1/sandboxes/{id}` 查看沙箱状态
@@ -66,6 +66,29 @@ curl -sS -H "Authorization: Bearer boat_..." \
 ```
 
 拿到详情中的 `publicUrl` 后，可以直接对该地址调用容器自己的 API。在沙箱内执行命令也可以走 `POST /api/v1/sandboxes/{id}/commands`。
+
+## MCP
+
+与上面的沙箱接口同一套能力，协议为 MCP Streamable HTTP（无状态，不建会话）。端点是 `POST /api/mcp`。
+
+认证与 REST 相同：`Authorization: Bearer boat_...`，或登录会话 cookie。`initialize` 和 `tools/list` 不需要登录；`tools/call` 会按当前用户鉴权。
+
+工具名就是 OpenAPI 的 `operationId`：`listSandboxes`、`getSandbox`、`createSandbox`、`stopSandbox`、`resumeSandbox`、`runSandboxCommand`、`deleteSandbox`。路径参数、查询参数和 JSON 请求体都摊平在工具参数里。
+
+`runSandboxCommand` 在 MCP 里不限执行时间。客户端 `Accept` 含 `text/event-stream` 时，输出会在同一次 POST 的 SSE 里随到随推（`notifications/message`，若带了 `progressToken` 还会发 `notifications/progress`），命令结束再给最终的 `ok` / `exitCode` / `stdout` / `stderr`。客户端断开连接会取消命令。REST 的同一接口仍是 60 秒超时。单路输出上限仍是 1MB。
+
+```json
+{
+  "mcpServers": {
+    "boat": {
+      "url": "http://localhost:3000/api/mcp",
+      "headers": {
+        "Authorization": "Bearer boat_..."
+      }
+    }
+  }
+}
+```
 
 ## 资源配置
 
