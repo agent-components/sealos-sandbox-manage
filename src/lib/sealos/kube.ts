@@ -355,7 +355,7 @@ export async function execInPod(
 
     req.on("upgrade", (_res, upgraded: Socket) => {
       socket = upgraded;
-      let buf = Buffer.alloc(0);
+      let buf: Buffer = Buffer.alloc(0);
       const stdout: Buffer[] = [];
       const stderr: Buffer[] = [];
       const statusBytes: Buffer[] = [];
