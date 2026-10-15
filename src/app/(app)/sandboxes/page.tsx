@@ -7,6 +7,7 @@ import {
   Button,
   Empty,
   Flex,
+  Form,
   Input,
   Modal,
   Space,
@@ -40,6 +41,7 @@ export default function SandboxesPage() {
   const [sandboxes, setSandboxes] = useState<Sandbox[]>([]);
   const [resources, setResources] =
     useState<ResourceSpec>(DEFAULT_RESOURCES);
+  const [createName, setCreateName] = useState("");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -78,13 +80,29 @@ export default function SandboxesPage() {
 
   function openCreate() {
     setResources(DEFAULT_RESOURCES);
+    setCreateName("");
     setCreateOpen(true);
   }
 
   async function create() {
+    const name = createName.trim();
+    if (name) {
+      if (
+        name.length > 48 ||
+        !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(name)
+      ) {
+        message.error(
+          "ID 只能包含小写字母、数字和连字符，长度 1–48，且首尾为字母或数字",
+        );
+        return;
+      }
+    }
     setCreating(true);
     try {
-      await boatClient.createSandbox(resources);
+      await boatClient.createSandbox({
+        ...resources,
+        ...(name ? { name } : {}),
+      });
       setCreateOpen(false);
       message.success("沙箱已创建");
       await refresh();
@@ -146,9 +164,24 @@ export default function SandboxesPage() {
         ),
       },
       {
+        title: "镜像",
+        dataIndex: "image",
+        key: "image",
+        ellipsis: true,
+        render: (image?: string) => (
+          <Typography.Text
+            type="secondary"
+            ellipsis={{ tooltip: image }}
+            style={{ maxWidth: 280 }}
+          >
+            {image || "—"}
+          </Typography.Text>
+        ),
+      },
+      {
         title: "规格",
         key: "spec",
-        width: 220,
+        width: 200,
         render: (_, sb) => (
           <Typography.Text type="secondary">
             {sb.cpu} 核 · {memoryLabel(sb.memoryGi)} · {sb.diskGi}Gi
@@ -159,7 +192,7 @@ export default function SandboxesPage() {
         title: "状态",
         dataIndex: "state",
         key: "state",
-        width: 120,
+        width: 100,
         render: (state: Sandbox["state"]) => <StateBadge state={state} />,
       },
       {
@@ -278,10 +311,27 @@ export default function SandboxesPage() {
         cancelText="取消"
         onOk={() => void create()}
       >
-        <Typography.Text type="secondary" style={{ display: "block", marginBottom: 16 }}>
+        <Typography.Text
+          type="secondary"
+          style={{ display: "block", marginBottom: 16 }}
+        >
           {resources.cpu} 核 · {memoryLabel(resources.memoryGi)} ·{" "}
           {resources.diskGi}Gi
         </Typography.Text>
+        <Form layout="vertical" disabled={creating}>
+          <Form.Item
+            label="沙箱 ID"
+            extra="可选。留空则自动生成；仅小写字母、数字和连字符"
+            style={{ marginBottom: 16 }}
+          >
+            <Input
+              value={createName}
+              placeholder="例如 my-sandbox"
+              maxLength={48}
+              onChange={(e) => setCreateName(e.target.value.toLowerCase())}
+            />
+          </Form.Item>
+        </Form>
         <ResourceConfig
           value={resources}
           onChange={setResources}
