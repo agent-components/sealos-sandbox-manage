@@ -12,9 +12,26 @@ const memorySchema = {
   description: "内存 Gi。0.5 表示 512Mi",
 } as const;
 
+const idleMinutesSchema = {
+  type: "integer",
+  minimum: 5,
+  maximum: 10080,
+  description: "MCP 空闲等待分钟数，至少 5。超时后自动关机（仅 MCP 活动计入）",
+} as const;
+
 const sandboxSchema = {
   type: "object",
-  required: ["id", "state", "cpu", "memoryGi", "diskGi", "publicUrl", "tags"],
+  required: [
+    "id",
+    "state",
+    "cpu",
+    "memoryGi",
+    "diskGi",
+    "publicUrl",
+    "tags",
+    "autoShutdown",
+    "idleMinutes",
+  ],
   properties: {
     id: { type: "string" },
     name: { type: "string" },
@@ -27,9 +44,32 @@ const sandboxSchema = {
     memoryGi: { type: "number" },
     diskGi: { type: "number" },
     publicUrl: { type: ["string", "null"] },
+    ports: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["number", "publicAddress", "privateAddress"],
+        properties: {
+          number: { type: "integer", description: "容器端口" },
+          publicAddress: {
+            type: ["string", "null"],
+            description: "公网地址",
+          },
+          privateAddress: {
+            type: ["string", "null"],
+            description: "内网地址",
+          },
+        },
+      },
+    },
     image: { type: "string" },
     templateId: { type: "string" },
     tags: { type: "array", items: { type: "string" } },
+    autoShutdown: {
+      type: "boolean",
+      description: "MCP 空闲超时后是否自动关机",
+    },
+    idleMinutes: idleMinutesSchema,
     createdAt: { type: "string" },
     upTime: { type: "string" },
   },
@@ -95,6 +135,14 @@ const createSandboxBody = {
         maxLength: 32,
         pattern: "^[\\p{L}\\p{N}][\\p{L}\\p{N}._-]{0,31}$",
       },
+    },
+    autoShutdown: {
+      type: "boolean",
+      description: "省略时使用模板配置。MCP 空闲超时后是否自动关机",
+    },
+    idleMinutes: {
+      ...idleMinutesSchema,
+      description: "省略时使用模板配置。MCP 空闲等待分钟数，至少 5",
     },
   },
 } as const;
@@ -253,7 +301,7 @@ export function openApiDocument() {
           operationId: "runSandboxCommand",
           summary: "在沙箱内执行命令",
           description:
-            "通过 Pod exec 在运行中的容器里执行 `/bin/sh -c`。命令结束后返回退出码与输出；非零退出码仍是 HTTP 200，`ok` 为 false。超时 60 秒。",
+            "通过 Pod exec 在运行中的容器里执行 `/bin/sh -c`。命令结束后返回退出码与输出；非零退出码仍是 HTTP 200，`ok` 为 false。REST 超时 60 秒且要求沙箱已在运行。MCP 的同名工具不限时，且沙箱已停止时会先开机再执行。",
           security: userAuth,
           parameters: [sandboxId],
           requestBody: {

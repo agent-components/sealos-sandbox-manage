@@ -40,8 +40,18 @@ export function mapLaunchpadStatus(status?: string): SandboxState {
   }
 }
 
+export function mapAppPorts(app: LaunchpadApp) {
+  return (app.ports ?? [])
+    .filter((p) => typeof p.number === "number" && Number.isFinite(p.number))
+    .map((p) => ({
+      number: p.number as number,
+      publicAddress: p.publicAddress?.trim() || p.customDomain?.trim() || null,
+      privateAddress: p.privateAddress?.trim() || null,
+    }));
+}
+
 export function pickPublicUrl(app: LaunchpadApp): string | null {
-  const port = (app.ports ?? []).find((p) => p.publicAddress);
+  const port = mapAppPorts(app).find((p) => p.publicAddress);
   return port?.publicAddress ?? null;
 }
 
@@ -70,9 +80,12 @@ export function toSandbox(app: LaunchpadApp): Sandbox {
     memoryGi: nearestMemoryGi(app.quota?.memory),
     diskGi: parseDiskGi(app),
     publicUrl: pickPublicUrl(app),
+    ports: mapAppPorts(app),
     image: app.image?.imageName,
     templateId,
     tags: [],
+    autoShutdown: false,
+    idleMinutes: 5,
     createdAt: app.createdAt,
     upTime: app.upTime,
   };

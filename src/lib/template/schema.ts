@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { ResourceSpecSchema } from "@/lib/sandbox/schema";
+import {
+  IdleMinutesSchema,
+  ResourceSpecSchema,
+} from "@/lib/sandbox/schema";
 
 const slugSchema = z
   .string()
@@ -60,6 +63,10 @@ export const TemplateSchema = z.object({
   cpu: ResourceSpecSchema.shape.cpu,
   memoryGi: ResourceSpecSchema.shape.memoryGi,
   replicas: z.number().int().min(1).max(20).default(1),
+  /** MCP 空闲超时后是否自动关机 */
+  autoShutdown: z.boolean().default(false),
+  /** MCP 空闲等待分钟数，至少 5 */
+  idleMinutes: IdleMinutesSchema.default(5),
   ports: z.array(TemplatePortSchema).min(1),
   env: z.array(TemplateEnvSchema).default([]),
   storage: z.array(TemplateStorageSchema).default([]),
@@ -85,6 +92,8 @@ export const CreateTemplateSchema = z.object({
   cpu: ResourceSpecSchema.shape.cpu.default(0.5),
   memoryGi: ResourceSpecSchema.shape.memoryGi.default(0.5),
   replicas: z.number().int().min(1).max(20).default(1),
+  autoShutdown: z.boolean().default(false),
+  idleMinutes: IdleMinutesSchema.default(5),
   ports: z
     .array(TemplatePortSchema)
     .min(1)

@@ -127,6 +127,7 @@ export async function deleteApiKey(
 export async function authenticateApiKey(secret: string): Promise<{
   username: string;
   apiKeyId: string;
+  apiKeyName: string;
   sandboxIds: string[];
 } | null> {
   if (!isApiKeySecret(secret)) return null;
@@ -143,6 +144,7 @@ export async function authenticateApiKey(secret: string): Promise<{
   return {
     username: doc.username,
     apiKeyId: doc.id,
+    apiKeyName: doc.name,
     sandboxIds: doc.sandboxIds ?? [],
   };
 }

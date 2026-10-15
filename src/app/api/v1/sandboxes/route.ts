@@ -4,7 +4,16 @@ import { filterAppsByApiKey } from "@/lib/apikey/access";
 import { grantApiKeySandbox } from "@/lib/apikey/store";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { createSandboxId } from "@/lib/sandbox/id";
-import { CreateSandboxSchema, TagsSchema } from "@/lib/sandbox/schema";
+import {
+  deleteSandboxIdle,
+  setSandboxIdleConfig,
+  withSandboxIdle,
+} from "@/lib/sandbox/idle";
+import {
+  CreateSandboxSchema,
+  IdleConfigSchema,
+  TagsSchema,
+} from "@/lib/sandbox/schema";
 import { isOwnedBy } from "@/lib/sandbox/ownership";
 import {
   deleteSandboxTags,
@@ -63,9 +72,9 @@ export async function GET(req: NextRequest) {
       owned = owned.filter((app) => matchedIds.has(app.name));
     }
 
-    const sandboxes = await withSandboxTags(
+    const sandboxes = await withSandboxIdle(
       user.username,
-      owned.map(toSandbox),
+      await withSandboxTags(user.username, owned.map(toSandbox)),
     );
     return jsonOk({ sandboxes });
   } catch (error) {
@@ -87,6 +96,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const idleConfig = IdleConfigSchema.parse({
+      autoShutdown: input.autoShutdown ?? template.autoShutdown ?? false,
+      idleMinutes: input.idleMinutes ?? template.idleMinutes ?? 5,
+    });
+
     const client = createLaunchpadClient({ kubeconfig });
     const id = input.name ?? createSandboxId();
     const app = await client.createAppFromTemplate({
@@ -102,6 +116,7 @@ export async function POST(req: NextRequest) {
     });
     try {
       await setSandboxTags(user.username, id, input.tags);
+      await setSandboxIdleConfig(user.username, id, idleConfig);
       if (user.apiKeyId) {
         const granted = await grantApiKeySandbox(user.apiKeyId, user.username, id);
         if (!granted) {
@@ -111,9 +126,13 @@ export async function POST(req: NextRequest) {
     } catch (error) {
       await client.deleteApp(id).catch(() => undefined);
       await deleteSandboxTags(user.username, id).catch(() => undefined);
+      await deleteSandboxIdle(user.username, id).catch(() => undefined);
       throw error;
     }
-    const [sandbox] = await withSandboxTags(user.username, [toSandbox(app)]);
+    const [sandbox] = await withSandboxIdle(
+      user.username,
+      await withSandboxTags(user.username, [toSandbox(app)]),
+    );
     return jsonOk({ sandbox }, { status: 201 });
   } catch (error) {
     return jsonError(error);

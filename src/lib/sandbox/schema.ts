@@ -51,6 +51,33 @@ export const TagsSchema = z
 
 export type SandboxTags = z.infer<typeof TagsSchema>;
 
+/** MCP 空闲自动关机的等待分钟数，至少 5 分钟 */
+export const IdleMinutesSchema = z
+  .number()
+  .int("等待时长须为整数分钟")
+  .min(5, "等待时长至少 5 分钟")
+  .max(10080, "等待时长最长 7 天");
+
+export const IdleConfigSchema = z.object({
+  autoShutdown: z.boolean(),
+  idleMinutes: IdleMinutesSchema,
+});
+
+export type IdleConfig = z.infer<typeof IdleConfigSchema>;
+
+export const DEFAULT_IDLE_CONFIG: IdleConfig = {
+  autoShutdown: false,
+  idleMinutes: 5,
+};
+
+export const SandboxPortSchema = z.object({
+  number: z.number().int(),
+  publicAddress: z.string().nullable(),
+  privateAddress: z.string().nullable(),
+});
+
+export type SandboxPort = z.infer<typeof SandboxPortSchema>;
+
 export const SandboxSchema = z.object({
   id: z.string(),
   name: z.string().optional(),
@@ -59,9 +86,12 @@ export const SandboxSchema = z.object({
   memoryGi: z.number(),
   diskGi: z.number(),
   publicUrl: z.string().nullable(),
+  ports: z.array(SandboxPortSchema).default([]),
   image: z.string().optional(),
   templateId: z.string().optional(),
   tags: z.array(z.string()).default([]),
+  autoShutdown: z.boolean().default(false),
+  idleMinutes: IdleMinutesSchema.default(5),
   createdAt: z.string().optional(),
   upTime: z.string().optional(),
 });
@@ -80,6 +110,8 @@ export const CreateSandboxSchema = z.object({
   diskGi: ResourceSpecSchema.shape.diskGi.optional(),
   env: z.array(CreateSandboxEnvSchema).default([]),
   tags: TagsSchema.default([]),
+  autoShutdown: z.boolean().optional(),
+  idleMinutes: IdleMinutesSchema.optional(),
   name: z
     .string()
     .min(1)
@@ -110,13 +142,17 @@ export const UpdateSandboxSchema = z
     memoryGi: ResourceSpecSchema.shape.memoryGi.optional(),
     diskGi: ResourceSpecSchema.shape.diskGi.optional(),
     tags: TagsSchema.optional(),
+    autoShutdown: z.boolean().optional(),
+    idleMinutes: IdleMinutesSchema.optional(),
   })
   .refine(
     (value) =>
       value.cpu !== undefined ||
       value.memoryGi !== undefined ||
       value.diskGi !== undefined ||
-      value.tags !== undefined,
+      value.tags !== undefined ||
+      value.autoShutdown !== undefined ||
+      value.idleMinutes !== undefined,
     { message: "没有可更新的字段" },
   )
   .refine(

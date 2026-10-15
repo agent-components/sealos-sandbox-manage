@@ -5,13 +5,14 @@ import {
   Alert,
   Button,
   Descriptions,
+  Drawer,
   Flex,
-  Modal,
   Select,
   Skeleton,
   Space,
   Typography,
 } from "antd";
+import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { StateBadge } from "@/components/StateBadge";
 import { boatClient } from "@/lib/client";
@@ -42,7 +43,9 @@ export function SandboxDetailModal({
   const [sandbox, setSandbox] = useState<Sandbox | null>(null);
   const [resources, setResources] = useState<ResourceSpec | null>(null);
   const [tags, setTags] = useState<string[]>([]);
+  const [idle, setIdle] = useState({ autoShutdown: false, idleMinutes: 5 });
   const tagsDirtyRef = useRef(false);
+  const idleDirtyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -56,6 +59,12 @@ export function SandboxDetailModal({
         diskGi: res.sandbox.diskGi,
       });
       if (!tagsDirtyRef.current) setTags(res.sandbox.tags);
+      if (!idleDirtyRef.current) {
+        setIdle({
+          autoShutdown: res.sandbox.autoShutdown ?? false,
+          idleMinutes: res.sandbox.idleMinutes ?? 5,
+        });
+      }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载失败");
@@ -65,9 +74,11 @@ export function SandboxDetailModal({
   useEffect(() => {
     if (!open) return;
     tagsDirtyRef.current = false;
+    idleDirtyRef.current = false;
     setSandbox(null);
     setResources(null);
     setTags([]);
+    setIdle({ autoShutdown: false, idleMinutes: 5 });
     void load();
     const timer = setInterval(() => {
       void load();
@@ -87,7 +98,10 @@ export function SandboxDetailModal({
       resources.memoryGi !== sandbox.memoryGi ||
       resources.diskGi !== sandbox.diskGi;
     const tagsDirty = !sameTags(parsedTags.data, sandbox.tags);
-    if (!resourceDirty && !tagsDirty) return;
+    const idleDirty =
+      idle.autoShutdown !== (sandbox.autoShutdown ?? false) ||
+      idle.idleMinutes !== (sandbox.idleMinutes ?? 5);
+    if (!resourceDirty && !tagsDirty && !idleDirty) return;
 
     setBusy("update");
     setError(null);
@@ -95,8 +109,15 @@ export function SandboxDetailModal({
       await boatClient.updateSandbox(sandboxId, {
         ...(resourceDirty ? resources : {}),
         ...(tagsDirty ? { tags: parsedTags.data } : {}),
+        ...(idleDirty
+          ? {
+            autoShutdown: idle.autoShutdown,
+            idleMinutes: idle.idleMinutes,
+          }
+          : {}),
       });
       tagsDirtyRef.current = false;
+      idleDirtyRef.current = false;
       await load();
       await onChanged();
     } catch (err) {
@@ -113,20 +134,26 @@ export function SandboxDetailModal({
       resources.memoryGi !== sandbox.memoryGi ||
       resources.diskGi !== sandbox.diskGi);
   const tagsDirty = !!sandbox && !sameTags(tags, sandbox.tags);
-  const dirty = resourceDirty || tagsDirty;
+  const idleDirty =
+    !!sandbox &&
+    (idle.autoShutdown !== (sandbox.autoShutdown ?? false) ||
+      idle.idleMinutes !== (sandbox.idleMinutes ?? 5));
+  const dirty = resourceDirty || tagsDirty || idleDirty;
 
   return (
-    <Modal
+    <Drawer
       title={sandboxId}
       open={open}
-      onCancel={onClose}
-      centered
+      onClose={() => {
+        if (busy === null) onClose();
+      }}
       destroyOnHidden
-      width={640}
-      styles={{ body: { minHeight: 380 } }}
+      width={720}
       mask={{ closable: busy === null }}
-      closable={busy === null}
-      footer={
+      styles={{
+        body: { paddingBottom: 24 },
+      }}
+      extra={
         <Space>
           <Button onClick={onClose} disabled={busy !== null}>
             关闭
@@ -168,27 +195,71 @@ export function SandboxDetailModal({
             bordered
             items={[
               {
-                key: "url",
-                label: "公网地址",
-                children: sandbox.publicUrl ? (
-                  <Space wrap>
-                    <Typography.Link href={sandbox.publicUrl} target="_blank">
-                      {sandbox.publicUrl}
-                    </Typography.Link>
-                    <Button
-                      size="small"
-                      onClick={() =>
-                        void navigator.clipboard.writeText(sandbox.publicUrl!)
-                      }
-                    >
-                      复制
-                    </Button>
-                  </Space>
-                ) : (
-                  <Typography.Text type="secondary">
-                    尚未就绪，进入运行中后会自动出现
-                  </Typography.Text>
-                ),
+                key: "ports",
+                label: "端口与地址",
+                children:
+                  (sandbox.ports ?? []).length > 0 ? (
+                    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                      {(sandbox.ports ?? []).map((port) => (
+                        <div key={port.number}>
+                          <Typography.Text strong>端口 {port.number}</Typography.Text>
+                          <div style={{ marginTop: 4 }}>
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                              公网
+                            </Typography.Text>
+                            <div>
+                              {port.publicAddress ? (
+                                <Space wrap size={8}>
+                                  <Typography.Link
+                                    href={
+                                      port.publicAddress.startsWith("http")
+                                        ? port.publicAddress
+                                        : `https://${port.publicAddress}`
+                                    }
+                                    target="_blank"
+                                  >
+                                    {port.publicAddress}
+                                  </Typography.Link>
+                                  <Button
+                                    size="small"
+                                    onClick={() =>
+                                      void navigator.clipboard.writeText(
+                                        port.publicAddress!,
+                                      )
+                                    }
+                                  >
+                                    复制
+                                  </Button>
+                                </Space>
+                              ) : (
+                                <Typography.Text type="secondary">
+                                  尚未就绪
+                                </Typography.Text>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ marginTop: 4 }}>
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                              内网
+                            </Typography.Text>
+                            <div>
+                              {port.privateAddress ? (
+                                <Space wrap size={8}>
+                                  <Typography.Text copyable>
+                                    {port.privateAddress}
+                                  </Typography.Text>
+                                </Space>
+                              ) : (
+                                <Typography.Text type="secondary">—</Typography.Text>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </Space>
+                  ) : (
+                    <Typography.Text type="secondary">暂无端口信息</Typography.Text>
+                  ),
               },
               {
                 key: "template",
@@ -238,10 +309,22 @@ export function SandboxDetailModal({
               value={resources}
               onChange={setResources}
               disabled={busy !== null}
+              showDisk={false}
             />
+            <div style={{ marginTop: 28 }}>
+              <IdleShutdownConfig
+                layout="stack"
+                value={idle}
+                disabled={busy !== null}
+                onChange={(next) => {
+                  idleDirtyRef.current = true;
+                  setIdle(next);
+                }}
+              />
+            </div>
           </div>
         </Space>
       )}
-    </Modal>
+    </Drawer>
   );
 }

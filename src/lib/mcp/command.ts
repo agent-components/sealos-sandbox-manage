@@ -1,6 +1,8 @@
 import { jsonError } from "@/lib/api/response";
+import { recordMcpCall } from "@/lib/mcp/audit";
+import { beginMcpActivity, endMcpActivity } from "@/lib/sandbox/idle";
 import { RunSandboxCommandSchema } from "@/lib/sandbox/schema";
-import { resolveRunningSandbox } from "@/lib/sandbox/command";
+import { resolveSandboxForMcpCommand } from "@/lib/sandbox/command";
 import { ExecCancelledError, execInPod, type PodExecChunk, type PodExecResult } from "@/lib/sealos/kube";
 
 type JsonRpcId = string | number | null;
@@ -39,11 +41,6 @@ function commandBody(result: PodExecResult) {
   };
 }
 
-async function failureResult(id: JsonRpcId, error: unknown) {
-  const response = jsonError(error);
-  return rpcResult(id, toolText(await response.json(), response.status >= 400));
-}
-
 function outputMessage(chunk: PodExecChunk) {
   return {
     jsonrpc: "2.0" as const,
@@ -72,6 +69,7 @@ function progressMessage(token: string | number, progress: number, chunk: PodExe
  * MCP 的 runSandboxCommand。
  * 接受 SSE 时边执行边推送输出，并且不限制执行时间；客户端断开则取消命令。
  * 不接受 SSE 时仍等到命令结束再返回 JSON，同样不限时。
+ * 沙箱已停止时会先开机再执行。
  */
 export async function callSandboxCommand(
   request: Request,
@@ -80,7 +78,9 @@ export async function callSandboxCommand(
   progressToken: string | number | undefined,
   stream: boolean,
 ): Promise<CommandDispatch> {
+  const startedAt = Date.now();
   if (typeof args.id !== "string" || args.id.length === 0) {
+    await auditCommand(args, 400, { error: "缺少参数 id" }, startedAt);
     return {
       kind: "response",
       status: 200,
@@ -89,18 +89,28 @@ export async function callSandboxCommand(
   }
   const parsed = RunSandboxCommandSchema.safeParse({ command: args.command });
   if (!parsed.success) {
+    const failure = await apiFailure(parsed.error);
+    await auditCommand(args, failure.status, failure.body, startedAt);
     return {
       kind: "response",
       status: 200,
-      body: rpcResult(id, toolText(await failureBody(parsed.error), true)),
+      body: rpcResult(id, toolText(failure.body, true)),
     };
   }
 
-  let target: Awaited<ReturnType<typeof resolveRunningSandbox>>;
+  const sandboxId = args.id;
+  await beginMcpActivity(sandboxId);
+
+  let target: Awaited<ReturnType<typeof resolveSandboxForMcpCommand>>;
   try {
-    target = await resolveRunningSandbox(args.id);
+    target = await resolveSandboxForMcpCommand(sandboxId, request.signal);
   } catch (error) {
-    return { kind: "response", status: 200, body: await failureResult(id, error) };
+    const failure = await apiFailure(error);
+    await endMcpActivity(sandboxId, {
+      touch: failure.status !== 401 && failure.status !== 403,
+    });
+    await auditCommand(args, failure.status, failure.body, startedAt);
+    return { kind: "response", status: 200, body: rpcResult(id, toolText(failure.body, true)) };
   }
 
   const command = ["/bin/sh", "-c", parsed.data.command];
@@ -113,16 +123,27 @@ export async function callSandboxCommand(
         timeoutMs: 0,
         signal: request.signal,
       });
+      const body = commandBody(result);
+      await auditCommand(args, 200, body, startedAt);
       return {
         kind: "response",
         status: 200,
-        body: rpcResult(id, toolText(commandBody(result), false)),
+        body: rpcResult(id, toolText(body, false)),
       };
     } catch (error) {
       if (error instanceof ExecCancelledError || request.signal.aborted) {
+        await auditCommand(args, 499, { error: "命令已取消" }, startedAt);
         return { kind: "response", status: 499, body: rpcResult(id, toolText("命令已取消", true)) };
       }
-      return { kind: "response", status: 200, body: await failureResult(id, error) };
+      const failure = await apiFailure(error);
+      await auditCommand(args, failure.status, failure.body, startedAt);
+      return {
+        kind: "response",
+        status: 200,
+        body: rpcResult(id, toolText(failure.body, true)),
+      };
+    } finally {
+      await endMcpActivity(sandboxId, { touch: true });
     }
   }
 
@@ -168,15 +189,21 @@ export async function callSandboxCommand(
             }
           },
         });
-        send(rpcResult(id, toolText(commandBody(result), false)));
+        const body = commandBody(result);
+        await auditCommand(args, 200, body, startedAt);
+        send(rpcResult(id, toolText(body, false)));
       } catch (error) {
         if (error instanceof ExecCancelledError || abort.signal.aborted || request.signal.aborted) {
+          await auditCommand(args, 499, { error: "命令已取消" }, startedAt);
           return;
         }
-        send(await failureResult(id, error));
+        const failure = await apiFailure(error);
+        await auditCommand(args, failure.status, failure.body, startedAt);
+        send(rpcResult(id, toolText(failure.body, true)));
       } finally {
         clearInterval(heartbeat);
         request.signal.removeEventListener("abort", onRequestAbort);
+        await endMcpActivity(sandboxId, { touch: true });
         closed = true;
         try {
           controller.close();
@@ -193,7 +220,24 @@ export async function callSandboxCommand(
   return { kind: "stream", stream: body };
 }
 
-async function failureBody(error: unknown) {
+function auditCommand(
+  args: Record<string, unknown>,
+  status: number,
+  result: unknown,
+  startedAt: number,
+) {
+  return recordMcpCall({
+    tool: "runSandboxCommand",
+    method: "POST",
+    path: "/sandboxes/{id}/commands",
+    arguments: args,
+    status,
+    result,
+    startedAt,
+  });
+}
+
+async function apiFailure(error: unknown) {
   const response = jsonError(error);
-  return response.json();
+  return { status: response.status, body: (await response.json()) as unknown };
 }

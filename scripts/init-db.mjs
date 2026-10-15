@@ -58,6 +58,17 @@ try {
   await sandboxTags.createIndex({ owner: 1, sandboxId: 1 }, { unique: true });
   await sandboxTags.createIndex({ owner: 1, tagsKey: 1 });
 
+  const sandboxIdle = db.collection("sandbox_idle");
+  await sandboxIdle.createIndex({ owner: 1, sandboxId: 1 }, { unique: true });
+  await sandboxIdle.createIndex({ autoShutdown: 1, lastActivityAt: 1 });
+
+  const mcpLogs = db.collection("mcp_logs");
+  await mcpLogs.createIndex({ id: 1 }, { unique: true });
+  await mcpLogs.createIndex({ createdAt: -1 });
+  await mcpLogs.createIndex({ tool: 1, createdAt: -1 });
+  await mcpLogs.createIndex({ username: 1, createdAt: -1 });
+  await mcpLogs.createIndex({ apiKeyId: 1, completedAt: -1 });
+
   const templates = db.collection("templates");
   await templates.createIndex({ id: 1 }, { unique: true });
   await templates.deleteMany({});
@@ -73,6 +84,8 @@ try {
     cpu: 0.5,
     memoryGi: 0.5,
     replicas: 1,
+    autoShutdown: false,
+    idleMinutes: 5,
     ports: [{ number: defaultPort, protocol: "http", isPublic: true }],
     env: [],
     storage: [],

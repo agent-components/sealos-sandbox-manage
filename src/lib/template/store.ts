@@ -22,6 +22,8 @@ type TemplateDoc = Document & {
   cpu: number;
   memoryGi: number;
   replicas: number;
+  autoShutdown?: boolean;
+  idleMinutes?: number;
   ports: TemplatePort[];
   env: TemplateEnv[];
   storage: TemplateStorage[];
@@ -41,6 +43,11 @@ function toTemplate(doc: TemplateDoc): Template {
     cpu: doc.cpu,
     memoryGi: doc.memoryGi,
     replicas: doc.replicas ?? 1,
+    autoShutdown: doc.autoShutdown ?? false,
+    idleMinutes:
+      typeof doc.idleMinutes === "number" && doc.idleMinutes >= 5
+        ? doc.idleMinutes
+        : 5,
     ports: doc.ports?.length
       ? doc.ports
       : [{ number: 80, protocol: "http", isPublic: true }],
@@ -79,6 +86,8 @@ export async function createTemplate(
     ...input,
     imageRegistry: input.imageRegistry ?? null,
     replicas: input.replicas ?? 1,
+    autoShutdown: input.autoShutdown ?? false,
+    idleMinutes: input.idleMinutes ?? 5,
     ports: input.ports,
     env: input.env ?? [],
     storage: input.storage ?? [],

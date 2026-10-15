@@ -81,11 +81,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               selectedKeys={
                 pathname.startsWith("/apikeys")
                   ? ["apikeys"]
-                  : pathname.startsWith("/templates")
-                    ? ["templates"]
-                    : pathname.startsWith("/sandboxes")
-                      ? ["sandboxes"]
-                      : []
+                  : pathname.startsWith("/mcp-logs")
+                    ? ["mcp-logs"]
+                    : pathname.startsWith("/templates")
+                      ? ["templates"]
+                      : pathname.startsWith("/sandboxes")
+                        ? ["sandboxes"]
+                        : []
               }
               items={[
                 {
@@ -97,6 +99,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   label: <Link href="/templates">模板</Link>,
                 },
                 {
+                  key: "mcp-logs",
+                  label: <Link href="/mcp-logs">MCP 日志</Link>,
+                },
+                {
                   key: "apikeys",
                   label: <Link href="/apikeys">API Key</Link>,
                 },
@@ -104,7 +110,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               style={{
                 border: "none",
                 background: "transparent",
-                minWidth: 280,
+                minWidth: 360,
                 lineHeight: "54px",
               }}
             />

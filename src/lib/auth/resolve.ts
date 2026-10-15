@@ -24,6 +24,8 @@ export type RequestUser = {
   username: string;
   /** 本次请求由 API Key 发起时存在。此时只能访问 sandboxIds 中的沙箱。 */
   apiKeyId?: string;
+  /** API Key 显示名称（不含密钥明文） */
+  apiKeyName?: string;
   sandboxIds?: string[];
 };
 

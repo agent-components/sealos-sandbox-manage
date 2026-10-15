@@ -21,6 +21,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined } from "@ant-design/icons";
+import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { boatClient } from "@/lib/client";
 import {
@@ -48,6 +49,8 @@ type FormState = {
   argsText: string;
   resources: ResourceSpec;
   replicas: number;
+  autoShutdown: boolean;
+  idleMinutes: number;
   ports: Template["ports"];
   env: Template["env"];
   storage: Template["storage"];
@@ -66,6 +69,8 @@ const emptyForm = (): FormState => ({
   argsText: "",
   resources: { ...DEFAULT_RESOURCES },
   replicas: 1,
+  autoShutdown: false,
+  idleMinutes: 5,
   ports: defaultTemplatePorts(),
   env: [],
   storage: [],
@@ -89,6 +94,8 @@ function fromTemplate(tpl: Template): FormState {
       diskGi: primaryDiskGi(tpl.storage),
     },
     replicas: tpl.replicas ?? 1,
+    autoShutdown: tpl.autoShutdown ?? false,
+    idleMinutes: tpl.idleMinutes ?? 5,
     ports: tpl.ports?.length ? tpl.ports : defaultTemplatePorts(),
     env: tpl.env ?? [],
     storage: tpl.storage ?? [],
@@ -120,6 +127,8 @@ function toPayload(form: FormState) {
     cpu: form.resources.cpu,
     memoryGi: form.resources.memoryGi,
     replicas: form.replicas,
+    autoShutdown: form.autoShutdown,
+    idleMinutes: form.idleMinutes,
     ports: form.ports,
     env: form.env.filter((e) => e.name.trim()),
     storage: form.storage.filter((s) => s.name.trim() && s.path.trim()),
@@ -588,6 +597,22 @@ export default function TemplatesPage() {
                         }
                         disabled={saving}
                         showDisk={false}
+                      />
+                    </div>
+                    <div style={{ marginTop: 24 }}>
+                      <IdleShutdownConfig
+                        value={{
+                          autoShutdown: form.autoShutdown,
+                          idleMinutes: form.idleMinutes,
+                        }}
+                        onChange={(idle) =>
+                          setForm((f) => ({
+                            ...f,
+                            autoShutdown: idle.autoShutdown,
+                            idleMinutes: idle.idleMinutes,
+                          }))
+                        }
+                        disabled={saving}
                       />
                     </div>
                   </div>

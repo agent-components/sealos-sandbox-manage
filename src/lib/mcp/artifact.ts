@@ -1,4 +1,5 @@
 import { jsonError } from "@/lib/api/response";
+import { beginMcpActivity, endMcpActivity } from "@/lib/sandbox/idle";
 import { openSandboxArtifact } from "@/lib/sandbox/artifact";
 import { ExecCancelledError } from "@/lib/sealos/kube";
 
@@ -58,14 +59,22 @@ export async function callSandboxArtifact(
     };
   }
 
+  const sandboxId = args.id;
+  await beginMcpActivity(sandboxId);
+
   let artifact: Awaited<ReturnType<typeof openSandboxArtifact>>;
   try {
-    artifact = await openSandboxArtifact(args.id, String(args.path ?? ""), request.signal);
+    artifact = await openSandboxArtifact(sandboxId, String(args.path ?? ""), request.signal);
   } catch (error) {
+    const response = jsonError(error);
+    await endMcpActivity(sandboxId, {
+      touch: response.status !== 401 && response.status !== 403,
+    });
     return { kind: "response", status: 200, body: await failureResult(id, error) };
   }
 
   if (artifact.kind === "image") {
+    await endMcpActivity(sandboxId, { touch: true });
     return {
       kind: "response",
       status: 200,
@@ -128,6 +137,8 @@ export async function callSandboxArtifact(
         return { kind: "response", status: 499, body: rpcResult(id, { content: [{ type: "text", text: "已取消" }], isError: true }) };
       }
       return { kind: "response", status: 200, body: await failureResult(id, error) };
+    } finally {
+      await endMcpActivity(sandboxId, { touch: true });
     }
   }
 
@@ -198,6 +209,7 @@ export async function callSandboxArtifact(
       } finally {
         clearInterval(heartbeat);
         request.signal.removeEventListener("abort", onRequestAbort);
+        await endMcpActivity(sandboxId, { touch: true });
         closed = true;
         try {
           controller.close();

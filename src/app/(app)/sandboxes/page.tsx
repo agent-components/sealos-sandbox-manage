@@ -20,6 +20,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined } from "@ant-design/icons";
+import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { SandboxDetailModal } from "@/components/SandboxDetailModal";
 import { SandboxLogsModal } from "@/components/SandboxLogsModal";
@@ -61,6 +62,10 @@ export default function SandboxesPage() {
   const [createEnv, setCreateEnv] = useState<{ name: string; value: string }[]>(
     [],
   );
+  const [createIdle, setCreateIdle] = useState({
+    autoShutdown: false,
+    idleMinutes: 5,
+  });
   const [busyId, setBusyId] = useState<string | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
   const [logsId, setLogsId] = useState<string | null>(null);
@@ -126,6 +131,10 @@ export default function SandboxesPage() {
         .filter((e) => e.name.trim())
         .map((e) => ({ name: e.name, value: e.value ?? "" })),
     );
+    setCreateIdle({
+      autoShutdown: first.autoShutdown ?? false,
+      idleMinutes: first.idleMinutes ?? 5,
+    });
     setCreateName("");
     setCreateTags([]);
     setAdvancedOpen(false);
@@ -146,6 +155,10 @@ export default function SandboxesPage() {
           .filter((e) => e.name.trim())
           .map((e) => ({ name: e.name, value: e.value ?? "" })),
       );
+      setCreateIdle({
+        autoShutdown: tpl.autoShutdown ?? false,
+        idleMinutes: tpl.idleMinutes ?? 5,
+      });
     }
   }
 
@@ -180,6 +193,8 @@ export default function SandboxesPage() {
         diskGi: resources.diskGi,
         env: createEnv.filter((e) => e.name.trim()),
         tags: parsedTags.data,
+        autoShutdown: createIdle.autoShutdown,
+        idleMinutes: createIdle.idleMinutes,
         ...(name ? { name } : {}),
       });
       setCreateOpen(false);
@@ -624,6 +639,14 @@ export default function SandboxesPage() {
                         disabled={creating}
                         showDisk={false}
                       />
+                      <div style={{ marginTop: 28 }}>
+                        <IdleShutdownConfig
+                          value={createIdle}
+                          onChange={setCreateIdle}
+                          disabled={creating}
+                          layout="stack"
+                        />
+                      </div>
                     </div>
                   </Space>
                 ),

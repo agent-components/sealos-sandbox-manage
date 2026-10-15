@@ -26,6 +26,26 @@ function formatTime(value?: string | null) {
   return date.toLocaleString("zh-CN", { hour12: false });
 }
 
+/** Cursor / MCP 客户端接入用的配置片段 */
+function mcpConnectJson(apiKey: ApiKey) {
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+  return JSON.stringify(
+    {
+      mcpServers: {
+        boat: {
+          url: `${origin}/api/mcp`,
+          headers: {
+            Authorization: `Bearer ${apiKey.key}`,
+          },
+        },
+      },
+    },
+    null,
+    2,
+  );
+}
+
 export default function ApiKeysPage() {
   const { message, modal } = App.useApp();
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
@@ -174,11 +194,24 @@ export default function ApiKeysPage() {
       {
         title: "操作",
         key: "actions",
-        width: 120,
+        width: 180,
         align: "right",
         fixed: "right",
         render: (_, item) => (
           <Space size={0}>
+            <Button
+              type="link"
+              size="small"
+              style={{ paddingInline: 4 }}
+              onClick={() => {
+                void navigator.clipboard
+                  .writeText(mcpConnectJson(item))
+                  .then(() => message.success("已复制 MCP 接入配置"))
+                  .catch(() => message.error("复制失败"));
+              }}
+            >
+              复制 MCP
+            </Button>
             <Button
               type="link"
               size="small"
@@ -201,7 +234,7 @@ export default function ApiKeysPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [message],
   );
 
   return (
@@ -234,7 +267,7 @@ export default function ApiKeysPage() {
           columns={columns}
           dataSource={apiKeys}
           pagination={false}
-          scroll={{ x: 1100 }}
+          scroll={{ x: 1160 }}
           locale={{
             emptyText: (
               <Empty

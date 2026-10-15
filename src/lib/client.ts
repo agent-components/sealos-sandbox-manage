@@ -15,10 +15,14 @@ export type CreateSandboxBody = {
   diskGi?: number;
   env?: { name: string; value: string }[];
   tags?: string[];
+  autoShutdown?: boolean;
+  idleMinutes?: number;
 };
 
 export type UpdateSandboxBody = Partial<ResourceSpec> & {
   tags?: string[];
+  autoShutdown?: boolean;
+  idleMinutes?: number;
 };
 
 export type ListSandboxesQuery = {
@@ -139,6 +143,65 @@ export const boatClient = {
     request<{ ok: true }>(`/api/v1/templates/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
+
+  listMcpLogs: (query?: {
+    tool?: string;
+    limit?: number;
+    apiKeyId?: string;
+    from?: string;
+    to?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (query?.tool) q.set("tool", query.tool);
+    if (query?.limit) q.set("limit", String(query.limit));
+    if (query?.apiKeyId) q.set("apiKeyId", query.apiKeyId);
+    if (query?.from) q.set("from", query.from);
+    if (query?.to) q.set("to", query.to);
+    const qs = q.toString();
+    return request<{
+      logs: {
+        id: string;
+        username?: string;
+        apiKeyId?: string | null;
+        apiKeyName?: string | null;
+        tool: string;
+        method: string;
+        path: string;
+        arguments: Record<string, unknown>;
+        status: number;
+        ok: boolean;
+        resultKey: string | null;
+        resultError: string | null;
+        startedAt: string;
+        completedAt: string;
+        durationMs: number;
+        createdAt: string;
+      }[];
+    }>(`/api/v1/mcp-logs${qs ? `?${qs}` : ""}`);
+  },
+  getMcpLog: (id: string) =>
+    request<{
+      log: {
+        id: string;
+        username?: string;
+        apiKeyId?: string | null;
+        apiKeyName?: string | null;
+        tool: string;
+        method: string;
+        path: string;
+        arguments: Record<string, unknown>;
+        status: number;
+        ok: boolean;
+        resultKey: string | null;
+        resultError: string | null;
+        startedAt: string;
+        completedAt: string;
+        durationMs: number;
+        createdAt: string;
+      };
+      result: unknown;
+      resultLoadError: string | null;
+    }>(`/api/v1/mcp-logs/${encodeURIComponent(id)}`),
 
   listApiKeys: () => request<{ apiKeys: ApiKey[] }>("/api/v1/apikeys"),
   createApiKey: (body: { name: string; sandboxIds?: string[] }) =>
