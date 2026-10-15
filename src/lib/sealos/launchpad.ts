@@ -54,6 +54,8 @@ export type CreateFromTemplateInput = {
   owner: string;
   template: Template;
   resources?: Partial<ResourceSpec>;
+  /** 创建时追加/覆盖的环境变量（同名覆盖模板） */
+  env?: { name: string; value: string }[];
 };
 
 export function createLaunchpadClient(opts: LaunchpadClientOptions) {
@@ -96,9 +98,20 @@ export function createLaunchpadClient(opts: LaunchpadClientOptions) {
             )
           : [];
 
-      const userEnv = (template.env ?? []).filter(
-        (e) => !["BOAT_SANDBOX", "BOAT_USER", "BOAT_TEMPLATE"].includes(e.name),
-      );
+      const reserved = new Set([
+        "BOAT_SANDBOX",
+        "BOAT_USER",
+        "BOAT_TEMPLATE",
+      ]);
+      const envMap = new Map<string, string>();
+      for (const e of template.env ?? []) {
+        if (!e.name.trim() || reserved.has(e.name)) continue;
+        envMap.set(e.name.trim(), e.value ?? "");
+      }
+      for (const e of input.env ?? []) {
+        if (!e.name.trim() || reserved.has(e.name.trim())) continue;
+        envMap.set(e.name.trim(), e.value ?? "");
+      }
 
       const body = {
         name: input.name,
@@ -133,7 +146,7 @@ export function createLaunchpadClient(opts: LaunchpadClientOptions) {
           { name: "BOAT_SANDBOX", value: "true" },
           { name: "BOAT_USER", value: input.owner },
           { name: "BOAT_TEMPLATE", value: template.id },
-          ...userEnv.map((e) => ({ name: e.name, value: e.value ?? "" })),
+          ...[...envMap.entries()].map(([name, value]) => ({ name, value })),
         ],
         storage,
         configMap: (template.configMap ?? [])

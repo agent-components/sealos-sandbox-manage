@@ -12,6 +12,7 @@ export type CreateSandboxBody = {
   cpu?: number;
   memoryGi?: number;
   diskGi?: number;
+  env?: { name: string; value: string }[];
 };
 
 export type CreateTemplateBody = Omit<
@@ -77,6 +78,25 @@ export const boatClient = {
       `/api/v1/sandboxes/${encodeURIComponent(id)}/resume`,
       { method: "POST" },
     ),
+  getSandboxLogs: (
+    id: string,
+    opts?: { pod?: string; tailLines?: number; previous?: boolean },
+  ) => {
+    const q = new URLSearchParams();
+    if (opts?.pod) q.set("pod", opts.pod);
+    if (opts?.tailLines) q.set("tailLines", String(opts.tailLines));
+    if (opts?.previous) q.set("previous", "true");
+    const qs = q.toString();
+    return request<{
+      pods: { name: string; phase: string; container: string; ready: boolean }[];
+      pod: string | null;
+      container: string | null;
+      logs: string;
+      message?: string;
+    }>(
+      `/api/v1/sandboxes/${encodeURIComponent(id)}/logs${qs ? `?${qs}` : ""}`,
+    );
+  },
 
   listTemplates: () =>
     request<{ templates: Template[] }>("/api/v1/templates"),

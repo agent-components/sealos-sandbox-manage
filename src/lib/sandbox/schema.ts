@@ -38,11 +38,17 @@ export const SandboxSchema = z.object({
 
 export type Sandbox = z.infer<typeof SandboxSchema>;
 
+export const CreateSandboxEnvSchema = z.object({
+  name: z.string().min(1).max(128),
+  value: z.string().max(4096).default(""),
+});
+
 export const CreateSandboxSchema = z.object({
   templateId: z.string().min(1, "请选择模板"),
   cpu: ResourceSpecSchema.shape.cpu.optional(),
   memoryGi: ResourceSpecSchema.shape.memoryGi.optional(),
   diskGi: ResourceSpecSchema.shape.diskGi.optional(),
+  env: z.array(CreateSandboxEnvSchema).default([]),
   name: z
     .string()
     .min(1)

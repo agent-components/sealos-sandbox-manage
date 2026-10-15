@@ -15,6 +15,8 @@ import {
   Switch,
   Table,
   Tabs,
+  Tag,
+  Tooltip,
   Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -254,19 +256,33 @@ export default function TemplatesPage() {
       {
         title: "网络",
         key: "ports",
-        width: 160,
+        width: 180,
         render: (_, tpl) => {
           const ports = tpl.ports ?? [];
           if (!ports.length) return "—";
+          const formatPort = (p: (typeof ports)[number]) =>
+            `${p.number}/${p.protocol}${p.isPublic ? " · 公网" : ""}`;
+          const first = ports[0]!;
+          const rest = ports.slice(1);
           return (
-            <Space direction="vertical" size={0}>
-              {ports.map((p, i) => (
-                <Typography.Text key={`${p.number}-${i}`} style={{ fontSize: 13 }}>
-                  {p.number}/{p.protocol}
-                  {p.isPublic ? " · 公网" : ""}
-                </Typography.Text>
-              ))}
-            </Space>
+            <Flex align="center" gap={6} wrap={false}>
+              <Typography.Text style={{ fontSize: 13 }} ellipsis>
+                {formatPort(first)}
+              </Typography.Text>
+              {rest.length > 0 ? (
+                <Tooltip
+                  title={
+                    <div style={{ whiteSpace: "pre-line" }}>
+                      {rest.map(formatPort).join("\n")}
+                    </div>
+                  }
+                >
+                  <Tag style={{ marginInlineEnd: 0, cursor: "default" }}>
+                    +{rest.length}
+                  </Tag>
+                </Tooltip>
+              ) : null}
+            </Flex>
           );
         },
       },
@@ -385,7 +401,14 @@ export default function TemplatesPage() {
           </Space>
         }
       >
-        <Form layout="vertical" disabled={saving}>
+        <Form
+          layout="horizontal"
+          disabled={saving}
+          labelCol={{ flex: "96px" }}
+          wrapperCol={{ flex: 1 }}
+          labelAlign="right"
+          colon={false}
+        >
           <Tabs
             className="template-drawer-tabs"
             tabPosition="left"

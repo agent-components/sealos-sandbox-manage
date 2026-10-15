@@ -83,7 +83,7 @@
 
 /* 右侧表单面板：padding 写在内联 style，这里只约束宽度与字段节奏 */
 .template-drawer-panel {
-  max-width: 480px;
+  max-width: 560px;
   box-sizing: border-box;
 }
 
@@ -92,7 +92,7 @@
 }
 
 .template-drawer-panel .ant-form-item {
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .template-drawer-panel .ant-form-item:last-child {
@@ -100,19 +100,23 @@
 }
 
 .template-drawer-panel .ant-form-item-label {
-  padding-bottom: 6px !important;
+  padding: 0 !important;
 }
 
 .template-drawer-panel .ant-form-item-label > label {
-  height: auto;
-  line-height: 1.4;
+  height: 32px;
+  line-height: 32px;
   font-weight: 500;
 }
 
 .template-drawer-panel .ant-form-item-control-input + .ant-form-item-extra,
 .template-drawer-panel .ant-form-item-extra {
-  margin-top: 6px;
+  margin-top: 4px;
   font-size: 12px;
+}
+
+.template-drawer-panel .ant-form-item-control-input {
+  min-height: 32px;
 }
 
 .template-drawer-panel .resource-config {

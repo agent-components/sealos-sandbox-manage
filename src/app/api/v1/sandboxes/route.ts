@@ -6,7 +6,7 @@ import { CreateSandboxSchema } from "@/lib/sandbox/schema";
 import { isOwnedBy } from "@/lib/sandbox/ownership";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { toSandbox } from "@/lib/sealos/map";
-import { ensureDefaultTemplate, getTemplate } from "@/lib/template/store";
+import { getTemplate } from "@/lib/template/store";
 
 export async function GET() {
   try {
@@ -26,7 +26,6 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireUser();
-    await ensureDefaultTemplate();
     const kubeconfig = await resolveKubeconfig();
     const input = CreateSandboxSchema.parse(await req.json().catch(() => ({})));
 
@@ -49,6 +48,7 @@ export async function POST(req: NextRequest) {
         memoryGi: input.memoryGi,
         diskGi: input.diskGi,
       },
+      env: input.env,
     });
     return jsonOk({ sandbox: toSandbox(app) }, { status: 201 });
   } catch (error) {

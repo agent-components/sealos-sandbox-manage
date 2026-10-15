@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   App,
   Button,
+  Collapse,
   Empty,
   Flex,
   Form,
@@ -17,8 +18,10 @@ import {
   Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { PlusOutlined } from "@ant-design/icons";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { SandboxDetailModal } from "@/components/SandboxDetailModal";
+import { SandboxLogsModal } from "@/components/SandboxLogsModal";
 import { StateBadge } from "@/components/StateBadge";
 import { boatClient } from "@/lib/client";
 import type { Sandbox } from "@/lib/sandbox/schema";
@@ -51,8 +54,13 @@ export default function SandboxesPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [createEnv, setCreateEnv] = useState<{ name: string; value: string }[]>(
+    [],
+  );
   const [busyId, setBusyId] = useState<string | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
+  const [logsId, setLogsId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Sandbox | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -110,7 +118,13 @@ export default function SandboxesPage() {
       memoryGi: first.memoryGi,
       diskGi: primaryDiskGi(first.storage),
     });
+    setCreateEnv(
+      (first.env ?? [])
+        .filter((e) => e.name.trim())
+        .map((e) => ({ name: e.name, value: e.value ?? "" })),
+    );
     setCreateName("");
+    setAdvancedOpen(false);
     setCreateOpen(true);
   }
 
@@ -123,6 +137,11 @@ export default function SandboxesPage() {
         memoryGi: tpl.memoryGi,
         diskGi: primaryDiskGi(tpl.storage),
       });
+      setCreateEnv(
+        (tpl.env ?? [])
+          .filter((e) => e.name.trim())
+          .map((e) => ({ name: e.name, value: e.value ?? "" })),
+      );
     }
   }
 
@@ -150,6 +169,7 @@ export default function SandboxesPage() {
         cpu: resources.cpu,
         memoryGi: resources.memoryGi,
         diskGi: resources.diskGi,
+        env: createEnv.filter((e) => e.name.trim()),
         ...(name ? { name } : {}),
       });
       setCreateOpen(false);
@@ -200,8 +220,6 @@ export default function SandboxesPage() {
     }
   }
 
-  const selectedTemplate = templates.find((t) => t.id === templateId);
-
   const columns: ColumnsType<Sandbox> = useMemo(
     () => [
       {
@@ -218,31 +236,46 @@ export default function SandboxesPage() {
         title: "模板",
         dataIndex: "templateId",
         key: "templateId",
-        width: 120,
-        render: (id?: string) => id || "—",
+        width: 180,
+        render: (id?: string) =>
+          id ? (
+            <Typography.Text
+              type="secondary"
+              style={{ fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}
+            >
+              {id}
+            </Typography.Text>
+          ) : (
+            "—"
+          ),
       },
       {
         title: "镜像",
         dataIndex: "image",
         key: "image",
-        ellipsis: true,
-        render: (image?: string) => (
-          <Typography.Text
-            type="secondary"
-            ellipsis={{ tooltip: image }}
-            style={{ maxWidth: 240 }}
-          >
-            {image || "—"}
-          </Typography.Text>
-        ),
+        width: 280,
+        render: (image?: string) =>
+          image ? (
+            <Typography.Text
+              type="secondary"
+              style={{ fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}
+            >
+              {image}
+            </Typography.Text>
+          ) : (
+            "—"
+          ),
       },
       {
         title: "规格",
         key: "spec",
-        width: 180,
+        width: 140,
         render: (_, sb) => (
-          <Typography.Text type="secondary">
-            {sb.cpu} 核 · {memoryLabel(sb.memoryGi)} · {sb.diskGi}Gi
+          <Typography.Text
+            type="secondary"
+            style={{ whiteSpace: "nowrap" }}
+          >
+            {sb.cpu} 核 · {memoryLabel(sb.memoryGi)}
           </Typography.Text>
         ),
       },
@@ -256,7 +289,7 @@ export default function SandboxesPage() {
       {
         title: "操作",
         key: "actions",
-        width: 220,
+        width: 260,
         align: "right",
         render: (_, sb) => {
           const rowBusy = busyId === sb.id;
@@ -275,6 +308,14 @@ export default function SandboxesPage() {
                 onClick={() => setViewId(sb.id)}
               >
                 查看
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                style={{ paddingInline: 4 }}
+                onClick={() => setLogsId(sb.id)}
+              >
+                日志
               </Button>
               <Button
                 type="link"
@@ -363,58 +404,150 @@ export default function SandboxesPage() {
         centered
         destroyOnHidden
         width={560}
-        styles={{ body: { minHeight: 320 } }}
         confirmLoading={creating}
         okText="创建"
         cancelText="取消"
         okButtonProps={{ disabled: !templateId }}
         onOk={() => void create()}
       >
-        <Form layout="vertical" disabled={creating}>
-          <Form.Item
-            label="模板"
-            required
-            extra={
-              selectedTemplate
-                ? `镜像 ${selectedTemplate.image} · 端口 ${selectedTemplate.ports?.[0]?.number ?? "—"}`
-                : undefined
-            }
-          >
+        <Form
+          layout="horizontal"
+          disabled={creating}
+          labelCol={{ flex: "88px" }}
+          wrapperCol={{ flex: 1 }}
+          labelAlign="right"
+          colon={false}
+        >
+          <Form.Item label="模板" required>
             <Select
               value={templateId}
               placeholder="请选择模板"
               options={templates.map((t) => ({
                 value: t.id,
                 label: `${t.name}（${t.id}）`,
-              }))
-              }
+              }))}
               onChange={onSelectTemplate}
             />
           </Form.Item>
-          <Form.Item
-            label="沙箱 ID"
-            extra="可选。留空则自动生成；仅小写字母、数字和连字符"
-          >
+          <Form.Item label="沙箱 ID">
             <Input
               value={createName}
-              placeholder="例如 my-sandbox"
+              placeholder="留空则自动生成"
               maxLength={48}
               onChange={(e) => setCreateName(e.target.value.toLowerCase())}
             />
           </Form.Item>
-          <Form.Item label="规格" style={{ marginBottom: 0 }}>
-            <Typography.Text
-              type="secondary"
-              style={{ display: "block", marginBottom: 8 }}
-            >
-              默认来自模板，可按需调整
-            </Typography.Text>
-            <ResourceConfig
-              value={resources}
-              onChange={setResources}
-              disabled={creating}
-            />
-          </Form.Item>
+          <Collapse
+            ghost
+            size="small"
+            style={{ marginInlineStart: 88 }}
+            activeKey={advancedOpen ? ["advanced"] : []}
+            onChange={(keys) => {
+              const next = Array.isArray(keys) ? keys : [keys];
+              setAdvancedOpen(next.includes("advanced"));
+            }}
+            items={[
+              {
+                key: "advanced",
+                label: "高级配置",
+                children: (
+                  <Space
+                    direction="vertical"
+                    size={20}
+                    style={{ width: "100%" }}
+                  >
+                    <div>
+                      <Typography.Text
+                        strong
+                        style={{ display: "block", marginBottom: 10 }}
+                      >
+                        环境变量
+                      </Typography.Text>
+                      <Space
+                        direction="vertical"
+                        size={8}
+                        style={{ width: "100%" }}
+                      >
+                        {createEnv.map((item, index) => (
+                          <Flex key={index} gap={8}>
+                            <Input
+                              placeholder="KEY"
+                              value={item.name}
+                              style={{ flex: 1 }}
+                              onChange={(e) =>
+                                setCreateEnv((list) => {
+                                  const next = [...list];
+                                  next[index] = {
+                                    ...next[index]!,
+                                    name: e.target.value,
+                                  };
+                                  return next;
+                                })
+                              }
+                            />
+                            <Input
+                              placeholder="VALUE"
+                              value={item.value}
+                              style={{ flex: 1.4 }}
+                              onChange={(e) =>
+                                setCreateEnv((list) => {
+                                  const next = [...list];
+                                  next[index] = {
+                                    ...next[index]!,
+                                    value: e.target.value,
+                                  };
+                                  return next;
+                                })
+                              }
+                            />
+                            <Button
+                              type="link"
+                              danger
+                              style={{ paddingInline: 0 }}
+                              onClick={() =>
+                                setCreateEnv((list) =>
+                                  list.filter((_, i) => i !== index),
+                                )
+                              }
+                            >
+                              删除
+                            </Button>
+                          </Flex>
+                        ))}
+                        <Button
+                          type="dashed"
+                          block
+                          icon={<PlusOutlined />}
+                          onClick={() =>
+                            setCreateEnv((list) => [
+                              ...list,
+                              { name: "", value: "" },
+                            ])
+                          }
+                        >
+                          添加环境变量
+                        </Button>
+                      </Space>
+                    </div>
+                    <div>
+                      <Typography.Text
+                        strong
+                        style={{ display: "block", marginBottom: 10 }}
+                      >
+                        规格
+                      </Typography.Text>
+                      <ResourceConfig
+                        value={resources}
+                        onChange={setResources}
+                        disabled={creating}
+                        showDisk={false}
+                      />
+                    </div>
+                  </Space>
+                ),
+              },
+            ]}
+          />
         </Form>
       </Modal>
 
@@ -423,6 +556,12 @@ export default function SandboxesPage() {
         open={!!viewId}
         onClose={() => setViewId(null)}
         onChanged={refresh}
+      />
+
+      <SandboxLogsModal
+        sandboxId={logsId ?? ""}
+        open={!!logsId}
+        onClose={() => setLogsId(null)}
       />
 
       <Modal
