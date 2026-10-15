@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 import { requireUser, resolveKubeconfig } from "@/lib/auth/resolve";
+import { assertSandboxAllowed } from "@/lib/apikey/access";
+import { revokeSandboxFromApiKeys } from "@/lib/apikey/store";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
 import { UpdateSandboxSchema } from "@/lib/sandbox/schema";
@@ -21,6 +23,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     const client = createLaunchpadClient({ kubeconfig });
     const app = await client.getApp(id);
     assertOwnedBy(app, user.username);
+    assertSandboxAllowed(user, id);
     const [sandbox] = await withSandboxTags(user.username, [toSandbox(app)]);
     return jsonOk({ sandbox });
   } catch (error) {
@@ -37,6 +40,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     const client = createLaunchpadClient({ kubeconfig });
     const existing = await client.getApp(id);
     assertOwnedBy(existing, user.username);
+    assertSandboxAllowed(user, id);
     const app =
       body.cpu !== undefined &&
       body.memoryGi !== undefined &&
@@ -65,8 +69,10 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
     const client = createLaunchpadClient({ kubeconfig });
     const existing = await client.getApp(id);
     assertOwnedBy(existing, user.username);
+    assertSandboxAllowed(user, id);
     await client.deleteApp(id);
     await deleteSandboxTags(user.username, id);
+    await revokeSandboxFromApiKeys(user.username, id);
     return jsonOk({ ok: true as const });
   } catch (error) {
     return jsonError(error);

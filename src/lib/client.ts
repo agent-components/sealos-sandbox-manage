@@ -136,10 +136,15 @@ export const boatClient = {
     }),
 
   listApiKeys: () => request<{ apiKeys: ApiKey[] }>("/api/v1/apikeys"),
-  createApiKey: (name: string) =>
+  createApiKey: (body: { name: string; sandboxIds?: string[] }) =>
     request<{ apiKey: ApiKey }>("/api/v1/apikeys", {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(body),
+    }),
+  updateApiKeySandboxes: (id: string, sandboxIds: string[]) =>
+    request<{ apiKey: ApiKey }>(`/api/v1/apikeys/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ sandboxIds }),
     }),
   deleteApiKey: (id: string) =>
     request<{ ok: true }>(`/api/v1/apikeys/${encodeURIComponent(id)}`, {

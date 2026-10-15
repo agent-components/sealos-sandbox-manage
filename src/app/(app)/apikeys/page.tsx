@@ -9,6 +9,7 @@ import {
   Form,
   Input,
   Modal,
+  Select,
   Space,
   Table,
   Typography,
@@ -16,6 +17,7 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import { boatClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
+import type { Sandbox } from "@/lib/sandbox/schema";
 
 function formatTime(value?: string | null) {
   if (!value) return "—";
@@ -30,7 +32,13 @@ export default function ApiKeysPage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [sandboxIds, setSandboxIds] = useState<string[]>([]);
+  const [sandboxes, setSandboxes] = useState<Sandbox[]>([]);
+  const [sandboxesLoading, setSandboxesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [accessKey, setAccessKey] = useState<ApiKey | null>(null);
+  const [accessIds, setAccessIds] = useState<string[]>([]);
+  const [accessSaving, setAccessSaving] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -47,9 +55,29 @@ export default function ApiKeysPage() {
     void refresh();
   }, [refresh]);
 
+  const loadSandboxes = useCallback(async () => {
+    setSandboxesLoading(true);
+    try {
+      const res = await boatClient.listSandboxes();
+      setSandboxes(res.sandboxes);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "沙箱列表加载失败");
+    } finally {
+      setSandboxesLoading(false);
+    }
+  }, [message]);
+
   function openCreate() {
     setName("");
+    setSandboxIds([]);
     setOpen(true);
+    void loadSandboxes();
+  }
+
+  function openAccess(item: ApiKey) {
+    setAccessKey(item);
+    setAccessIds(item.sandboxIds ?? []);
+    void loadSandboxes();
   }
 
   async function create() {
@@ -60,7 +88,7 @@ export default function ApiKeysPage() {
     }
     setSaving(true);
     try {
-      await boatClient.createApiKey(trimmed);
+      await boatClient.createApiKey({ name: trimmed, sandboxIds });
       message.success("API Key 已创建");
       setOpen(false);
       await refresh();
@@ -68,6 +96,21 @@ export default function ApiKeysPage() {
       message.error(err instanceof Error ? err.message : "创建失败");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveAccess() {
+    if (!accessKey) return;
+    setAccessSaving(true);
+    try {
+      await boatClient.updateApiKeySandboxes(accessKey.id, accessIds);
+      message.success("权限已更新");
+      setAccessKey(null);
+      await refresh();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setAccessSaving(false);
     }
   }
 
@@ -123,13 +166,36 @@ export default function ApiKeysPage() {
         ),
       },
       {
+        title: "可访问沙箱",
+        dataIndex: "sandboxIds",
+        width: 220,
+        render: (ids: string[] = []) =>
+          ids.length === 0 ? (
+            <Typography.Text type="secondary">无</Typography.Text>
+          ) : (
+            <Typography.Text ellipsis={{ tooltip: ids.join("、") }}>
+              {ids.length <= 2
+                ? ids.join("、")
+                : `${ids.slice(0, 2).join("、")} 等 ${ids.length} 个`}
+            </Typography.Text>
+          ),
+      },
+      {
         title: "操作",
         key: "actions",
-        width: 80,
+        width: 120,
         align: "right",
         fixed: "right",
         render: (_, item) => (
           <Space size={0}>
+            <Button
+              type="link"
+              size="small"
+              style={{ paddingInline: 4 }}
+              onClick={() => openAccess(item)}
+            >
+              权限
+            </Button>
             <Button
               type="link"
               size="small"
@@ -161,7 +227,7 @@ export default function ApiKeysPage() {
             API Key
           </Typography.Title>
           <Typography.Text type="secondary">
-            用于脚本和 Agent 调用 REST API，密钥长期保留，可随时复制
+            每把 Key 只能访问被授权的沙箱。用它创建的沙箱会自动加入授权列表
           </Typography.Text>
         </div>
         <Button type="primary" onClick={openCreate}>
@@ -177,7 +243,7 @@ export default function ApiKeysPage() {
           columns={columns}
           dataSource={apiKeys}
           pagination={false}
-          scroll={{ x: 900 }}
+          scroll={{ x: 1100 }}
           locale={{
             emptyText: (
               <Empty
@@ -218,7 +284,7 @@ export default function ApiKeysPage() {
           colon={false}
           style={{ marginTop: 16 }}
         >
-          <Form.Item label="名称" required style={{ marginBottom: 0 }}>
+          <Form.Item label="名称" required>
             <Input
               value={name}
               maxLength={64}
@@ -228,7 +294,60 @@ export default function ApiKeysPage() {
               onPressEnter={() => void create()}
             />
           </Form.Item>
+          <Form.Item label="沙箱" style={{ marginBottom: 0 }}>
+            <Select
+              mode="multiple"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="可先不选，之后只能访问用这把 Key 创建的沙箱"
+              loading={sandboxesLoading}
+              value={sandboxIds}
+              options={sandboxes.map((item) => ({
+                value: item.id,
+                label: item.name || item.id,
+              }))}
+              onChange={setSandboxIds}
+            />
+          </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={accessKey ? `沙箱权限 · ${accessKey.name}` : "沙箱权限"}
+        open={!!accessKey}
+        onCancel={() => {
+          if (!accessSaving) setAccessKey(null);
+        }}
+        centered
+        destroyOnHidden
+        width={480}
+        confirmLoading={accessSaving}
+        okText="保存"
+        cancelText="取消"
+        mask={{ closable: !accessSaving }}
+        cancelButtonProps={{ disabled: accessSaving }}
+        onOk={() => void saveAccess()}
+      >
+        <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
+          只能访问这里列出的沙箱。用这把 Key 新建的沙箱会自动加进来。
+        </Typography.Paragraph>
+        <Select
+          mode="multiple"
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          placeholder="选择允许访问的沙箱"
+          style={{ width: "100%" }}
+          loading={sandboxesLoading}
+          value={accessIds}
+          options={sandboxes.map((item) => ({
+            value: item.id,
+            label: item.name || item.id,
+          }))}
+          onChange={setAccessIds}
+          disabled={accessSaving}
+        />
       </Modal>
     </>
   );

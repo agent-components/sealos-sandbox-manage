@@ -20,6 +20,13 @@ function bearerToken(header: string | null): string | null {
   return match?.[1] ?? null;
 }
 
+export type RequestUser = {
+  username: string;
+  /** 本次请求由 API Key 发起时存在。此时只能访问 sandboxIds 中的沙箱。 */
+  apiKeyId?: string;
+  sandboxIds?: string[];
+};
+
 /** 要求已登录的平台用户（会话 cookie）。API Key 管理只走这条路径。 */
 export async function requireSessionUser(): Promise<{ username: string }> {
   const session = await readUserSession();
@@ -31,9 +38,9 @@ export async function requireSessionUser(): Promise<{ username: string }> {
 
 /**
  * 沙箱 / 模板等接口：会话 cookie，或 `Authorization: Bearer boat_...`。
- * 密钥按所属用户隔离。
+ * 会话可访问该用户的全部沙箱；API Key 只能访问其授权列表。
  */
-export async function requireUser(): Promise<{ username: string }> {
+export async function requireUser(): Promise<RequestUser> {
   const session = await readUserSession();
   if (session) return session;
 

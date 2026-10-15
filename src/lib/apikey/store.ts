@@ -1,4 +1,4 @@
-import type { Document } from "mongodb";
+import type { Document, UpdateFilter } from "mongodb";
 import { getCollection } from "@/lib/db/mongo";
 import type { ApiKey } from "@/lib/apikey/schema";
 import { isApiKeySecret } from "@/lib/apikey/secret";
@@ -8,6 +8,7 @@ type ApiKeyDoc = Document & {
   name: string;
   username: string;
   key: string;
+  sandboxIds: string[];
   createdAt: Date;
   lastUsedAt: Date | null;
 };
@@ -17,6 +18,7 @@ function toApiKey(doc: ApiKeyDoc): ApiKey {
     id: doc.id,
     name: doc.name,
     key: doc.key,
+    sandboxIds: doc.sandboxIds ?? [],
     createdAt: doc.createdAt?.toISOString(),
     lastUsedAt: doc.lastUsedAt?.toISOString() ?? null,
   };
@@ -52,6 +54,7 @@ export async function createApiKey(input: {
   name: string;
   username: string;
   key: string;
+  sandboxIds: string[];
 }): Promise<ApiKey> {
   const col = await apiKeys();
   const now = new Date();
@@ -60,11 +63,52 @@ export async function createApiKey(input: {
     name: input.name,
     username: input.username,
     key: input.key,
+    sandboxIds: input.sandboxIds,
     createdAt: now,
     lastUsedAt: null,
   };
   await col.insertOne(doc);
   return toApiKey(doc);
+}
+
+export async function setApiKeySandboxes(
+  id: string,
+  username: string,
+  sandboxIds: string[],
+): Promise<ApiKey | null> {
+  const col = await apiKeys();
+  const result = await col.findOneAndUpdate(
+    { id, username },
+    { $set: { sandboxIds } },
+    { returnDocument: "after" },
+  );
+  return result ? toApiKey(result) : null;
+}
+
+/** 把沙箱加入指定 API Key 的授权列表。Key 不存在时返回 false。 */
+export async function grantApiKeySandbox(
+  id: string,
+  username: string,
+  sandboxId: string,
+): Promise<boolean> {
+  const col = await apiKeys();
+  const result = await col.updateOne(
+    { id, username },
+    { $addToSet: { sandboxIds: sandboxId } },
+  );
+  return result.matchedCount > 0;
+}
+
+/** 沙箱删除后，从该用户全部 API Key 的授权列表中移除。 */
+export async function revokeSandboxFromApiKeys(
+  username: string,
+  sandboxId: string,
+): Promise<void> {
+  const col = await apiKeys();
+  await col.updateMany(
+    { username },
+    { $pull: { sandboxIds: sandboxId } } as unknown as UpdateFilter<ApiKeyDoc>,
+  );
 }
 
 export async function deleteApiKey(
@@ -76,10 +120,12 @@ export async function deleteApiKey(
   return result.deletedCount > 0;
 }
 
-/** 用明文密钥换取所属用户；命中后按分钟更新最近使用时间。 */
-export async function authenticateApiKey(
-  secret: string,
-): Promise<{ username: string } | null> {
+/** 用明文密钥换取所属用户与授权沙箱；命中后按分钟更新最近使用时间。 */
+export async function authenticateApiKey(secret: string): Promise<{
+  username: string;
+  apiKeyId: string;
+  sandboxIds: string[];
+} | null> {
   if (!isApiKeySecret(secret)) return null;
   const col = await apiKeys();
   const doc = await col.findOne({ key: secret });
@@ -91,5 +137,9 @@ export async function authenticateApiKey(
   if (stale) {
     await col.updateOne({ id: doc.id }, { $set: { lastUsedAt: now } });
   }
-  return { username: doc.username };
+  return {
+    username: doc.username,
+    apiKeyId: doc.id,
+    sandboxIds: doc.sandboxIds ?? [],
+  };
 }

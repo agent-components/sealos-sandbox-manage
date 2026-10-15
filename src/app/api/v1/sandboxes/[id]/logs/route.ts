@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireUser, resolveKubeconfig } from "@/lib/auth/resolve";
+import { assertSandboxAllowed } from "@/lib/apikey/access";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
@@ -15,6 +16,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     const client = createLaunchpadClient({ kubeconfig });
     const app = await client.getApp(id);
     assertOwnedBy(app, user.username);
+    assertSandboxAllowed(user, id);
 
     const pods = await listAppPods(kubeconfig, id);
     if (!pods.length) {

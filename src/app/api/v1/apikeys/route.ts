@@ -10,6 +10,7 @@ import {
   createApiKey,
   listApiKeys,
 } from "@/lib/apikey/store";
+import { findUnownedSandboxIds } from "@/lib/sandbox/owned";
 
 export async function GET() {
   try {
@@ -43,11 +44,20 @@ export async function POST(req: NextRequest) {
       return jsonOk({ error: "无法生成唯一 API Key ID，请重试" }, { status: 500 });
     }
 
+    const missing = await findUnownedSandboxIds(user.username, input.sandboxIds);
+    if (missing.length > 0) {
+      return jsonOk(
+        { error: `沙箱不存在或无权访问：${missing.join("、")}` },
+        { status: 400 },
+      );
+    }
+
     const apiKey = await createApiKey({
       id,
       name: input.name,
       username: user.username,
       key: createApiKeySecret(),
+      sandboxIds: input.sandboxIds,
     });
     return jsonOk({ apiKey }, { status: 201 });
   } catch (error) {

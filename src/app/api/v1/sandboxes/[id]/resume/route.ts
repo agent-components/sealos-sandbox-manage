@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireUser, resolveKubeconfig } from "@/lib/auth/resolve";
+import { assertSandboxAllowed } from "@/lib/apikey/access";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
 import { withSandboxTags } from "@/lib/sandbox/tags";
@@ -16,6 +17,7 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
     const client = createLaunchpadClient({ kubeconfig });
     const existing = await client.getApp(id);
     assertOwnedBy(existing, user.username);
+    assertSandboxAllowed(user, id);
     await client.startApp(id);
     const app = await client.getApp(id);
     const [sandbox] = await withSandboxTags(user.username, [toSandbox(app)]);

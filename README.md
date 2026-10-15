@@ -29,9 +29,18 @@ npm run dev
 
 ## REST API
 
-基路径 `/api/v1`。需先登录获取 session cookie，或使用控制台创建的 API Key（`Authorization: Bearer boat_...`）。沙箱与 API Key 按当前用户隔离。服务端另用环境中的 kubeconfig 调用 Sealos。
+基路径 `/api/v1`。Agent 读取 `GET /api/openapi.json`（OpenAPI 3.1），当前可调用：
 
-API Key 以明文保存在数据库中，列表接口会返回完整密钥。密钥管理接口（`/api/v1/apikeys`）仅接受登录会话，不接受 API Key 自身调用。
+- `GET /api/v1/sandboxes` 查看沙箱列表
+- `GET /api/v1/sandboxes/{id}` 查看沙箱状态
+- `POST /api/v1/sandboxes` 创建沙箱
+- `POST /api/v1/sandboxes/{id}/stop` 关机
+- `POST /api/v1/sandboxes/{id}/resume` 开机
+- `DELETE /api/v1/sandboxes/{id}` 删除沙箱
+
+需先登录获取 session cookie，或使用控制台创建的 API Key（`Authorization: Bearer boat_...`）。沙箱与 API Key 按当前用户隔离。服务端另用环境中的 kubeconfig 调用 Sealos。
+
+API Key 以明文保存在数据库中，列表接口会返回完整密钥。密钥管理接口（`/api/v1/apikeys`）仅接受登录会话，不接受 API Key 自身调用。每把 Key 有独立的沙箱授权列表，只能访问列表中的沙箱；用该 Key 创建的沙箱会自动加入列表。可在控制台修改授权。
 
 ### 示例
 
