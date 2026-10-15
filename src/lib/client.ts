@@ -14,16 +14,10 @@ export type CreateSandboxBody = {
   diskGi?: number;
 };
 
-export type CreateTemplateBody = {
-  id: string;
-  name: string;
-  description?: string;
-  image: string;
-  cpu: number;
-  memoryGi: number;
-  diskGi: number;
-  port?: number;
-};
+export type CreateTemplateBody = Omit<
+  Template,
+  "createdAt" | "updatedAt"
+>;
 
 export type UpdateTemplateBody = Partial<
   Omit<CreateTemplateBody, "id">

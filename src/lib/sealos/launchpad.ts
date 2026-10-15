@@ -2,6 +2,8 @@ import { getSealosConfig } from "@/lib/sealos/config";
 import { SealosApiError } from "@/lib/sealos/errors";
 import type { LaunchpadApp } from "@/lib/sealos/map";
 import type { ResourceSpec } from "@/lib/sealos/resources";
+import type { Template } from "@/lib/template/schema";
+import { primaryDiskGi } from "@/lib/template/schema";
 
 export type LaunchpadClientOptions = {
   kubeconfig: string;
@@ -47,9 +49,15 @@ async function launchpadFetch<T>(
   return json as T;
 }
 
+export type CreateFromTemplateInput = {
+  name: string;
+  owner: string;
+  template: Template;
+  resources?: Partial<ResourceSpec>;
+};
+
 export function createLaunchpadClient(opts: LaunchpadClientOptions) {
   const { kubeconfig, baseUrl } = opts;
-  const config = getSealosConfig();
 
   return {
     async listApps(): Promise<LaunchpadApp[]> {
@@ -70,46 +78,64 @@ export function createLaunchpadClient(opts: LaunchpadClientOptions) {
       );
     },
 
-    async createApp(input: {
-      name: string;
-      resources: ResourceSpec;
-      owner: string;
-      image: string;
-      port?: number;
-      templateId: string;
-    }): Promise<LaunchpadApp> {
-      const imageName = input.image;
-      const port = input.port ?? config.defaultPort;
-      const { cpu, memoryGi, diskGi } = input.resources;
+    async createAppFromTemplate(
+      input: CreateFromTemplateInput,
+    ): Promise<LaunchpadApp> {
+      const { template } = input;
+      const cpu = input.resources?.cpu ?? template.cpu;
+      const memoryGi = input.resources?.memoryGi ?? template.memoryGi;
+      const diskGi =
+        input.resources?.diskGi ?? primaryDiskGi(template.storage);
+
+      const storage =
+        template.storage.length > 0
+          ? template.storage.map((s, i) =>
+              i === 0 && input.resources?.diskGi
+                ? { ...s, size: `${diskGi}Gi` }
+                : s,
+            )
+          : [{ name: "data", path: "/data", size: `${diskGi}Gi` }];
+
+      const userEnv = (template.env ?? []).filter(
+        (e) => !["BOAT_SANDBOX", "BOAT_USER", "BOAT_TEMPLATE"].includes(e.name),
+      );
 
       const body = {
         name: input.name,
-        image: { imageName },
-        launchCommand: {},
+        image: {
+          imageName: template.image,
+          ...(template.imageRegistry
+            ? { imageRegistry: template.imageRegistry }
+            : {}),
+        },
+        launchCommand: {
+          ...(template.launchCommand?.command
+            ? { command: template.launchCommand.command }
+            : {}),
+          ...(template.launchCommand?.args?.length
+            ? { args: template.launchCommand.args }
+            : {}),
+        },
         quota: {
           cpu,
           memory: memoryGi,
-          replicas: 1,
+          replicas: template.replicas ?? 1,
         },
-        ports: [
-          {
-            number: port,
-            protocol: "http",
-            isPublic: true,
-          },
-        ],
+        ports:
+          template.ports.length > 0
+            ? template.ports.map((p) => ({
+                number: p.number,
+                protocol: p.protocol,
+                isPublic: p.isPublic,
+              }))
+            : [{ number: 80, protocol: "http", isPublic: true }],
         env: [
           { name: "BOAT_SANDBOX", value: "true" },
           { name: "BOAT_USER", value: input.owner },
-          { name: "BOAT_TEMPLATE", value: input.templateId },
+          { name: "BOAT_TEMPLATE", value: template.id },
+          ...userEnv.map((e) => ({ name: e.name, value: e.value ?? "" })),
         ],
-        storage: [
-          {
-            name: "data",
-            path: "/data",
-            size: `${diskGi}Gi`,
-          },
-        ],
+        storage,
         configMap: [],
       };
 

@@ -1,16 +1,29 @@
 import type { Document } from "mongodb";
 import { getCollection } from "@/lib/db/mongo";
-import type { Template } from "@/lib/template/schema";
+import type {
+  Template,
+  TemplateEnv,
+  TemplatePort,
+  TemplateStorage,
+} from "@/lib/template/schema";
 
 type TemplateDoc = Document & {
   id: string;
   name: string;
   description?: string;
   image: string;
+  imageRegistry?: {
+    username: string;
+    password: string;
+    serverAddress: string;
+  } | null;
+  launchCommand?: { command?: string; args?: string[] };
   cpu: number;
   memoryGi: number;
-  diskGi: number;
-  port: number;
+  replicas: number;
+  ports: TemplatePort[];
+  env: TemplateEnv[];
+  storage: TemplateStorage[];
   createdAt: Date;
   updatedAt: Date;
 };
@@ -21,10 +34,18 @@ function toTemplate(doc: TemplateDoc): Template {
     name: doc.name,
     description: doc.description,
     image: doc.image,
+    imageRegistry: doc.imageRegistry ?? null,
+    launchCommand: doc.launchCommand,
     cpu: doc.cpu,
     memoryGi: doc.memoryGi,
-    diskGi: doc.diskGi,
-    port: doc.port,
+    replicas: doc.replicas ?? 1,
+    ports: doc.ports?.length
+      ? doc.ports
+      : [{ number: 80, protocol: "http", isPublic: true }],
+    env: doc.env ?? [],
+    storage: doc.storage?.length
+      ? doc.storage
+      : [{ name: "data", path: "/data", size: "3Gi" }],
     createdAt: doc.createdAt?.toISOString(),
     updatedAt: doc.updatedAt?.toISOString(),
   };
@@ -55,7 +76,11 @@ export async function createTemplate(
   const now = new Date();
   const doc: TemplateDoc = {
     ...input,
-    port: input.port ?? 80,
+    imageRegistry: input.imageRegistry ?? null,
+    replicas: input.replicas ?? 1,
+    ports: input.ports,
+    env: input.env ?? [],
+    storage: input.storage ?? [],
     createdAt: now,
     updatedAt: now,
   };
@@ -82,7 +107,6 @@ export async function deleteTemplate(id: string): Promise<boolean> {
   return result.deletedCount > 0;
 }
 
-/** 库为空时写入默认模板 */
 export async function ensureDefaultTemplate(): Promise<void> {
   const col = await templates();
   const count = await col.countDocuments();
@@ -96,10 +120,14 @@ export async function ensureDefaultTemplate(): Promise<void> {
     name: "Nginx",
     description: "默认 Web 服务模板",
     image,
+    imageRegistry: null,
+    launchCommand: {},
     cpu: 0.5,
     memoryGi: 0.5,
-    diskGi: 3,
-    port,
+    replicas: 1,
+    ports: [{ number: port, protocol: "http", isPublic: true }],
+    env: [],
+    storage: [{ name: "data", path: "/data", size: "3Gi" }],
     createdAt: now,
     updatedAt: now,
   });

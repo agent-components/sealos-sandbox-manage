@@ -40,16 +40,14 @@ export async function POST(req: NextRequest) {
 
     const client = createLaunchpadClient({ kubeconfig });
     const id = input.name ?? createSandboxId();
-    const app = await client.createApp({
+    const app = await client.createAppFromTemplate({
       name: id,
       owner: user.username,
-      image: template.image,
-      port: template.port,
-      templateId: template.id,
+      template,
       resources: {
-        cpu: input.cpu ?? template.cpu,
-        memoryGi: input.memoryGi ?? template.memoryGi,
-        diskGi: input.diskGi ?? template.diskGi,
+        cpu: input.cpu,
+        memoryGi: input.memoryGi,
+        diskGi: input.diskGi,
       },
     });
     return jsonOk({ sandbox: toSandbox(app) }, { status: 201 });

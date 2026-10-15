@@ -40,25 +40,25 @@ try {
 
   const templates = db.collection("templates");
   await templates.createIndex({ id: 1 }, { unique: true });
-  const existingTpl = await templates.findOne({ id: "nginx" });
-  if (!existingTpl) {
-    const now = new Date();
-    await templates.insertOne({
-      id: "nginx",
-      name: "Nginx",
-      description: "默认 Web 服务模板",
-      image: defaultImage,
-      cpu: 0.5,
-      memoryGi: 0.5,
-      diskGi: 3,
-      port: defaultPort,
-      createdAt: now,
-      updatedAt: now,
-    });
-    console.log(`已创建默认模板 nginx（镜像 ${defaultImage}）`);
-  } else {
-    console.log("默认模板 nginx 已存在");
-  }
+  await templates.deleteMany({});
+  const now = new Date();
+  await templates.insertOne({
+    id: "nginx",
+    name: "Nginx",
+    description: "默认 Web 服务模板",
+    image: defaultImage,
+    imageRegistry: null,
+    launchCommand: {},
+    cpu: 0.5,
+    memoryGi: 0.5,
+    replicas: 1,
+    ports: [{ number: defaultPort, protocol: "http", isPublic: true }],
+    env: [],
+    storage: [{ name: "data", path: "/data", size: "3Gi" }],
+    createdAt: now,
+    updatedAt: now,
+  });
+  console.log(`已写入默认模板 nginx（镜像 ${defaultImage}）`);
 
   console.log(
     "集合：",

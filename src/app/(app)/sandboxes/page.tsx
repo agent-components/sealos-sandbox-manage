@@ -28,6 +28,7 @@ import {
   type ResourceSpec,
 } from "@/lib/sealos/resources";
 import type { Template } from "@/lib/template/schema";
+import { primaryDiskGi } from "@/lib/template/schema";
 
 function canStop(state: Sandbox["state"]) {
   return state === "running" || state === "starting";
@@ -107,7 +108,7 @@ export default function SandboxesPage() {
     setResources({
       cpu: first.cpu,
       memoryGi: first.memoryGi,
-      diskGi: first.diskGi,
+      diskGi: primaryDiskGi(first.storage),
     });
     setCreateName("");
     setCreateOpen(true);
@@ -120,7 +121,7 @@ export default function SandboxesPage() {
       setResources({
         cpu: tpl.cpu,
         memoryGi: tpl.memoryGi,
-        diskGi: tpl.diskGi,
+        diskGi: primaryDiskGi(tpl.storage),
       });
     }
   }
@@ -375,7 +376,7 @@ export default function SandboxesPage() {
             required
             extra={
               selectedTemplate
-                ? `镜像 ${selectedTemplate.image} · 端口 ${selectedTemplate.port}`
+                ? `镜像 ${selectedTemplate.image} · 端口 ${selectedTemplate.ports?.[0]?.number ?? "—"}`
                 : undefined
             }
           >
