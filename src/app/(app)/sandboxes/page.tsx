@@ -166,6 +166,11 @@ export default function SandboxesPage() {
         return;
       }
     }
+    const parsedTags = TagsSchema.safeParse(createTags);
+    if (!parsedTags.success) {
+      message.error(parsedTags.error.issues[0]?.message ?? "标签无效");
+      return;
+    }
     setCreating(true);
     try {
       await boatClient.createSandbox({
@@ -174,6 +179,7 @@ export default function SandboxesPage() {
         memoryGi: resources.memoryGi,
         diskGi: resources.diskGi,
         env: createEnv.filter((e) => e.name.trim()),
+        tags: parsedTags.data,
         ...(name ? { name } : {}),
       });
       setCreateOpen(false);
@@ -223,6 +229,19 @@ export default function SandboxesPage() {
       setDeleting(false);
     }
   }
+
+  const visibleSandboxes = useMemo(() => {
+    const terms = tagQuery
+      .split(/[\s,]+/)
+      .map((term) => term.trim().toLocaleLowerCase())
+      .filter(Boolean);
+    if (terms.length === 0) return sandboxes;
+    return sandboxes.filter((sandbox) =>
+      terms.every((term) =>
+        sandbox.tags.some((tag) => tag.toLocaleLowerCase().includes(term)),
+      ),
+    );
+  }, [sandboxes, tagQuery]);
 
   const templateNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -291,6 +310,28 @@ export default function SandboxesPage() {
             {sb.cpu} 核 · {memoryLabel(sb.memoryGi)}
           </Typography.Text>
         ),
+      },
+      {
+        title: "标签",
+        dataIndex: "tags",
+        key: "tags",
+        width: 220,
+        render: (tags: string[]) =>
+          tags.length > 0 ? (
+            <Space size={4} wrap>
+              {tags.map((tag) => (
+                <Tag
+                  key={tag}
+                  style={{ marginInlineEnd: 0, cursor: "pointer" }}
+                  onClick={() => setTagQuery(tag)}
+                >
+                  {tag}
+                </Tag>
+              ))}
+            </Space>
+          ) : (
+            "—"
+          ),
       },
       {
         title: "状态",
@@ -379,9 +420,18 @@ export default function SandboxesPage() {
             基于模板创建 · 状态每 5 秒刷新
           </Typography.Text>
         </div>
-        <Button type="primary" onClick={() => void openCreate()}>
-          新建沙箱
-        </Button>
+        <Space wrap>
+          <Input
+            allowClear
+            placeholder="按标签检索"
+            value={tagQuery}
+            onChange={(e) => setTagQuery(e.target.value)}
+            style={{ width: 220 }}
+          />
+          <Button type="primary" onClick={() => void openCreate()}>
+            新建沙箱
+          </Button>
+        </Space>
       </Flex>
 
       <div className="boat-table-wrap">
@@ -390,21 +440,27 @@ export default function SandboxesPage() {
           size="small"
           loading={loading}
           columns={columns}
-          dataSource={sandboxes}
+          dataSource={visibleSandboxes}
           pagination={false}
           showSorterTooltip={false}
-          scroll={{ x: 1060 }}
+          scroll={{ x: 1280 }}
           locale={{
-            emptyText: (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="还没有沙箱"
-              >
-                <Button type="primary" onClick={() => void openCreate()}>
-                  新建沙箱
-                </Button>
-              </Empty>
-            ),
+            emptyText:
+              sandboxes.length > 0 ? (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="没有匹配的标签"
+                />
+              ) : (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="还没有沙箱"
+                >
+                  <Button type="primary" onClick={() => void openCreate()}>
+                    新建沙箱
+                  </Button>
+                </Empty>
+              ),
           }}
         />
       </div>
@@ -447,6 +503,21 @@ export default function SandboxesPage() {
               placeholder="留空则自动生成"
               maxLength={48}
               onChange={(e) => setCreateName(e.target.value.toLowerCase())}
+            />
+          </Form.Item>
+          <Form.Item label="标签">
+            <Select
+              mode="tags"
+              value={createTags}
+              placeholder="输入后回车，可添加多个"
+              tokenSeparators={[","]}
+              open={false}
+              suffixIcon={null}
+              onChange={(values: string[]) =>
+                setCreateTags(
+                  values.map((value) => value.trim()).filter(Boolean),
+                )
+              }
             />
           </Form.Item>
           <Collapse

@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
   Descriptions,
   Flex,
   Modal,
+  Select,
   Skeleton,
   Space,
   Typography,
@@ -14,8 +15,16 @@ import {
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { StateBadge } from "@/components/StateBadge";
 import { boatClient } from "@/lib/client";
-import type { Sandbox } from "@/lib/sandbox/schema";
+import { TagsSchema, type Sandbox } from "@/lib/sandbox/schema";
 import { memoryLabel, type ResourceSpec } from "@/lib/sealos/resources";
+
+function sameTags(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  return left.every(
+    (tag, index) =>
+      tag.toLocaleLowerCase() === right[index]?.toLocaleLowerCase(),
+  );
+}
 
 type Props = {
   sandboxId: string;
@@ -32,6 +41,8 @@ export function SandboxDetailModal({
 }: Props) {
   const [sandbox, setSandbox] = useState<Sandbox | null>(null);
   const [resources, setResources] = useState<ResourceSpec | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
+  const tagsDirtyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -44,6 +55,7 @@ export function SandboxDetailModal({
         memoryGi: res.sandbox.memoryGi,
         diskGi: res.sandbox.diskGi,
       });
+      if (!tagsDirtyRef.current) setTags(res.sandbox.tags);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载失败");
@@ -52,8 +64,10 @@ export function SandboxDetailModal({
 
   useEffect(() => {
     if (!open) return;
+    tagsDirtyRef.current = false;
     setSandbox(null);
     setResources(null);
+    setTags([]);
     void load();
     const timer = setInterval(() => {
       void load();
@@ -62,11 +76,27 @@ export function SandboxDetailModal({
   }, [load, open]);
 
   async function save() {
-    if (!resources) return;
+    if (!resources || !sandbox) return;
+    const parsedTags = TagsSchema.safeParse(tags);
+    if (!parsedTags.success) {
+      setError(parsedTags.error.issues[0]?.message ?? "标签无效");
+      return;
+    }
+    const resourceDirty =
+      resources.cpu !== sandbox.cpu ||
+      resources.memoryGi !== sandbox.memoryGi ||
+      resources.diskGi !== sandbox.diskGi;
+    const tagsDirty = !sameTags(parsedTags.data, sandbox.tags);
+    if (!resourceDirty && !tagsDirty) return;
+
     setBusy("update");
     setError(null);
     try {
-      await boatClient.updateSandbox(sandboxId, resources);
+      await boatClient.updateSandbox(sandboxId, {
+        ...(resourceDirty ? resources : {}),
+        ...(tagsDirty ? { tags: parsedTags.data } : {}),
+      });
+      tagsDirtyRef.current = false;
       await load();
       await onChanged();
     } catch (err) {
@@ -76,12 +106,14 @@ export function SandboxDetailModal({
     }
   }
 
-  const dirty =
+  const resourceDirty =
     !!sandbox &&
     !!resources &&
     (resources.cpu !== sandbox.cpu ||
       resources.memoryGi !== sandbox.memoryGi ||
       resources.diskGi !== sandbox.diskGi);
+  const tagsDirty = !!sandbox && !sameTags(tags, sandbox.tags);
+  const dirty = resourceDirty || tagsDirty;
 
   return (
     <Modal
@@ -172,6 +204,28 @@ export function SandboxDetailModal({
                 key: "spec",
                 label: "当前规格",
                 children: `${sandbox.cpu} 核 · ${memoryLabel(sandbox.memoryGi)} · ${sandbox.diskGi}Gi`,
+              },
+              {
+                key: "tags",
+                label: "标签",
+                children: (
+                  <Select
+                    mode="tags"
+                    value={tags}
+                    placeholder="输入后回车，可添加多个"
+                    tokenSeparators={[","]}
+                    open={false}
+                    suffixIcon={null}
+                    disabled={busy !== null}
+                    style={{ width: "100%" }}
+                    onChange={(values: string[]) => {
+                      tagsDirtyRef.current = true;
+                      setTags(
+                        values.map((value) => value.trim()).filter(Boolean),
+                      );
+                    }}
+                  />
+                ),
               },
             ]}
           />
