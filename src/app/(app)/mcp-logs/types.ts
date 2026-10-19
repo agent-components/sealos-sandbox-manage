@@ -1,8 +1,8 @@
 import type { Dayjs } from "dayjs";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 
 export type McpLogRow = Awaited<
-  ReturnType<typeof boatClient.listMcpLogs>
+  ReturnType<typeof sandboxClient.listMcpLogs>
 >["logs"][number];
 
 export type McpLogFilters = {

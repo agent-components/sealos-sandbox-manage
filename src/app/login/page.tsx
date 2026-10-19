@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert, Button, Card, Flex, Form, Input } from "antd";
 import { Brand } from "@/components/Brand";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 
 type LoginValues = {
   username: string;
@@ -20,7 +20,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      await boatClient.login(values.username.trim(), values.password);
+      await sandboxClient.login(values.username.trim(), values.password);
       router.replace("/sandboxes");
       router.refresh();
     } catch (err) {

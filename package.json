@@ -18,9 +18,9 @@
     "js-yaml": "^5.4.3",
     "listpage-components": "^1.0.45",
     "minio": "^8.0.7",
-    "mongodb": "^7.7.0",
     "next": "16.4.1",
     "node-cron": "^4.6.0",
+    "pg": "^8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "zod": "^4.6.7"
@@ -30,6 +30,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
     "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

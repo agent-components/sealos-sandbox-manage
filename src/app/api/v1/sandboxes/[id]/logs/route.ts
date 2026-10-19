@@ -15,7 +15,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     const kubeconfig = await resolveKubeconfig();
     const client = createLaunchpadClient({ kubeconfig });
     const app = await client.getApp(id);
-    assertOwnedBy(app, user.username);
+    await assertOwnedBy(app, user.username);
     assertSandboxAllowed(user, id);
 
     const pods = await listAppPods(kubeconfig, id);

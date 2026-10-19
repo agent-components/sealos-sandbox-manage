@@ -1,14 +1,13 @@
 import { resolveKubeconfig } from "@/lib/auth/resolve";
-import { isOwnedBy } from "@/lib/sandbox/ownership";
+import { selectOwnedApps } from "@/lib/sandbox/ownership";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 
 export async function listOwnedSandboxIds(username: string): Promise<Set<string>> {
   const kubeconfig = await resolveKubeconfig();
   const client = createLaunchpadClient({ kubeconfig });
   const apps = await client.listApps();
-  return new Set(
-    apps.filter((app) => isOwnedBy(app, username)).map((app) => app.name),
-  );
+  const owned = await selectOwnedApps(apps, username);
+  return new Set(owned.map((item) => item.name));
 }
 
 export async function findUnownedSandboxIds(

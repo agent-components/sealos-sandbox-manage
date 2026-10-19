@@ -1,5 +1,4 @@
-import type { Document } from "mongodb";
-import { getCollection } from "@/lib/db/mongo";
+import { query } from "@/lib/db/postgres";
 import type {
   Template,
   TemplateConfigMap,
@@ -8,112 +7,158 @@ import type {
   TemplateStorage,
 } from "@/lib/template/schema";
 
-type TemplateDoc = Document & {
+type TemplateRow = {
   id: string;
   name: string;
-  description?: string;
+  description: string | null;
   image: string;
-  imageRegistry?: {
-    username: string;
-    password: string;
-    serverAddress: string;
-  } | null;
-  launchCommand?: { command?: string; args?: string[] };
+  image_registry: Template["imageRegistry"] | null;
+  launch_command: Template["launchCommand"] | null;
   cpu: number;
-  memoryGi: number;
+  memory_gi: number;
   replicas: number;
-  autoShutdown?: boolean;
-  idleMinutes?: number;
-  ports: TemplatePort[];
-  env: TemplateEnv[];
-  storage: TemplateStorage[];
-  configMap: TemplateConfigMap[];
-  createdAt: Date;
-  updatedAt: Date;
+  auto_shutdown: boolean;
+  idle_minutes: number;
+  ports: TemplatePort[] | null;
+  env: TemplateEnv[] | null;
+  storage: TemplateStorage[] | null;
+  config_map: TemplateConfigMap[] | null;
+  created_at: Date;
+  updated_at: Date;
 };
 
-function toTemplate(doc: TemplateDoc): Template {
+const SELECT_COLUMNS = `id, name, description, image, image_registry, launch_command,
+  cpu, memory_gi, replicas, auto_shutdown, idle_minutes,
+  ports, env, storage, config_map, created_at, updated_at`;
+
+function toTemplate(row: TemplateRow): Template {
   return {
-    id: doc.id,
-    name: doc.name,
-    description: doc.description,
-    image: doc.image,
-    imageRegistry: doc.imageRegistry ?? null,
-    launchCommand: doc.launchCommand,
-    cpu: doc.cpu,
-    memoryGi: doc.memoryGi,
-    replicas: doc.replicas ?? 1,
-    autoShutdown: doc.autoShutdown ?? false,
+    id: row.id,
+    name: row.name,
+    description: row.description ?? undefined,
+    image: row.image,
+    imageRegistry: row.image_registry ?? null,
+    launchCommand: row.launch_command ?? undefined,
+    cpu: row.cpu,
+    memoryGi: row.memory_gi,
+    replicas: row.replicas ?? 1,
+    autoShutdown: row.auto_shutdown ?? false,
     idleMinutes:
-      typeof doc.idleMinutes === "number" && doc.idleMinutes >= 5
-        ? doc.idleMinutes
+      typeof row.idle_minutes === "number" && row.idle_minutes >= 5
+        ? row.idle_minutes
         : 5,
-    ports: doc.ports?.length
-      ? doc.ports
+    ports: row.ports?.length
+      ? row.ports
       : [{ number: 80, protocol: "http", isPublic: true }],
-    env: doc.env ?? [],
-    storage: doc.storage ?? [],
-    configMap: doc.configMap ?? [],
-    createdAt: doc.createdAt?.toISOString(),
-    updatedAt: doc.updatedAt?.toISOString(),
+    env: row.env ?? [],
+    storage: row.storage ?? [],
+    configMap: row.config_map ?? [],
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
   };
 }
 
-async function templates() {
-  const col = await getCollection<TemplateDoc>("templates");
-  await col.createIndex({ id: 1 }, { unique: true });
-  return col;
+function jsonb(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  return JSON.stringify(value);
 }
 
 export async function listTemplates(): Promise<Template[]> {
-  const col = await templates();
-  const docs = await col.find({}).sort({ createdAt: 1 }).toArray();
-  return docs.map(toTemplate);
+  const result = await query<TemplateRow>(
+    `SELECT ${SELECT_COLUMNS} FROM sandbox.templates ORDER BY created_at ASC`,
+  );
+  return result.rows.map(toTemplate);
 }
 
 export async function getTemplate(id: string): Promise<Template | null> {
-  const col = await templates();
-  const doc = await col.findOne({ id });
-  return doc ? toTemplate(doc) : null;
+  const result = await query<TemplateRow>(
+    `SELECT ${SELECT_COLUMNS} FROM sandbox.templates WHERE id = $1`,
+    [id],
+  );
+  const row = result.rows[0];
+  return row ? toTemplate(row) : null;
 }
 
 export async function createTemplate(
   input: Omit<Template, "createdAt" | "updatedAt">,
 ): Promise<Template> {
-  const col = await templates();
-  const now = new Date();
-  const doc: TemplateDoc = {
-    ...input,
-    imageRegistry: input.imageRegistry ?? null,
-    replicas: input.replicas ?? 1,
-    autoShutdown: input.autoShutdown ?? false,
-    idleMinutes: input.idleMinutes ?? 5,
-    ports: input.ports,
-    env: input.env ?? [],
-    storage: input.storage ?? [],
-    configMap: input.configMap ?? [],
-    createdAt: now,
-    updatedAt: now,
-  };
-  await col.insertOne(doc);
-  return toTemplate(doc);
+  const result = await query<TemplateRow>(
+    `INSERT INTO sandbox.templates (
+       id, name, description, image, image_registry, launch_command,
+       cpu, memory_gi, replicas, auto_shutdown, idle_minutes,
+       ports, env, storage, config_map
+     )
+     VALUES (
+       $1, $2, $3, $4, $5::jsonb, $6::jsonb,
+       $7, $8, $9, $10, $11,
+       $12::jsonb, $13::jsonb, $14::jsonb, $15::jsonb
+     )
+     RETURNING ${SELECT_COLUMNS}`,
+    [
+      input.id,
+      input.name,
+      input.description ?? null,
+      input.image,
+      jsonb(input.imageRegistry ?? null),
+      jsonb(input.launchCommand ?? null),
+      input.cpu,
+      input.memoryGi,
+      input.replicas ?? 1,
+      input.autoShutdown ?? false,
+      input.idleMinutes ?? 5,
+      JSON.stringify(input.ports),
+      JSON.stringify(input.env ?? []),
+      JSON.stringify(input.storage ?? []),
+      JSON.stringify(input.configMap ?? []),
+    ],
+  );
+  return toTemplate(result.rows[0]!);
 }
+
+const PATCH_COLUMNS: Record<string, { column: string; jsonb?: boolean }> = {
+  name: { column: "name" },
+  description: { column: "description" },
+  image: { column: "image" },
+  imageRegistry: { column: "image_registry", jsonb: true },
+  launchCommand: { column: "launch_command", jsonb: true },
+  cpu: { column: "cpu" },
+  memoryGi: { column: "memory_gi" },
+  replicas: { column: "replicas" },
+  autoShutdown: { column: "auto_shutdown" },
+  idleMinutes: { column: "idle_minutes" },
+  ports: { column: "ports", jsonb: true },
+  env: { column: "env", jsonb: true },
+  storage: { column: "storage", jsonb: true },
+  configMap: { column: "config_map", jsonb: true },
+};
 
 export async function updateTemplate(
   id: string,
   patch: Partial<Omit<Template, "id" | "createdAt" | "updatedAt">>,
 ): Promise<Template | null> {
-  const col = await templates();
-  const result = await col.findOneAndUpdate(
-    { id },
-    { $set: { ...patch, updatedAt: new Date() } },
-    { returnDocument: "after" },
+  const sets = ["updated_at = now()"];
+  const params: unknown[] = [];
+  for (const [key, spec] of Object.entries(PATCH_COLUMNS)) {
+    if (!(key in patch)) continue;
+    const value = patch[key as keyof typeof patch];
+    if (value === undefined) continue;
+    params.push(spec.jsonb ? jsonb(value) : value);
+    const cast = spec.jsonb ? "::jsonb" : "";
+    sets.push(`${spec.column} = $${params.length}${cast}`);
+  }
+  params.push(id);
+  const result = await query<TemplateRow>(
+    `UPDATE sandbox.templates
+     SET ${sets.join(", ")}
+     WHERE id = $${params.length}
+     RETURNING ${SELECT_COLUMNS}`,
+    params,
   );
-  return result ? toTemplate(result) : null;
+  const row = result.rows[0];
+  return row ? toTemplate(row) : null;
 }
 
 export async function deleteTemplate(id: string): Promise<boolean> {
-  const col = await templates();
-  const result = await col.deleteOne({ id });
-  return result.deletedCount > 0;
+  const result = await query(`DELETE FROM sandbox.templates WHERE id = $1`, [id]);
+  return (result.rowCount ?? 0) > 0;
 }

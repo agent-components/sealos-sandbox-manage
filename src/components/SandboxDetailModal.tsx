@@ -14,7 +14,7 @@ import { ProDrawer } from "listpage-components/ProDrawer";
 import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { StateBadge } from "@/components/StateBadge";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 import { TagsSchema, type Sandbox } from "@/lib/sandbox/schema";
 import { memoryLabel, type ResourceSpec } from "@/lib/sealos/resources";
 
@@ -143,7 +143,7 @@ export function SandboxDetailModal({
 
   const load = useCallback(async () => {
     try {
-      const res = await boatClient.getSandbox(sandboxId);
+      const res = await sandboxClient.getSandbox(sandboxId);
       setSandbox(res.sandbox);
       setResources({
         cpu: res.sandbox.cpu,
@@ -166,7 +166,7 @@ export function SandboxDetailModal({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    void boatClient
+    void sandboxClient
       .listTemplates()
       .then((res) => {
         if (cancelled) return;
@@ -216,7 +216,7 @@ export function SandboxDetailModal({
     setBusy("update");
     setError(null);
     try {
-      await boatClient.updateSandbox(sandboxId, {
+      await sandboxClient.updateSandbox(sandboxId, {
         ...(resourceDirty ? resources : {}),
         ...(tagsDirty ? { tags: parsedTags.data } : {}),
         ...(idleDirty

@@ -39,7 +39,7 @@ export async function resolveRunningSandbox(id: string) {
   const kubeconfig = await resolveKubeconfig();
   const client = createLaunchpadClient({ kubeconfig });
   const app = await client.getApp(id);
-  assertOwnedBy(app, user.username);
+  await assertOwnedBy(app, user.username);
   assertSandboxAllowed(user, id);
 
   const pods = await listAppPods(kubeconfig, id);
@@ -63,7 +63,7 @@ export async function resolveSandboxForCommand(
   const kubeconfig = await resolveKubeconfig();
   const client = createLaunchpadClient({ kubeconfig });
   let app = await client.getApp(id);
-  assertOwnedBy(app, user.username);
+  await assertOwnedBy(app, user.username);
   assertSandboxAllowed(user, id);
 
   let state = mapLaunchpadStatus(app.status);

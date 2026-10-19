@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { App, Typography } from "antd";
 import { ProDrawer } from "listpage-components/ProDrawer";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 import { formatTime, sandboxIdOf } from "./types";
 
 function commandOf(args: Record<string, unknown> | undefined) {
@@ -51,7 +51,7 @@ function errorTextOf(value: unknown) {
   return typeof error === "string" ? error : "";
 }
 
-type McpLogDetail = NonNullable<Awaited<ReturnType<typeof boatClient.getMcpLog>>>;
+type McpLogDetail = NonNullable<Awaited<ReturnType<typeof sandboxClient.getMcpLog>>>;
 
 function resultView(detail: McpLogDetail) {
   if (detail.resultLoadError) {
@@ -80,8 +80,8 @@ function LogBody({ detail }: { detail: McpLogDetail }) {
       <div>
         <Typography.Text type="secondary">参数</Typography.Text>
         {command ? (
-          <pre className="boat-shell-block">
-            <span className="boat-shell-prompt">$ </span>
+          <pre className="sandbox-shell-block">
+            <span className="sandbox-shell-prompt">$ </span>
             {command}
           </pre>
         ) : (
@@ -93,7 +93,7 @@ function LogBody({ detail }: { detail: McpLogDetail }) {
       <div>
         <Typography.Text type="secondary">结果</Typography.Text>
         {result.text ? (
-          <pre className={result.failed ? "boat-shell-block is-error" : "boat-shell-block"}>
+          <pre className={result.failed ? "sandbox-shell-block is-error" : "sandbox-shell-block"}>
             {result.text}
           </pre>
         ) : (
@@ -125,7 +125,7 @@ export function McpLogDetailDrawer({
     let cancelled = false;
     setDetailLoading(true);
     setDetail(null);
-    void boatClient
+    void sandboxClient
       .getMcpLog(logId)
       .then((res) => {
         if (!cancelled) setDetail(res);

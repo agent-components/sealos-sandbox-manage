@@ -10,7 +10,7 @@ import {
 } from "@ant-design/icons";
 import { Layout, useLayoutTabs } from "listpage-components/Layout";
 import { useBoatTheme } from "@/components/AntdProvider";
-import { boatClient, type BoatUser } from "@/lib/client";
+import { sandboxClient, type SandboxUser } from "@/lib/client";
 import { PRODUCT_NAME } from "@/lib/product";
 
 const ROUTES = [
@@ -49,7 +49,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const theme = useBoatTheme();
-  const [user, setUser] = useState<BoatUser | null>(null);
+  const [user, setUser] = useState<SandboxUser | null>(null);
   const tabPath = tabPathOf(pathname);
 
   const { tabs, activeKey, activateTab, closeTab, reorderTabs } = useLayoutTabs({
@@ -61,7 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    boatClient
+    sandboxClient
       .me()
       .then((res) => {
         if (cancelled) return;
@@ -80,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname, router]);
 
   async function logout() {
-    await boatClient.logout();
+    await sandboxClient.logout();
     router.replace("/login");
   }
 
@@ -104,7 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <Layout
       title={PRODUCT_NAME}
-      logo={<img src="/logo.png" alt="" className="boat-logo" />}
+      logo={<img src="/logo.png" alt="" className="sandbox-logo" />}
       height="fill"
       contentPadding={24}
       menuVariant="inline"

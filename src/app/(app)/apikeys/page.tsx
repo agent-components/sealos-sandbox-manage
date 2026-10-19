@@ -8,7 +8,7 @@ import {
   type FloatComponentProps,
 } from "listpage-components/ListPage";
 import { listPagination, paginate } from "@/components/list-page";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
 import { apiKeyColumns, type ApiKeyFilters } from "./columns";
 import { ApiKeyFormModal } from "./form";
@@ -37,7 +37,7 @@ export default function ApiKeysPage() {
       filters: ApiKeyFilters,
     ) => {
       try {
-        const res = await boatClient.listApiKeys();
+        const res = await sandboxClient.listApiKeys();
         let list = res.apiKeys;
         const keyword = filters.q?.trim().toLowerCase();
         if (keyword) {

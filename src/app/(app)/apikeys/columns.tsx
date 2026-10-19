@@ -6,7 +6,7 @@ import type {
   ListPageColumnType,
   ListPageContextValue,
 } from "listpage-components/ListPage";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
 
 export type ApiKeyFilters = { q?: string };
@@ -83,7 +83,7 @@ function copySecret(
   success: string,
   notify: { success: (text: string) => void; error: (text: string) => void },
 ) {
-  void boatClient
+  void sandboxClient
     .getApiKeySecret(id)
     .then(async ({ key }) => {
       await navigator.clipboard.writeText(write(key));
@@ -133,7 +133,7 @@ function ApiKeyActions({
             okButtonProps: { danger: true },
             cancelText: "取消",
             onOk: async () => {
-              await boatClient.deleteApiKey(record.id);
+              await sandboxClient.deleteApiKey(record.id);
               message.success("已删除");
               ctx.refreshTable();
             },

@@ -11,7 +11,7 @@ import {
 import { AutoRefreshList, paginate } from "@/components/list-page";
 import { SandboxDetailModal } from "@/components/SandboxDetailModal";
 import { SandboxLogsModal } from "@/components/SandboxLogsModal";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 import type { Sandbox } from "@/lib/sandbox/schema";
 import type { Template } from "@/lib/template/schema";
 import { sandboxColumns } from "./columns";
@@ -97,7 +97,7 @@ export default function SandboxesPage() {
 
   const loadTemplates = useCallback(async () => {
     try {
-      const res = await boatClient.listTemplates();
+      const res = await sandboxClient.listTemplates();
       setTemplates(res.templates);
     } catch (err) {
       message.error(err instanceof Error ? err.message : "加载模板失败");
@@ -114,7 +114,7 @@ export default function SandboxesPage() {
       filters: SandboxFilters,
     ) => {
       try {
-        const res = await boatClient.listSandboxes();
+        const res = await sandboxClient.listSandboxes();
         let list = res.sandboxes;
         const keyword = filters.q?.trim().toLowerCase();
         if (keyword) {

@@ -7,7 +7,7 @@ import type {
   ListPageContextValue,
 } from "listpage-components/ListPage";
 import { StateBadge } from "@/components/StateBadge";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 import type { Sandbox } from "@/lib/sandbox/schema";
 import { memoryLabel } from "@/lib/sealos/resources";
 import type { SandboxFilters } from "./filters";
@@ -44,10 +44,10 @@ function SandboxActions({
     setBusy(true);
     try {
       if (canStop(record.state)) {
-        await boatClient.stopSandbox(record.id);
+        await sandboxClient.stopSandbox(record.id);
         message.success("已关机");
       } else {
-        await boatClient.resumeSandbox(record.id);
+        await sandboxClient.resumeSandbox(record.id);
         message.success("已开机");
       }
       ctx.refreshTable();

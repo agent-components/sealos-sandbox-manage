@@ -8,7 +8,7 @@ import {
   type FloatComponentProps,
 } from "listpage-components/ListPage";
 import { listPagination, paginate } from "@/components/list-page";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 import type { Template } from "@/lib/template/schema";
 import { templateColumns, type TemplateFilters } from "./columns";
 import { TemplateEditor } from "./editor";
@@ -37,7 +37,7 @@ export default function TemplatesPage() {
       filters: TemplateFilters,
     ) => {
       try {
-        const res = await boatClient.listTemplates();
+        const res = await sandboxClient.listTemplates();
         let list = res.templates;
         const keyword = filters.q?.trim().toLowerCase();
         if (keyword) {

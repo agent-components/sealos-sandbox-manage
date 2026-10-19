@@ -5,7 +5,7 @@ import type {
   ListPageColumnType,
   ListPageContextValue,
 } from "listpage-components/ListPage";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 import { memoryLabel } from "@/lib/sealos/resources";
 import type { Template } from "@/lib/template/schema";
 
@@ -42,7 +42,7 @@ function TemplateActions({
             okButtonProps: { danger: true },
             cancelText: "取消",
             onOk: async () => {
-              await boatClient.deleteTemplate(record.id);
+              await sandboxClient.deleteTemplate(record.id);
               message.success("已删除");
               ctx.refreshTable();
             },

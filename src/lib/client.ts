@@ -5,7 +5,7 @@ import type { Template } from "@/lib/template/schema";
 
 export type ApiError = { error: string; details?: unknown };
 
-export type BoatUser = { username: string };
+export type SandboxUser = { username: string };
 
 export type CreateSandboxBody = {
   templateId: string;
@@ -57,11 +57,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-export const boatClient = {
+export const sandboxClient = {
   me: () =>
-    request<{ authenticated: boolean; user: BoatUser | null }>("/api/auth/me"),
+    request<{ authenticated: boolean; user: SandboxUser | null }>("/api/auth/me"),
   login: (username: string, password: string) =>
-    request<{ user: BoatUser }>("/api/auth/login", {
+    request<{ user: SandboxUser }>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ username, password }),
     }),

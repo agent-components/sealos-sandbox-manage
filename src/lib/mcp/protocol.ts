@@ -103,7 +103,7 @@ async function handleRequest(request: Request, message: JsonRpcRequest): Promise
         instructions: [
           info.description,
           "这些工具与 GET /api/openapi.json 中的沙箱接口一致，工具名即 operationId。",
-          "认证与 REST 相同：Authorization: Bearer boat_...，或登录会话 cookie。",
+          "认证与 REST 相同：Authorization: Bearer sandbox_...，或登录会话 cookie。已发出的 boat_ 密钥仍然有效。",
           "runSandboxCommand 会用 SSE 持续推送 stdout/stderr，执行时间不限制；客户端断开即取消。命令结束后的最终结果里仍有 ok、exitCode、stdout、stderr。非零退出码时 ok 为 false。",
         ].join("\n"),
       }),

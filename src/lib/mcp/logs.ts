@@ -1,62 +1,46 @@
-import { getCollection } from "@/lib/db/mongo";
+import { query } from "@/lib/db/postgres";
 import { getMinioClient, minioBucket } from "@/lib/minio/client";
 import { AUDITED_TOOL, type McpCallLog, type McpCallLogView } from "@/lib/mcp/audit";
 
-let indexesReady = false;
+type LogRow = {
+  id: string;
+  username: string | null;
+  api_key_id: string | null;
+  api_key_name: string | null;
+  channel: McpCallLog["channel"];
+  tool: string;
+  method: string;
+  path: string;
+  arguments: Record<string, unknown>;
+  status: number;
+  ok: boolean;
+  result_key: string | null;
+  result_error: string | null;
+  started_at: Date;
+  completed_at: Date;
+  duration_ms: number;
+  created_at: Date;
+};
 
-async function mcpLogCollection() {
-  const col = await getCollection<McpCallLog>("mcp_logs");
-  if (!indexesReady) {
-    await col.createIndex({ id: 1 }, { unique: true });
-    await col.createIndex({ startedAt: -1 });
-    await col.createIndex({ completedAt: -1 });
-    await col.createIndex({ createdAt: -1 });
-    await col.createIndex({ tool: 1, startedAt: -1 });
-    await col.createIndex({ username: 1, startedAt: -1 });
-    await col.createIndex({ apiKeyId: 1, startedAt: -1 });
-    indexesReady = true;
-  }
-  return col;
-}
-
-function asIso(value: Date | string | undefined | null, fallback?: Date | string) {
-  const raw = value ?? fallback;
-  if (!raw) return new Date(0).toISOString();
-  if (raw instanceof Date) return raw.toISOString();
-  return String(raw);
-}
-
-function toView(doc: McpCallLog): McpCallLogView {
-  const completedAt = asIso(doc.completedAt, doc.createdAt);
-  const startedAt = asIso(doc.startedAt, doc.completedAt ?? doc.createdAt);
-  const durationMs =
-    typeof doc.durationMs === "number"
-      ? doc.durationMs
-      : Math.max(0, new Date(completedAt).getTime() - new Date(startedAt).getTime());
+function toView(row: LogRow): McpCallLogView {
   return {
-    id: doc.id,
-    username: doc.username,
-    apiKeyId: doc.apiKeyId ?? null,
-    apiKeyName: doc.apiKeyName ?? null,
-    channel: doc.channel ?? "mcp",
-    tool: doc.tool,
-    method: doc.method,
-    path: doc.path,
-    arguments: doc.arguments,
-    status: doc.status,
-    ok: doc.ok,
-    resultKey: doc.resultKey,
-    resultError: doc.resultError,
-    startedAt,
-    completedAt,
-    durationMs,
-    createdAt: asIso(doc.createdAt, completedAt),
-  };
-}
-
-function ownedOrLegacy(username: string) {
-  return {
-    $or: [{ username }, { username: { $exists: false } }],
+    id: row.id,
+    username: row.username ?? undefined,
+    apiKeyId: row.api_key_id,
+    apiKeyName: row.api_key_name,
+    channel: row.channel ?? "mcp",
+    tool: row.tool,
+    method: row.method,
+    path: row.path,
+    arguments: row.arguments,
+    status: row.status,
+    ok: row.ok,
+    resultKey: row.result_key,
+    resultError: row.result_error,
+    startedAt: row.started_at.toISOString(),
+    completedAt: row.completed_at.toISOString(),
+    durationMs: row.duration_ms,
+    createdAt: row.created_at.toISOString(),
   };
 }
 
@@ -76,6 +60,26 @@ export type ListMcpLogsOpts = {
   to?: Date;
 };
 
+function logFilter(username: string, opts?: ListMcpLogsOpts) {
+  const where = ["(username = $1 OR username IS NULL)", "tool = $2"];
+  const params: unknown[] = [username, AUDITED_TOOL];
+  if (opts?.apiKeyId === "session") {
+    where.push("api_key_id IS NULL");
+  } else if (opts?.apiKeyId) {
+    params.push(opts.apiKeyId);
+    where.push(`api_key_id = $${params.length}`);
+  }
+  if (opts?.from) {
+    params.push(opts.from);
+    where.push(`started_at >= $${params.length}`);
+  }
+  if (opts?.to) {
+    params.push(opts.to);
+    where.push(`started_at <= $${params.length}`);
+  }
+  return { where: where.join(" AND "), params };
+}
+
 export async function listMcpLogs(
   username: string,
   opts?: ListMcpLogsOpts,
@@ -84,62 +88,49 @@ export async function listMcpLogs(
     return { logs: [], total: 0, page: 1, pageSize: opts?.pageSize ?? opts?.limit ?? 20 };
   }
 
-  const col = await mcpLogCollection();
   const pageSize = Math.min(
     Math.max(opts?.pageSize ?? opts?.limit ?? 20, 1),
     100,
   );
   const page = Math.max(Math.floor(opts?.page ?? 1), 1);
-
-  const clauses: Record<string, unknown>[] = [
-    ownedOrLegacy(username),
-    { tool: AUDITED_TOOL },
-  ];
-
-  if (opts?.apiKeyId === "session") {
-    clauses.push({
-      $or: [{ apiKeyId: null }, { apiKeyId: { $exists: false } }],
-    });
-  } else if (opts?.apiKeyId) {
-    clauses.push({ apiKeyId: opts.apiKeyId });
-  }
-
-  if (opts?.from || opts?.to) {
-    const range: Record<string, Date> = {};
-    if (opts.from) range.$gte = opts.from;
-    if (opts.to) range.$lte = opts.to;
-    clauses.push({
-      $or: [
-        { startedAt: range },
-        { startedAt: { $exists: false }, createdAt: range },
-      ],
-    });
-  }
-
-  const filter = clauses.length === 1 ? clauses[0]! : { $and: clauses };
-  const [total, docs] = await Promise.all([
-    col.countDocuments(filter),
-    col
-      .find(filter)
-      .sort({ startedAt: -1, createdAt: -1 })
-      .skip((page - 1) * pageSize)
-      .limit(pageSize)
-      .toArray(),
-  ]);
-  return { logs: docs.map(toView), total, page, pageSize };
+  const filter = logFilter(username, opts);
+  const count = await query<{ count: string }>(
+    `SELECT count(*)::text AS count FROM sandbox.mcp_logs WHERE ${filter.where}`,
+    filter.params,
+  );
+  const listed = await query<LogRow>(
+    `SELECT id, username, api_key_id, api_key_name, channel, tool, method, path,
+            arguments, status, ok, result_key, result_error,
+            started_at, completed_at, duration_ms, created_at
+     FROM sandbox.mcp_logs
+     WHERE ${filter.where}
+     ORDER BY started_at DESC, created_at DESC
+     LIMIT $${filter.params.length + 1}
+     OFFSET $${filter.params.length + 2}`,
+    [...filter.params, pageSize, (page - 1) * pageSize],
+  );
+  return {
+    logs: listed.rows.map(toView),
+    total: Number(count.rows[0]?.count ?? 0),
+    page,
+    pageSize,
+  };
 }
 
 export async function getMcpLog(
   username: string,
   id: string,
 ): Promise<McpCallLogView | null> {
-  const col = await mcpLogCollection();
-  const doc = await col.findOne({
-    id,
-    tool: AUDITED_TOOL,
-    ...ownedOrLegacy(username),
-  });
-  return doc ? toView(doc) : null;
+  const result = await query<LogRow>(
+    `SELECT id, username, api_key_id, api_key_name, channel, tool, method, path,
+            arguments, status, ok, result_key, result_error,
+            started_at, completed_at, duration_ms, created_at
+     FROM sandbox.mcp_logs
+     WHERE id = $1 AND tool = $2 AND (username = $3 OR username IS NULL)`,
+    [id, AUDITED_TOOL, username],
+  );
+  const row = result.rows[0];
+  return row ? toView(row) : null;
 }
 
 export async function readMcpLogResult(resultKey: string): Promise<unknown> {

@@ -51,7 +51,6 @@ async function launchpadFetch<T>(
 
 export type CreateFromTemplateInput = {
   name: string;
-  owner: string;
   template: Template;
   resources?: Partial<ResourceSpec>;
   /** 创建时追加/覆盖的环境变量（同名覆盖模板） */
@@ -98,6 +97,7 @@ export function createLaunchpadClient(opts: LaunchpadClientOptions) {
             )
           : [];
 
+      // 归属和模板记在数据库里，不写入容器。旧名字也继续丢掉，避免再注入进去。
       const reserved = new Set([
         "BOAT_SANDBOX",
         "BOAT_USER",
@@ -142,12 +142,7 @@ export function createLaunchpadClient(opts: LaunchpadClientOptions) {
                 isPublic: p.isPublic,
               }))
             : [{ number: 80, protocol: "http", isPublic: true }],
-        env: [
-          { name: "BOAT_SANDBOX", value: "true" },
-          { name: "BOAT_USER", value: input.owner },
-          { name: "BOAT_TEMPLATE", value: template.id },
-          ...[...envMap.entries()].map(([name, value]) => ({ name, value })),
-        ],
+        env: [...envMap.entries()].map(([name, value]) => ({ name, value })),
         storage,
         configMap: (template.configMap ?? [])
           .filter((c) => c.path.trim())

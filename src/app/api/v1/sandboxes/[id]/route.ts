@@ -10,6 +10,7 @@ import {
   withSandboxIdle,
 } from "@/lib/sandbox/idle";
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
+import { deleteSandboxRecord } from "@/lib/sandbox/record";
 import { DEFAULT_IDLE_CONFIG, UpdateSandboxSchema } from "@/lib/sandbox/schema";
 import {
   deleteSandboxTags,
@@ -45,9 +46,11 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         const kubeconfig = await resolveKubeconfig();
         const client = createLaunchpadClient({ kubeconfig });
         const app = await client.getApp(id);
-        assertOwnedBy(app, user.username);
+        const templateId = await assertOwnedBy(app, user.username);
         assertSandboxAllowed(user, id);
-        const body = { sandbox: await withSandboxExtras(user.username, toSandbox(app)) };
+        const body = {
+          sandbox: await withSandboxExtras(user.username, toSandbox(app, templateId)),
+        };
         return { status: 200, result: body, value: jsonOk(body) };
       },
     });
@@ -64,7 +67,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     const kubeconfig = await resolveKubeconfig();
     const client = createLaunchpadClient({ kubeconfig });
     const existing = await client.getApp(id);
-    assertOwnedBy(existing, user.username);
+    const templateId = await assertOwnedBy(existing, user.username);
     assertSandboxAllowed(user, id);
     const app =
       body.cpu !== undefined &&
@@ -80,13 +83,18 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       await setSandboxTags(user.username, id, body.tags);
     }
     if (body.autoShutdown !== undefined || body.idleMinutes !== undefined) {
-      const current = await withSandboxExtras(user.username, toSandbox(existing));
+      const current = await withSandboxExtras(
+        user.username,
+        toSandbox(existing, templateId),
+      );
       await setSandboxIdleConfig(user.username, id, {
         autoShutdown: body.autoShutdown ?? current.autoShutdown ?? DEFAULT_IDLE_CONFIG.autoShutdown,
         idleMinutes: body.idleMinutes ?? current.idleMinutes ?? DEFAULT_IDLE_CONFIG.idleMinutes,
       });
     }
-    return jsonOk({ sandbox: await withSandboxExtras(user.username, toSandbox(app)) });
+    return jsonOk({
+      sandbox: await withSandboxExtras(user.username, toSandbox(app, templateId)),
+    });
   } catch (error) {
     return jsonError(error);
   }
@@ -108,9 +116,10 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
         const kubeconfig = await resolveKubeconfig();
         const client = createLaunchpadClient({ kubeconfig });
         const existing = await client.getApp(id);
-        assertOwnedBy(existing, user.username);
+        await assertOwnedBy(existing, user.username);
         assertSandboxAllowed(user, id);
         await client.deleteApp(id);
+        await deleteSandboxRecord(id);
         await deleteSandboxTags(user.username, id);
         await deleteSandboxIdle(user.username, id);
         await revokeSandboxFromApiKeys(user.username, id);

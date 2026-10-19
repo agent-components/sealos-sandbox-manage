@@ -12,7 +12,7 @@ type MinioSettings = {
 
 declare global {
   // eslint-disable-next-line no-var
-  var __boatMinio: Client | undefined;
+  var _minio: Client | undefined;
 }
 
 /** 从环境变量读取 MinIO。未配齐时返回 null，调用方应跳过上传。 */
@@ -42,8 +42,8 @@ export function readMinioSettings(): MinioSettings | null {
 export function getMinioClient(): Client | null {
   const settings = readMinioSettings();
   if (!settings) return null;
-  if (!global.__boatMinio) {
-    global.__boatMinio = new Client({
+  if (!global._minio) {
+    global._minio = new Client({
       endPoint: settings.endPoint,
       port: settings.port,
       useSSL: settings.useSSL,
@@ -53,7 +53,7 @@ export function getMinioClient(): Client | null {
       pathStyle: true,
     });
   }
-  return global.__boatMinio;
+  return global._minio;
 }
 
 export function minioBucket(): string | null {

@@ -62,16 +62,11 @@ function parseDiskGi(app: LaunchpadApp): number {
   return clampDiskGi(undefined);
 }
 
-export function isBoatSandbox(app: LaunchpadApp): boolean {
-  return (
-    app.env?.some((e) => e.name === "BOAT_SANDBOX" && e.value === "true") ??
-    false
-  );
-}
-
-export function toSandbox(app: LaunchpadApp): Sandbox {
-  const templateId =
-    app.env?.find((e) => e.name === "BOAT_TEMPLATE")?.value || undefined;
+export function toSandbox(app: LaunchpadApp, templateId?: string): Sandbox {
+  const resolved =
+    templateId ||
+    app.env?.find((e) => e.name === "BOAT_TEMPLATE")?.value ||
+    undefined;
   return {
     id: app.name,
     name: app.name,
@@ -82,7 +77,7 @@ export function toSandbox(app: LaunchpadApp): Sandbox {
     publicUrl: pickPublicUrl(app),
     ports: mapAppPorts(app),
     image: app.image?.imageName,
-    templateId,
+    templateId: resolved,
     tags: [],
     autoShutdown: false,
     idleMinutes: 5,

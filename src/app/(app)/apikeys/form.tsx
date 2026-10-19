@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { App, Form, Input, Select } from "antd";
 import { FormModal } from "listpage-components/FormModal";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
 import type { Sandbox } from "@/lib/sandbox/schema";
 import type { Template } from "@/lib/template/schema";
@@ -30,8 +30,8 @@ export function ApiKeyFormModal({
     setSandboxesLoading(true);
     try {
       const [sandboxRes, templateRes] = await Promise.all([
-        boatClient.listSandboxes(),
-        boatClient.listTemplates().catch(() => ({ templates: [] as Template[] })),
+        sandboxClient.listSandboxes(),
+        sandboxClient.listTemplates().catch(() => ({ templates: [] as Template[] })),
       ]);
       setSandboxes(sandboxRes.sandboxes);
       setTemplates(templateRes.templates);
@@ -67,10 +67,10 @@ export function ApiKeyFormModal({
     }
     const sandboxIds = values.sandboxIds ?? [];
     if (editing) {
-      await boatClient.updateApiKey(editing.id, { name: trimmed, sandboxIds });
+      await sandboxClient.updateApiKey(editing.id, { name: trimmed, sandboxIds });
       message.success("已保存");
     } else {
-      await boatClient.createApiKey({ name: trimmed, sandboxIds });
+      await sandboxClient.createApiKey({ name: trimmed, sandboxIds });
       message.success("令牌已创建");
     }
     onClose();

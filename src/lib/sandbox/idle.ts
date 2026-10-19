@@ -1,35 +1,27 @@
-import type { Document } from "mongodb";
-import { getCollection } from "@/lib/db/mongo";
+import { query } from "@/lib/db/postgres";
 import {
   DEFAULT_IDLE_CONFIG,
   type IdleConfig,
   type Sandbox,
 } from "@/lib/sandbox/schema";
 
-type SandboxIdleDoc = Document & {
-  sandboxId: string;
+type IdleRow = {
+  sandbox_id: string;
   owner: string;
-  autoShutdown: boolean;
-  idleMinutes: number;
-  lastActivityAt: Date;
+  auto_shutdown: boolean;
+  idle_minutes: number;
+  last_activity_at: Date;
   inflight: number;
-  updatedAt: Date;
+  updated_at: Date;
 };
 
-async function idleCollection() {
-  const col = await getCollection<SandboxIdleDoc>("sandbox_idle");
-  await col.createIndex({ owner: 1, sandboxId: 1 }, { unique: true });
-  await col.createIndex({ autoShutdown: 1, lastActivityAt: 1 });
-  return col;
-}
-
-function asConfig(doc: Pick<SandboxIdleDoc, "autoShutdown" | "idleMinutes"> | null): IdleConfig {
-  if (!doc) return { ...DEFAULT_IDLE_CONFIG };
+function asConfig(row: Pick<IdleRow, "auto_shutdown" | "idle_minutes"> | null): IdleConfig {
+  if (!row) return { ...DEFAULT_IDLE_CONFIG };
   return {
-    autoShutdown: !!doc.autoShutdown,
+    autoShutdown: !!row.auto_shutdown,
     idleMinutes:
-      typeof doc.idleMinutes === "number" && doc.idleMinutes >= 5
-        ? doc.idleMinutes
+      typeof row.idle_minutes === "number" && row.idle_minutes >= 5
+        ? row.idle_minutes
         : DEFAULT_IDLE_CONFIG.idleMinutes,
   };
 }
@@ -39,24 +31,16 @@ export async function setSandboxIdleConfig(
   sandboxId: string,
   config: IdleConfig,
 ): Promise<void> {
-  const col = await idleCollection();
-  const now = new Date();
-  await col.updateOne(
-    { owner, sandboxId },
-    {
-      $set: {
-        autoShutdown: config.autoShutdown,
-        idleMinutes: config.idleMinutes,
-        updatedAt: now,
-      },
-      $setOnInsert: {
-        owner,
-        sandboxId,
-        lastActivityAt: now,
-        inflight: 0,
-      },
-    },
-    { upsert: true },
+  await query(
+    `INSERT INTO sandbox.idle (
+       owner, sandbox_id, auto_shutdown, idle_minutes, last_activity_at, inflight
+     )
+     VALUES ($1, $2, $3, $4, now(), 0)
+     ON CONFLICT (owner, sandbox_id) DO UPDATE
+     SET auto_shutdown = EXCLUDED.auto_shutdown,
+         idle_minutes = EXCLUDED.idle_minutes,
+         updated_at = now()`,
+    [owner, sandboxId, config.autoShutdown, config.idleMinutes],
   );
 }
 
@@ -64,8 +48,10 @@ export async function deleteSandboxIdle(
   owner: string,
   sandboxId: string,
 ): Promise<void> {
-  const col = await idleCollection();
-  await col.deleteOne({ owner, sandboxId });
+  await query(
+    `DELETE FROM sandbox.idle WHERE owner = $1 AND sandbox_id = $2`,
+    [owner, sandboxId],
+  );
 }
 
 export async function withSandboxIdle(
@@ -73,14 +59,13 @@ export async function withSandboxIdle(
   sandboxes: Sandbox[],
 ): Promise<Sandbox[]> {
   if (sandboxes.length === 0) return sandboxes;
-  const col = await idleCollection();
-  const docs = await col
-    .find({
-      owner,
-      sandboxId: { $in: sandboxes.map((sandbox) => sandbox.id) },
-    })
-    .toArray();
-  const byId = new Map(docs.map((doc) => [doc.sandboxId, doc]));
+  const result = await query<IdleRow>(
+    `SELECT sandbox_id, owner, auto_shutdown, idle_minutes, last_activity_at, inflight, updated_at
+     FROM sandbox.idle
+     WHERE owner = $1 AND sandbox_id = ANY($2::text[])`,
+    [owner, sandboxes.map((sandbox) => sandbox.id)],
+  );
+  const byId = new Map(result.rows.map((row) => [row.sandbox_id, row]));
   return sandboxes.map((sandbox) => {
     const config = asConfig(byId.get(sandbox.id) ?? null);
     return {
@@ -94,8 +79,12 @@ export async function withSandboxIdle(
 /** 沙箱 API 请求开始：有空闲配置的沙箱才增加 inflight。 */
 export async function beginMcpActivity(sandboxId: string): Promise<void> {
   try {
-    const col = await idleCollection();
-    await col.updateOne({ sandboxId }, { $inc: { inflight: 1 }, $set: { updatedAt: new Date() } });
+    await query(
+      `UPDATE sandbox.idle
+       SET inflight = inflight + 1, updated_at = now()
+       WHERE sandbox_id = $1`,
+      [sandboxId],
+    );
   } catch (error) {
     console.error("空闲 inflight 增加失败", error);
   }
@@ -103,7 +92,7 @@ export async function beginMcpActivity(sandboxId: string): Promise<void> {
 
 /**
  * 沙箱 API 请求结束。鉴权失败传 touch: false。
- * 成功时刷新 lastActivityAt，并减少 inflight（下限 0）。
+ * 成功时刷新 last_activity_at，并减少 inflight（下限 0）。
  */
 export async function endMcpActivity(
   sandboxId: string,
@@ -111,19 +100,14 @@ export async function endMcpActivity(
 ): Promise<void> {
   const touch = opts?.touch !== false;
   try {
-    const col = await idleCollection();
-    const now = new Date();
-    await col.updateOne({ sandboxId }, [
-      {
-        $set: {
-          inflight: {
-            $max: [0, { $add: [{ $ifNull: ["$inflight", 0] }, -1] }],
-          },
-          ...(touch ? { lastActivityAt: now } : {}),
-          updatedAt: now,
-        },
-      },
-    ]);
+    await query(
+      `UPDATE sandbox.idle
+       SET inflight = GREATEST(0, inflight - 1),
+           last_activity_at = CASE WHEN $2::boolean THEN now() ELSE last_activity_at END,
+           updated_at = now()
+       WHERE sandbox_id = $1`,
+      [sandboxId, touch],
+    );
   } catch (error) {
     console.error("空闲活动结束失败", error);
   }
@@ -132,11 +116,11 @@ export async function endMcpActivity(
 /** 创建成功后写入活动时间（不经 inflight）。 */
 export async function touchMcpActivity(sandboxId: string): Promise<void> {
   try {
-    const col = await idleCollection();
-    const now = new Date();
-    await col.updateOne(
-      { sandboxId },
-      { $set: { lastActivityAt: now, updatedAt: now } },
+    await query(
+      `UPDATE sandbox.idle
+       SET last_activity_at = now(), updated_at = now()
+       WHERE sandbox_id = $1`,
+      [sandboxId],
     );
   } catch (error) {
     console.error("空闲活动刷新失败", error);
@@ -154,29 +138,25 @@ export type IdleCandidate = {
 export async function listIdleShutdownCandidates(
   now = new Date(),
 ): Promise<IdleCandidate[]> {
-  const col = await idleCollection();
-  const docs = await col
-    .find({
-      autoShutdown: true,
-      $or: [{ inflight: { $lte: 0 } }, { inflight: { $exists: false } }],
-    })
-    .toArray();
-  return docs
-    .filter((doc) => {
-      const minutes =
-        typeof doc.idleMinutes === "number" && doc.idleMinutes >= 5
-          ? doc.idleMinutes
-          : DEFAULT_IDLE_CONFIG.idleMinutes;
-      const last = doc.lastActivityAt ?? doc.updatedAt;
-      if (!(last instanceof Date)) return false;
-      return now.getTime() - last.getTime() >= minutes * 60_000;
-    })
-    .map((doc) => ({
-      sandboxId: doc.sandboxId,
-      owner: doc.owner,
-      idleMinutes: doc.idleMinutes,
-      lastActivityAt: doc.lastActivityAt,
-    }));
+  const result = await query<{
+    sandbox_id: string;
+    owner: string;
+    idle_minutes: number;
+    last_activity_at: Date;
+  }>(
+    `SELECT sandbox_id, owner, GREATEST(idle_minutes, 5) AS idle_minutes, last_activity_at
+     FROM sandbox.idle
+     WHERE auto_shutdown = true
+       AND inflight <= 0
+       AND last_activity_at <= $1::timestamptz - (GREATEST(idle_minutes, 5) * interval '1 minute')`,
+    [now],
+  );
+  return result.rows.map((row) => ({
+    sandboxId: row.sandbox_id,
+    owner: row.owner,
+    idleMinutes: row.idle_minutes,
+    lastActivityAt: row.last_activity_at,
+  }));
 }
 
 export async function withMcpSandboxActivity<T>(

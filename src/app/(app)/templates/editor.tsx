@@ -18,7 +18,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import { ProDrawer } from "listpage-components/ProDrawer";
 import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 import { DEFAULT_RESOURCES, type ResourceSpec } from "@/lib/sealos/resources";
 import type { Template } from "@/lib/template/schema";
 import {
@@ -225,10 +225,10 @@ export function TemplateEditor({
     try {
       const payload = toPayload(form);
       if (editingId) {
-        await boatClient.updateTemplate(editingId, payload);
+        await sandboxClient.updateTemplate(editingId, payload);
         message.success("模板已更新");
       } else {
-        await boatClient.createTemplate(payload);
+        await sandboxClient.createTemplate(payload);
         message.success("模板已创建");
       }
       onClose();

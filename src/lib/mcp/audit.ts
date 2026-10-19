@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 
-import { getCollection } from "@/lib/db/mongo";
+import { query } from "@/lib/db/postgres";
 import { getMinioClient, minioBucket } from "@/lib/minio/client";
 
 /** 只有执行沙箱命令会写入调用日志。 */
@@ -43,25 +43,8 @@ export type McpCallLogView = Omit<
   createdAt: string;
 };
 
-let indexesReady = false;
-
-async function mcpLogCollection() {
-  const col = await getCollection<McpCallLog>("mcp_logs");
-  if (!indexesReady) {
-    await col.createIndex({ id: 1 }, { unique: true });
-    await col.createIndex({ startedAt: -1 });
-    await col.createIndex({ completedAt: -1 });
-    await col.createIndex({ createdAt: -1 });
-    await col.createIndex({ tool: 1, startedAt: -1 });
-    await col.createIndex({ username: 1, startedAt: -1 });
-    await col.createIndex({ apiKeyId: 1, startedAt: -1 });
-    indexesReady = true;
-  }
-  return col;
-}
-
 /**
- * 记录一次 runSandboxCommand。元数据写入 Mongo，命令结果写入 MinIO。
+ * 记录一次 runSandboxCommand。元数据写入 PostgreSQL，命令结果写入 MinIO。
  * 其他工具直接返回。存储失败不影响本次调用。
  */
 export async function recordMcpCall(input: {
@@ -120,26 +103,37 @@ export async function recordMcpCall(input: {
   }
 
   try {
-    const col = await mcpLogCollection();
-    await col.insertOne({
-      id,
-      ...(username ? { username } : {}),
-      apiKeyId: apiKeyId ?? null,
-      apiKeyName: apiKeyName ?? null,
-      channel: input.channel ?? "mcp",
-      tool: input.tool,
-      method: input.method,
-      path: concretePath(input.path, input.arguments),
-      arguments: input.arguments,
-      status: input.status,
-      ok: input.status >= 200 && input.status < 400,
-      resultKey,
-      resultError,
-      startedAt,
-      completedAt,
-      durationMs,
-      createdAt: completedAt,
-    });
+    await query(
+      `INSERT INTO sandbox.mcp_logs (
+         id, username, api_key_id, api_key_name, channel, tool, method, path,
+         arguments, status, ok, result_key, result_error,
+         started_at, completed_at, duration_ms, created_at
+       )
+       VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8,
+         $9::jsonb, $10, $11, $12, $13,
+         $14, $15, $16, $17
+       )`,
+      [
+        id,
+        username ?? null,
+        apiKeyId ?? null,
+        apiKeyName ?? null,
+        input.channel ?? "mcp",
+        input.tool,
+        input.method,
+        concretePath(input.path, input.arguments),
+        JSON.stringify(input.arguments),
+        input.status,
+        input.status >= 200 && input.status < 400,
+        resultKey,
+        resultError,
+        startedAt,
+        completedAt,
+        durationMs,
+        completedAt,
+      ],
+    );
   } catch (error) {
     console.error("MCP 调用日志写入数据库失败", error);
   }

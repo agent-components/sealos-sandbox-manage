@@ -7,7 +7,7 @@ import {
   type FloatComponentProps,
 } from "listpage-components/ListPage";
 import { listPagination } from "@/components/list-page";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
 import { mcpLogColumns } from "./columns";
 import { McpLogDetailDrawer } from "./detail";
@@ -19,7 +19,7 @@ export default function McpLogsPage() {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
 
   useEffect(() => {
-    void boatClient
+    void sandboxClient
       .listApiKeys()
       .then((res) => setApiKeys(res.apiKeys))
       .catch(() => undefined);
@@ -32,7 +32,7 @@ export default function McpLogsPage() {
     ) => {
       try {
         const range = filters.range;
-        const res = await boatClient.listMcpLogs({
+        const res = await sandboxClient.listMcpLogs({
           page: page.current,
           pageSize: page.pageSize,
           ...(filters.apiKeyId ? { apiKeyId: filters.apiKeyId } : {}),

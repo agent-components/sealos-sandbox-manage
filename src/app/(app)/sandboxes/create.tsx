@@ -17,7 +17,7 @@ import {
 import { PlusOutlined } from "@ant-design/icons";
 import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 import { TagsSchema } from "@/lib/sandbox/schema";
 import { DEFAULT_RESOURCES, type ResourceSpec } from "@/lib/sealos/resources";
 import type { Template } from "@/lib/template/schema";
@@ -70,7 +70,7 @@ export function CreateSandboxModal({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    void boatClient
+    void sandboxClient
       .listTemplates()
       .then((res) => {
         if (cancelled) return;
@@ -121,7 +121,7 @@ export function CreateSandboxModal({
     }
     setCreating(true);
     try {
-      await boatClient.createSandbox({
+      await sandboxClient.createSandbox({
         templateId,
         cpu: resources.cpu,
         memoryGi: resources.memoryGi,

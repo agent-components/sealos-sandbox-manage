@@ -15,7 +15,11 @@ import {
   IdleConfigSchema,
   TagsSchema,
 } from "@/lib/sandbox/schema";
-import { isOwnedBy } from "@/lib/sandbox/ownership";
+import { selectOwnedApps } from "@/lib/sandbox/ownership";
+import {
+  deleteSandboxRecord,
+  saveSandboxRecord,
+} from "@/lib/sandbox/record";
 import {
   deleteSandboxTags,
   findSandboxIdsByTagQuery,
@@ -61,7 +65,7 @@ export async function GET(req: NextRequest) {
         const apps = await client.listApps();
         let owned = filterAppsByApiKey(
           user,
-          apps.filter((app) => isOwnedBy(app, user.username)),
+          await selectOwnedApps(apps, user.username),
         );
 
         const tags = tagQuery.length > 0 ? TagsSchema.parse(tagQuery) : [];
@@ -80,12 +84,15 @@ export async function GET(req: NextRequest) {
           );
         }
         if (matchedIds) {
-          owned = owned.filter((app) => matchedIds.has(app.name));
+          owned = owned.filter((item) => matchedIds.has(item.name));
         }
 
         const sandboxes = await withSandboxIdle(
           user.username,
-          await withSandboxTags(user.username, owned.map(toSandbox)),
+          await withSandboxTags(
+            user.username,
+            owned.map((item) => toSandbox(item.app, item.templateId)),
+          ),
         );
         const body = { sandboxes };
         return { status: 200, result: body, value: jsonOk(body) };
@@ -127,7 +134,6 @@ export async function POST(req: NextRequest) {
         const id = input.name ?? createSandboxId();
         const app = await client.createAppFromTemplate({
           name: id,
-          owner: user.username,
           template,
           resources: {
             cpu: input.cpu,
@@ -137,6 +143,7 @@ export async function POST(req: NextRequest) {
           env: input.env,
         });
         try {
+          await saveSandboxRecord(user.username, id, template.id);
           await setSandboxTags(user.username, id, input.tags);
           await setSandboxIdleConfig(user.username, id, idleConfig);
           if (user.apiKeyId) {
@@ -147,13 +154,14 @@ export async function POST(req: NextRequest) {
           }
         } catch (error) {
           await client.deleteApp(id).catch(() => undefined);
+          await deleteSandboxRecord(id).catch(() => undefined);
           await deleteSandboxTags(user.username, id).catch(() => undefined);
           await deleteSandboxIdle(user.username, id).catch(() => undefined);
           throw error;
         }
         const [sandbox] = await withSandboxIdle(
           user.username,
-          await withSandboxTags(user.username, [toSandbox(app)]),
+          await withSandboxTags(user.username, [toSandbox(app, template.id)]),
         );
         await touchSandboxActivity(id);
         const body = { sandbox };

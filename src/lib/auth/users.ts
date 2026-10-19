@@ -1,58 +1,89 @@
-import { getDb } from "@/lib/db/mongo";
-
-export type UserDoc = {
-  username: string;
-  password: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
+import { randomBytes } from "crypto";
+import { query } from "@/lib/db/postgres";
 
 export type PublicUser = {
   username: string;
 };
 
-let indexesReady = false;
+/** 与现有登录一致：token 为 32 字节十六进制，30 天后过期。 */
+const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-async function users() {
-  const db = await getDb();
-  const col = db.collection<UserDoc>("users");
-  if (!indexesReady) {
-    await col.createIndex({ username: 1 }, { unique: true });
-    indexesReady = true;
-  }
-  return col;
+function isUserToken(value: string): boolean {
+  return /^[a-f0-9]{64}$/i.test(value);
 }
 
+/** 登录名是 public.users.account。停用账号不能登录。 */
 export async function authenticateUser(
   username: string,
   password: string,
 ): Promise<PublicUser | null> {
-  const col = await users();
-  const user = await col.findOne({ username, password });
-  if (!user) return null;
-  return { username: user.username };
-}
-
-export async function createUser(
-  username: string,
-  password: string,
-): Promise<PublicUser> {
-  const col = await users();
-  const now = new Date();
-  await col.insertOne({
-    username,
-    password,
-    createdAt: now,
-    updatedAt: now,
-  });
-  return { username };
+  const result = await query<{ account: string }>(
+    `SELECT account
+     FROM public.users
+     WHERE account = $1 AND password = $2 AND status = 'ACTIVE'`,
+    [username, password],
+  );
+  const account = result.rows[0]?.account;
+  return account ? { username: account } : null;
 }
 
 export async function findUser(username: string): Promise<PublicUser | null> {
-  const col = await users();
-  const user = await col.findOne(
-    { username },
-    { projection: { username: 1, _id: 0 } },
+  const result = await query<{ account: string }>(
+    `SELECT account FROM public.users WHERE account = $1`,
+    [username],
   );
-  return user ? { username: user.username } : null;
+  const account = result.rows[0]?.account;
+  return account ? { username: account } : null;
+}
+
+/** 未过期则复用 public.users.token，否则签发一枚新的。 */
+export async function issueUserToken(username: string): Promise<string> {
+  const existing = await query<{ token: string }>(
+    `SELECT token
+     FROM public.users
+     WHERE account = $1
+       AND status = 'ACTIVE'
+       AND token IS NOT NULL
+       AND "tokenExpiredAt" > now()`,
+    [username],
+  );
+  const current = existing.rows[0]?.token;
+  if (current && isUserToken(current)) return current;
+
+  const token = randomBytes(32).toString("hex");
+  const expiredAt = new Date(Date.now() + TOKEN_TTL_MS);
+  const result = await query(
+    `UPDATE public.users
+     SET token = $2, "tokenExpiredAt" = $3, "updatedAt" = now()
+     WHERE account = $1 AND status = 'ACTIVE'`,
+    [username, token, expiredAt],
+  );
+  if ((result.rowCount ?? 0) === 0) {
+    throw new Error("无法写入登录 token");
+  }
+  return token;
+}
+
+export async function findUserByToken(token: string): Promise<PublicUser | null> {
+  if (!isUserToken(token)) return null;
+  const result = await query<{ account: string }>(
+    `SELECT account
+     FROM public.users
+     WHERE token = $1
+       AND status = 'ACTIVE'
+       AND "tokenExpiredAt" > now()`,
+    [token],
+  );
+  const account = result.rows[0]?.account;
+  return account ? { username: account } : null;
+}
+
+export async function clearUserToken(token: string): Promise<void> {
+  if (!isUserToken(token)) return;
+  await query(
+    `UPDATE public.users
+     SET token = NULL, "tokenExpiredAt" = NULL, "updatedAt" = now()
+     WHERE token = $1`,
+    [token],
+  );
 }

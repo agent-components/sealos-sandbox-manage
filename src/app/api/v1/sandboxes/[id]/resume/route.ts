@@ -27,13 +27,13 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         const kubeconfig = await resolveKubeconfig();
         const client = createLaunchpadClient({ kubeconfig });
         const existing = await client.getApp(id);
-        assertOwnedBy(existing, user.username);
+        const templateId = await assertOwnedBy(existing, user.username);
         assertSandboxAllowed(user, id);
         await client.startApp(id);
         const app = await client.getApp(id);
         const [sandbox] = await withSandboxIdle(
           user.username,
-          await withSandboxTags(user.username, [toSandbox(app)]),
+          await withSandboxTags(user.username, [toSandbox(app, templateId)]),
         );
         const body = { sandbox };
         return { status: 200, result: body, value: jsonOk(body) };

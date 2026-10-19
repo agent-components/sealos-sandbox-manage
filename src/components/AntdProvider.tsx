@@ -4,7 +4,7 @@ import { AntdRegistry } from "@ant-design/nextjs-registry";
 import { createContext, useContext, useEffect, useRef } from "react";
 import { AppProvider, useProTheme } from "listpage-components";
 
-const THEME_STORAGE_KEY = "boat-pro-theme";
+const THEME_STORAGE_KEY = "sandbox-pro-theme";
 
 type BoatTheme = ReturnType<typeof useProTheme>;
 
@@ -36,7 +36,7 @@ export function AntdProvider({ children }: { children: React.ReactNode }) {
   return (
     <AntdRegistry>
       <BoatThemeContext.Provider value={theme}>
-        <div className="boat-root">
+        <div className="sandbox-root">
           <AppProvider {...theme.appProviderProps}>{children}</AppProvider>
         </div>
       </BoatThemeContext.Provider>

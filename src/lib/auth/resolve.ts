@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "fs";
 import { headers } from "next/headers";
 import { authenticateApiKey } from "@/lib/apikey/store";
+import { findUserByToken } from "@/lib/auth/users";
 import { AuthError } from "@/lib/sealos/errors";
 import { getSealosConfig } from "@/lib/sealos/config";
 import { readUserSession } from "@/lib/auth/session";
@@ -39,7 +40,8 @@ export async function requireSessionUser(): Promise<{ username: string }> {
 }
 
 /**
- * 沙箱 / 模板等接口：会话 cookie，或 `Authorization: Bearer boat_...`。
+ * 沙箱 / 模板等接口：会话 cookie，或 `Authorization: Bearer sandbox_...`。
+ * 已发出的 `boat_` 密钥仍然有效。
  * 会话可访问该用户的全部沙箱；API Key 只能访问其授权列表。
  */
 export async function requireUser(): Promise<RequestUser> {
@@ -51,6 +53,8 @@ export async function requireUser(): Promise<RequestUser> {
   if (secret) {
     const user = await authenticateApiKey(secret);
     if (user) return user;
+    const sessionUser = await findUserByToken(secret);
+    if (sessionUser) return sessionUser;
   }
 
   throw new AuthError("请先登录");

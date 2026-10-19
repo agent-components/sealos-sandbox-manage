@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { App, Input, Modal, Typography } from "antd";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 import type { Sandbox } from "@/lib/sandbox/schema";
 
 export function DeleteSandboxModal({
@@ -28,7 +28,7 @@ export function DeleteSandboxModal({
     }
     setDeleting(true);
     try {
-      await boatClient.deleteSandbox(sandbox.id);
+      await sandboxClient.deleteSandbox(sandbox.id);
       message.success("已删除");
       onClose();
       onSaved();

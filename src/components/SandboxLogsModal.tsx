@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { App, Button, Flex, Select, Space, Typography } from "antd";
 import { ProDrawer } from "listpage-components/ProDrawer";
-import { boatClient } from "@/lib/client";
+import { sandboxClient } from "@/lib/client";
 
 type Props = {
   sandboxId: string;
@@ -26,7 +26,7 @@ export function SandboxLogsModal({ sandboxId, open, onClose }: Props) {
       if (!sandboxId) return;
       setLoading(true);
       try {
-        const res = await boatClient.getSandboxLogs(sandboxId, {
+        const res = await sandboxClient.getSandboxLogs(sandboxId, {
           pod: podName || undefined,
           tailLines: 800,
         });

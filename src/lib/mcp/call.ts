@@ -5,7 +5,7 @@ import { POST as runSandboxCommand } from "@/app/api/v1/sandboxes/[id]/commands/
 import { POST as resumeSandbox } from "@/app/api/v1/sandboxes/[id]/resume/route";
 import { POST as stopSandbox } from "@/app/api/v1/sandboxes/[id]/stop/route";
 import { GET as listSandboxes, POST as createSandbox } from "@/app/api/v1/sandboxes/route";
-import { BOAT_CHANNEL_HEADER } from "@/lib/api/call-context";
+import { SANDBOX_CHANNEL_HEADER } from "@/lib/api/call-context";
 import { mcpRoutesFromOpenApi, type McpRoute } from "@/lib/mcp/tools";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -124,7 +124,7 @@ export async function callMcpTool(
   if (authorization) headers.set("authorization", authorization);
   const cookie = incoming.headers.get("cookie");
   if (cookie) headers.set("cookie", cookie);
-  headers.set(BOAT_CHANNEL_HEADER, "mcp");
+  headers.set(SANDBOX_CHANNEL_HEADER, "mcp");
 
   const hasBody = route.bodyProperties !== null;
   if (hasBody) headers.set("content-type", "application/json");

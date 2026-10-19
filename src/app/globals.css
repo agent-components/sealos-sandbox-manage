@@ -23,14 +23,14 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  .boat-root {
+  .sandbox-root {
     display: flex;
     flex-direction: column;
     height: 100%;
     min-height: 100%;
   }
 
-  .boat-logo {
+  .sandbox-logo {
     display: block;
     width: 28px;
     height: 28px;
@@ -38,13 +38,13 @@
     object-fit: cover;
   }
 
-  .boat-logo-lg {
+  .sandbox-logo-lg {
     width: 48px;
     height: 48px;
     border-radius: 12px;
   }
 
-  .boat-shell-block {
+  .sandbox-shell-block {
     margin: 8px 0 0;
     padding: 12px 14px;
     background: #1e1e1e;
@@ -60,12 +60,12 @@
     overflow: auto;
   }
 
-  .boat-shell-prompt {
+  .sandbox-shell-prompt {
     color: #6a9955;
     user-select: none;
   }
 
-  .boat-shell-block.is-error {
+  .sandbox-shell-block.is-error {
     background: #2a1d1d;
     color: #f2c1c1;
   }
@@ -91,53 +91,53 @@
 }
 
 /* 列表表格：固定列 + 横向滚动（压掉快速滚动时 sticky 弹跳） */
-.boat-table-wrap {
+.sandbox-table-wrap {
   border: 1px solid #f0f0f0;
   border-radius: 8px;
   overflow: clip;
   background: #fff;
 }
 
-.boat-table-wrap .ant-table-content,
-.boat-table-wrap .ant-table-body {
+.sandbox-table-wrap .ant-table-content,
+.sandbox-table-wrap .ant-table-body {
   overscroll-behavior-x: none;
   overscroll-behavior-y: none;
 }
 
 /* 关掉 ping 阴影：滚动到边缘瞬间出现/消失会像「弹一下」 */
-.boat-table-wrap .ant-table-container::before,
-.boat-table-wrap .ant-table-container::after,
-.boat-table-wrap .ant-table-cell-fix-left-last::after,
-.boat-table-wrap .ant-table-cell-fix-right-first::after {
+.sandbox-table-wrap .ant-table-container::before,
+.sandbox-table-wrap .ant-table-container::after,
+.sandbox-table-wrap .ant-table-cell-fix-left-last::after,
+.sandbox-table-wrap .ant-table-cell-fix-right-first::after {
   display: none !important;
   box-shadow: none !important;
   transition: none !important;
 }
 
-.boat-table-wrap .ant-table-cell-fix-left,
-.boat-table-wrap .ant-table-cell-fix-right {
+.sandbox-table-wrap .ant-table-cell-fix-left,
+.sandbox-table-wrap .ant-table-cell-fix-right {
   background: #fff !important;
   transition: none !important;
   animation: none !important;
 }
 
-.boat-table-wrap .ant-table-thead > tr > th.ant-table-cell-fix-left,
-.boat-table-wrap .ant-table-thead > tr > th.ant-table-cell-fix-right {
+.sandbox-table-wrap .ant-table-thead > tr > th.ant-table-cell-fix-left,
+.sandbox-table-wrap .ant-table-thead > tr > th.ant-table-cell-fix-right {
   background: #fafafa !important;
 }
 
-.boat-table-wrap .ant-table-cell-fix-left {
+.sandbox-table-wrap .ant-table-cell-fix-left {
   left: 0 !important;
   z-index: 3;
 }
 
-.boat-table-wrap .ant-table-cell-fix-right {
+.sandbox-table-wrap .ant-table-cell-fix-right {
   right: 0 !important;
   z-index: 3;
 }
 
-.boat-table-wrap .ant-table-thead .ant-table-cell-fix-left,
-.boat-table-wrap .ant-table-thead .ant-table-cell-fix-right {
+.sandbox-table-wrap .ant-table-thead .ant-table-cell-fix-left,
+.sandbox-table-wrap .ant-table-thead .ant-table-cell-fix-right {
   z-index: 4;
 }
 

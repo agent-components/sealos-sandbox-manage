@@ -8,10 +8,10 @@ import {
 
 export type { CallChannel };
 
-export const BOAT_CHANNEL_HEADER = "x-boat-channel";
+export const SANDBOX_CHANNEL_HEADER = "x-sandbox-channel";
 
 export function callChannel(req: Request): CallChannel {
-  return req.headers.get(BOAT_CHANNEL_HEADER) === "mcp" ? "mcp" : "rest";
+  return req.headers.get(SANDBOX_CHANNEL_HEADER) === "mcp" ? "mcp" : "rest";
 }
 
 /** 包裹一次沙箱相关请求：可选空闲计时。只有 runSandboxCommand 写调用日志。 */
