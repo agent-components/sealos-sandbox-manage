@@ -97,20 +97,11 @@ export function createLaunchpadClient(opts: LaunchpadClientOptions) {
             )
           : [];
 
-      // 归属和模板记在数据库里，不写入容器。旧名字也继续丢掉，避免再注入进去。
-      const reserved = new Set([
-        "BOAT_SANDBOX",
-        "BOAT_USER",
-        "BOAT_TEMPLATE",
-      ]);
       const envMap = new Map<string, string>();
-      for (const e of template.env ?? []) {
-        if (!e.name.trim() || reserved.has(e.name)) continue;
-        envMap.set(e.name.trim(), e.value ?? "");
-      }
-      for (const e of input.env ?? []) {
-        if (!e.name.trim() || reserved.has(e.name.trim())) continue;
-        envMap.set(e.name.trim(), e.value ?? "");
+      for (const e of [...(template.env ?? []), ...(input.env ?? [])]) {
+        const name = e.name.trim();
+        if (!name) continue;
+        envMap.set(name, e.value ?? "");
       }
 
       const body = {
