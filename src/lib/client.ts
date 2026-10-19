@@ -146,19 +146,24 @@ export const boatClient = {
 
   listMcpLogs: (query?: {
     tool?: string;
-    limit?: number;
+    page?: number;
+    pageSize?: number;
     apiKeyId?: string;
     from?: string;
     to?: string;
   }) => {
     const q = new URLSearchParams();
     if (query?.tool) q.set("tool", query.tool);
-    if (query?.limit) q.set("limit", String(query.limit));
+    if (query?.page) q.set("page", String(query.page));
+    if (query?.pageSize) q.set("pageSize", String(query.pageSize));
     if (query?.apiKeyId) q.set("apiKeyId", query.apiKeyId);
     if (query?.from) q.set("from", query.from);
     if (query?.to) q.set("to", query.to);
     const qs = q.toString();
     return request<{
+      total: number;
+      page: number;
+      pageSize: number;
       logs: {
         id: string;
         username?: string;

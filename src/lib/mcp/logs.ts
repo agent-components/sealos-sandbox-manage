@@ -61,6 +61,11 @@ function ownedOrLegacy(username: string) {
 }
 
 export type ListMcpLogsOpts = {
+  /** 页码，从 1 开始 */
+  page?: number;
+  /** 每页条数 */
+  pageSize?: number;
+  /** 兼容旧参数：未传 pageSize 时当作每页条数，且只返回第一页 */
   limit?: number;
   tool?: string;
   /** 指定 API Key；`session` 表示仅会话登录 */
@@ -74,11 +79,17 @@ export type ListMcpLogsOpts = {
 export async function listMcpLogs(
   username: string,
   opts?: ListMcpLogsOpts,
-): Promise<McpCallLogView[]> {
-  if (opts?.tool && opts.tool !== AUDITED_TOOL) return [];
+): Promise<{ logs: McpCallLogView[]; total: number; page: number; pageSize: number }> {
+  if (opts?.tool && opts.tool !== AUDITED_TOOL) {
+    return { logs: [], total: 0, page: 1, pageSize: opts?.pageSize ?? opts?.limit ?? 20 };
+  }
 
   const col = await mcpLogCollection();
-  const limit = Math.min(Math.max(opts?.limit ?? 50, 1), 200);
+  const pageSize = Math.min(
+    Math.max(opts?.pageSize ?? opts?.limit ?? 20, 1),
+    100,
+  );
+  const page = Math.max(Math.floor(opts?.page ?? 1), 1);
 
   const clauses: Record<string, unknown>[] = [
     ownedOrLegacy(username),
@@ -106,12 +117,16 @@ export async function listMcpLogs(
   }
 
   const filter = clauses.length === 1 ? clauses[0]! : { $and: clauses };
-  const docs = await col
-    .find(filter)
-    .sort({ startedAt: -1, createdAt: -1 })
-    .limit(limit)
-    .toArray();
-  return docs.map(toView);
+  const [total, docs] = await Promise.all([
+    col.countDocuments(filter),
+    col
+      .find(filter)
+      .sort({ startedAt: -1, createdAt: -1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .toArray(),
+  ]);
+  return { logs: docs.map(toView), total, page, pageSize };
 }
 
 export async function getMcpLog(

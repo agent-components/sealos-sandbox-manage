@@ -18,8 +18,13 @@ export async function GET(req: NextRequest) {
     const apiKeyId = params.get("apiKeyId")?.trim() || undefined;
     const from = parseTime(params.get("from"));
     const to = parseTime(params.get("to"));
-    const limitRaw = Number(params.get("limit") ?? "100");
-    const limit = Number.isFinite(limitRaw) ? limitRaw : 100;
+    const pageRaw = Number(params.get("page") ?? "1");
+    const page = Number.isFinite(pageRaw) ? pageRaw : 1;
+    const pageSizeParam = params.get("pageSize");
+    const limitParam = params.get("limit");
+    const sized = pageSizeParam != null || limitParam != null;
+    const sizeRaw = Number(pageSizeParam ?? limitParam ?? (sized ? "20" : "100"));
+    const pageSize = Number.isFinite(sizeRaw) ? sizeRaw : sized ? 20 : 100;
 
     if (params.get("from") && !from) {
       return jsonOk({ error: "from 时间格式无效" }, { status: 400 });
@@ -31,14 +36,15 @@ export async function GET(req: NextRequest) {
       return jsonOk({ error: "时间范围起点不能晚于终点" }, { status: 400 });
     }
 
-    const logs = await listMcpLogs(user.username, {
-      limit,
+    const result = await listMcpLogs(user.username, {
+      page,
+      pageSize,
       tool,
       apiKeyId,
       from,
       to,
     });
-    return jsonOk({ logs });
+    return jsonOk(result);
   } catch (error) {
     return jsonError(error);
   }

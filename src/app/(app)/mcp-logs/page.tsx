@@ -19,7 +19,7 @@ import {
   type ListPageColumnType,
 } from "listpage-components/ListPage";
 import { ProDrawer } from "listpage-components/ProDrawer";
-import { listPagination, paginate } from "@/components/list-page";
+import { listPagination } from "@/components/list-page";
 import { boatClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
 
@@ -86,12 +86,13 @@ export default function McpLogsPage() {
       try {
         const range = filters.range;
         const res = await boatClient.listMcpLogs({
-          limit: 100,
+          page: page.current,
+          pageSize: page.pageSize,
           ...(filters.apiKeyId ? { apiKeyId: filters.apiKeyId } : {}),
           ...(range?.[0] ? { from: range[0].toISOString() } : {}),
           ...(range?.[1] ? { to: range[1].toISOString() } : {}),
         });
-        return paginate(res.logs, page.current, page.pageSize);
+        return { list: res.logs, total: res.total };
       } catch (err) {
         message.error(err instanceof Error ? err.message : "加载失败");
         return { list: [], total: 0 };
@@ -174,7 +175,6 @@ export default function McpLogsPage() {
       {
         title: "沙箱",
         key: "sandbox",
-        width: 180,
         ellipsis: true,
         render: (_, row) => {
           const id = sandboxIdOf(row.arguments);
@@ -210,9 +210,10 @@ export default function McpLogsPage() {
         ),
       },
       {
-        title: "",
+        title: "操作",
         key: "actions",
         width: 72,
+        fixed: "right",
         render: (_, row) => (
           <Button type="link" style={{ padding: 0 }} onClick={() => setViewId(row.id)}>
             详情
@@ -298,7 +299,7 @@ export default function McpLogsPage() {
           columnResize: { persistenceKey: "boat-mcp-logs-width" },
           columnSetting: { persistenceKey: "boat-mcp-logs-columns" },
           extra: (_ctx, columnSetting) => columnSetting?.trigger ?? null,
-          scroll: { x: 1100 },
+          scroll: { x: 1100, y: "calc(100vh - 420px)" },
           pagination: listPagination,
         }}
         request={request}
