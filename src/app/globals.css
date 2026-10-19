@@ -12,15 +12,47 @@
 
   html,
   body {
-    min-height: 100%;
+    height: 100%;
   }
 
   body {
     margin: 0;
-    background: #ffffff;
+    background: transparent;
     color: #1f1f1f;
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+  }
+
+  .boat-root {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 100%;
+  }
+
+  .boat-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--ant-color-primary);
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .boat-json-block {
+    margin: 8px 0 0;
+    padding: 12px;
+    background: var(--ant-color-fill-alter, #fafafa);
+    border: 1px solid var(--ant-color-border, #f0f0f0);
+    border-radius: 8px;
+    font-size: 12px;
+    overflow: auto;
+    max-height: 360px;
   }
 
   a {

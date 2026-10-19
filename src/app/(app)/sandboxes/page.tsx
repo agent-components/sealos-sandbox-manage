@@ -1,26 +1,34 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   App,
   Button,
   Collapse,
-  Empty,
   Flex,
   Form,
   Input,
   Modal,
   Select,
   Space,
-  Table,
   Tag,
   Typography,
 } from "antd";
-import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined } from "@ant-design/icons";
+import {
+  ListPage,
+  useListPageContext,
+  type ListPageColumnType,
+} from "listpage-components/ListPage";
+import { ProTable } from "listpage-components/ProTable";
 import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
+import {
+  AutoRefreshList,
+  BindListRefresh,
+  listPagination,
+  paginate,
+} from "@/components/list-page";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { SandboxDetailModal } from "@/components/SandboxDetailModal";
 import { SandboxLogsModal } from "@/components/SandboxLogsModal";
@@ -43,19 +51,62 @@ function canStart(state: Sandbox["state"]) {
   return state === "stopped" || state === "error";
 }
 
+type SandboxFilters = {
+  q?: string;
+  tag?: string;
+};
+
+function SandboxTable({
+  columns,
+}: {
+  columns: ListPageColumnType<Sandbox, SandboxFilters>[];
+}) {
+  const ctx = useListPageContext<Sandbox, SandboxFilters>();
+  const filtering = Boolean(ctx.filters.q?.trim() || ctx.filters.tag?.trim());
+  return (
+    <ProTable<Sandbox, typeof ctx>
+      columns={columns}
+      columnContext={ctx}
+      dataSource={ctx.dataSource}
+      loading={ctx.loading && ctx.dataSource.length === 0}
+      rowKey="id"
+      density="compact"
+      columnResize={{ persistenceKey: "boat-sandboxes-width" }}
+      columnSetting={{ persistenceKey: "boat-sandboxes-columns" }}
+      extra={(columnSetting) => columnSetting?.trigger ?? null}
+      scroll={{ x: 1280 }}
+      sort={{ ...ctx.sort, onChange: ctx.updateSort }}
+      pagination={{
+        current: ctx.pagination.current,
+        pageSize: ctx.pagination.pageSize,
+        total: ctx.pagination.total,
+        ...listPagination,
+        onChange: ctx.updatePagination,
+      }}
+      tableProps={{
+        locale: {
+          emptyText: ctx.loading
+            ? "加载中…"
+            : filtering
+              ? "没有匹配的沙箱"
+              : "还没有沙箱",
+        },
+      }}
+    />
+  );
+}
+
 export default function SandboxesPage() {
   const { message } = App.useApp();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [sandboxes, setSandboxes] = useState<Sandbox[]>([]);
+  const refreshRef = useRef<() => void>(() => {});
   const [templates, setTemplates] = useState<Template[]>([]);
   const [resources, setResources] =
     useState<ResourceSpec>(DEFAULT_RESOURCES);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [createName, setCreateName] = useState("");
   const [createTags, setCreateTags] = useState<string[]>([]);
-  const [tagQuery, setTagQuery] = useState("");
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -81,16 +132,9 @@ export default function SandboxesPage() {
     }
   }, [router, searchParams]);
 
-  const refresh = useCallback(async () => {
-    try {
-      const res = await boatClient.listSandboxes();
-      setSandboxes(res.sandboxes);
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "加载失败");
-    } finally {
-      setLoading(false);
-    }
-  }, [message]);
+  const bindRefresh = useCallback((refresh: () => void) => {
+    refreshRef.current = refresh;
+  }, []);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -104,13 +148,8 @@ export default function SandboxesPage() {
   }, [message]);
 
   useEffect(() => {
-    void refresh();
     void loadTemplates();
-    const timer = setInterval(() => {
-      void refresh();
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [refresh, loadTemplates]);
+  }, [loadTemplates]);
 
   async function openCreate() {
     const list = await loadTemplates();
@@ -199,7 +238,7 @@ export default function SandboxesPage() {
       });
       setCreateOpen(false);
       message.success("沙箱已创建");
-      await refresh();
+      refreshRef.current();
     } catch (err) {
       message.error(err instanceof Error ? err.message : "创建失败");
     } finally {
@@ -217,7 +256,7 @@ export default function SandboxesPage() {
         await boatClient.resumeSandbox(sb.id);
         message.success("已开机");
       }
-      await refresh();
+      refreshRef.current();
     } catch (err) {
       message.error(err instanceof Error ? err.message : "操作失败");
     } finally {
@@ -237,7 +276,7 @@ export default function SandboxesPage() {
       message.success("已删除");
       setDeleteTarget(null);
       setDeleteConfirm("");
-      await refresh();
+      refreshRef.current();
     } catch (err) {
       message.error(err instanceof Error ? err.message : "删除失败");
     } finally {
@@ -245,18 +284,46 @@ export default function SandboxesPage() {
     }
   }
 
-  const visibleSandboxes = useMemo(() => {
-    const terms = tagQuery
-      .split(/[\s,]+/)
-      .map((term) => term.trim().toLocaleLowerCase())
-      .filter(Boolean);
-    if (terms.length === 0) return sandboxes;
-    return sandboxes.filter((sandbox) =>
-      terms.every((term) =>
-        sandbox.tags.some((tag) => tag.toLocaleLowerCase().includes(term)),
-      ),
-    );
-  }, [sandboxes, tagQuery]);
+  const request = useCallback(
+    async (
+      page: { current: number; pageSize: number },
+      filters: SandboxFilters,
+    ) => {
+      try {
+        const res = await boatClient.listSandboxes();
+        let list = res.sandboxes;
+        const keyword = filters.q?.trim().toLowerCase();
+        if (keyword) {
+          list = list.filter((sandbox) => {
+            const templateName = templates
+              .find((item) => item.id === sandbox.templateId)
+              ?.name?.toLowerCase();
+            return (
+              sandbox.id.toLowerCase().includes(keyword) ||
+              (sandbox.image ?? "").toLowerCase().includes(keyword) ||
+              (templateName ?? "").includes(keyword)
+            );
+          });
+        }
+        const terms = (filters.tag ?? "")
+          .split(/[\s,]+/)
+          .map((term) => term.trim().toLowerCase())
+          .filter(Boolean);
+        if (terms.length > 0) {
+          list = list.filter((sandbox) =>
+            terms.every((term) =>
+              sandbox.tags.some((tag) => tag.toLowerCase().includes(term)),
+            ),
+          );
+        }
+        return paginate(list, page.current, page.pageSize);
+      } catch (err) {
+        message.error(err instanceof Error ? err.message : "加载失败");
+        return { list: [], total: 0 };
+      }
+    },
+    [message, templates],
+  );
 
   const templateNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -264,7 +331,7 @@ export default function SandboxesPage() {
     return map;
   }, [templates]);
 
-  const columns: ColumnsType<Sandbox> = useMemo(
+  const columns: ListPageColumnType<Sandbox, SandboxFilters>[] = useMemo(
     () => [
       {
         title: "名称",
@@ -331,14 +398,16 @@ export default function SandboxesPage() {
         dataIndex: "tags",
         key: "tags",
         width: 220,
-        render: (tags: string[]) =>
-          tags.length > 0 ? (
+        component: ({ record, ctx }) =>
+          record.tags.length > 0 ? (
             <Space size={4} wrap>
-              {tags.map((tag) => (
+              {record.tags.map((tag) => (
                 <Tag
                   key={tag}
                   style={{ marginInlineEnd: 0, cursor: "pointer" }}
-                  onClick={() => setTagQuery(tag)}
+                  onClick={() =>
+                    ctx.submitFilters({ ...ctx.filters, tag })
+                  }
                 >
                   {tag}
                 </Tag>
@@ -420,65 +489,42 @@ export default function SandboxesPage() {
 
   return (
     <>
-      <Flex
-        align="flex-start"
-        justify="space-between"
-        gap={16}
-        wrap
-        style={{ marginBottom: 24 }}
-      >
-        <div>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            沙箱
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            基于模板创建 · 状态每 5 秒刷新
-          </Typography.Text>
-        </div>
-        <Space wrap>
-          <Input
-            allowClear
-            placeholder="按标签检索"
-            value={tagQuery}
-            onChange={(e) => setTagQuery(e.target.value)}
-            style={{ width: 220 }}
-          />
+      <ListPage<Sandbox, SandboxFilters>
+        title={
+          <div>
+            <Typography.Title level={3} style={{ margin: 0 }}>
+              沙箱
+            </Typography.Title>
+            <Typography.Text type="secondary">
+              基于模板创建 · 状态每 5 秒刷新
+            </Typography.Text>
+          </div>
+        }
+        extra={
           <Button type="primary" onClick={() => void openCreate()}>
             新建沙箱
           </Button>
-        </Space>
-      </Flex>
-
-      <div className="boat-table-wrap">
-        <Table<Sandbox>
-          rowKey="id"
-          size="small"
-          loading={loading}
-          columns={columns}
-          dataSource={visibleSandboxes}
-          pagination={false}
-          showSorterTooltip={false}
-          scroll={{ x: 1280 }}
-          locale={{
-            emptyText:
-              sandboxes.length > 0 ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="没有匹配的标签"
-                />
-              ) : (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="还没有沙箱"
-                >
-                  <Button type="primary" onClick={() => void openCreate()}>
-                    新建沙箱
-                  </Button>
-                </Empty>
-              ),
-          }}
-        />
-      </div>
+        }
+        filter={{
+          items: [
+            { name: "q", label: "关键词", placeholder: "名称、镜像或模板" },
+            {
+              name: "tag",
+              label: "标签",
+              placeholder: "多个标签用空格分隔",
+            },
+          ],
+        }}
+        middle={
+          <>
+            <BindListRefresh onReady={bindRefresh} />
+            <AutoRefreshList intervalMs={5000} />
+          </>
+        }
+        table={{ render: () => <SandboxTable columns={columns} /> }}
+        request={request}
+        initialValues={{ pageSize: 20 }}
+      />
 
       <Modal
         title="新建沙箱"
@@ -660,7 +706,7 @@ export default function SandboxesPage() {
         sandboxId={viewId ?? ""}
         open={!!viewId}
         onClose={() => setViewId(null)}
-        onChanged={refresh}
+        onChanged={() => refreshRef.current()}
       />
 
       <SandboxLogsModal
@@ -704,12 +750,6 @@ export default function SandboxesPage() {
         />
       </Modal>
 
-      {templates.length === 0 && !loading ? (
-        <Typography.Paragraph type="secondary" style={{ marginTop: 16 }}>
-          还没有模板时无法创建沙箱，请先去{" "}
-          <Link href="/templates">模板</Link> 页面创建。
-        </Typography.Paragraph>
-      ) : null}
     </>
   );
 }

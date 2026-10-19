@@ -35,7 +35,7 @@ export default function LoginPage() {
       vertical
       align="center"
       justify="center"
-      style={{ minHeight: "100vh", background: "#fff", padding: 24 }}
+      style={{ flex: 1, minHeight: "100%", padding: 24 }}
     >
       <div style={{ width: "100%", maxWidth: 400 }}>
         <Brand large />

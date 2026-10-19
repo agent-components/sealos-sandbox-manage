@@ -1,11 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   App,
   Button,
-  Drawer,
-  Empty,
   Flex,
   Form,
   Input,
@@ -19,8 +17,10 @@ import {
   Tooltip,
   Typography,
 } from "antd";
-import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined } from "@ant-design/icons";
+import { ListPage, type ListPageColumnType } from "listpage-components/ListPage";
+import { ProDrawer } from "listpage-components/ProDrawer";
+import { BindListRefresh, listPagination, paginate } from "@/components/list-page";
 import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { boatClient } from "@/lib/client";
@@ -138,30 +138,46 @@ function toPayload(form: FormState) {
   };
 }
 
+type TemplateFilters = { q?: string };
+
 export default function TemplatesPage() {
   const { message, modal } = App.useApp();
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [loading, setLoading] = useState(true);
+  const refreshRef = useRef<() => void>(() => { });
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("basic");
   const [form, setForm] = useState<FormState>(emptyForm);
 
-  const refresh = useCallback(async () => {
-    try {
-      const res = await boatClient.listTemplates();
-      setTemplates(res.templates);
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "加载失败");
-    } finally {
-      setLoading(false);
-    }
-  }, [message]);
+  const bindRefresh = useCallback((refresh: () => void) => {
+    refreshRef.current = refresh;
+  }, []);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const request = useCallback(
+    async (
+      page: { current: number; pageSize: number },
+      filters: TemplateFilters,
+    ) => {
+      try {
+        const res = await boatClient.listTemplates();
+        let list = res.templates;
+        const keyword = filters.q?.trim().toLowerCase();
+        if (keyword) {
+          list = list.filter(
+            (tpl) =>
+              tpl.name.toLowerCase().includes(keyword) ||
+              tpl.id.toLowerCase().includes(keyword) ||
+              tpl.image.toLowerCase().includes(keyword),
+          );
+        }
+        return paginate(list, page.current, page.pageSize);
+      } catch (err) {
+        message.error(err instanceof Error ? err.message : "加载失败");
+        return { list: [], total: 0 };
+      }
+    },
+    [message],
+  );
 
   function openCreate() {
     setEditingId(null);
@@ -216,7 +232,7 @@ export default function TemplatesPage() {
         message.success("模板已创建");
       }
       setOpen(false);
-      await refresh();
+      refreshRef.current();
     } catch (err) {
       message.error(err instanceof Error ? err.message : "保存失败");
     } finally {
@@ -234,12 +250,12 @@ export default function TemplatesPage() {
       onOk: async () => {
         await boatClient.deleteTemplate(tpl.id);
         message.success("已删除");
-        await refresh();
+        refreshRef.current();
       },
     });
   }
 
-  const columns: ColumnsType<Template> = useMemo(
+  const columns: ListPageColumnType<Template, TemplateFilters>[] = useMemo(
     () => [
       {
         title: "ID",
@@ -345,62 +361,53 @@ export default function TemplatesPage() {
 
   return (
     <>
-      <Flex
-        align="flex-start"
-        justify="space-between"
-        gap={16}
-        wrap
-        style={{ marginBottom: 24 }}
-      >
-        <div>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            模板
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            对齐 Sealos 应用管理参数；沙箱必须基于模板创建
-          </Typography.Text>
-        </div>
-        <Button type="primary" onClick={openCreate}>
-          新建模板
-        </Button>
-      </Flex>
+      <ListPage<Template, TemplateFilters>
+        title={
+          <div>
+            <Typography.Title level={3} style={{ margin: 0 }}>
+              模板
+            </Typography.Title>
+            <Typography.Text type="secondary">
+              对齐 Sealos 应用管理参数；沙箱必须基于模板创建
+            </Typography.Text>
+          </div>
+        }
+        extra={
+          <Button type="primary" onClick={openCreate}>
+            新建模板
+          </Button>
+        }
+        filter={{
+          items: [
+            {
+              name: "q",
+              label: "关键词",
+              placeholder: "名称、ID 或镜像",
+            },
+          ],
+        }}
+        middle={<BindListRefresh onReady={bindRefresh} />}
+        table={{
+          rowKey: "id",
+          columns,
+          density: "compact",
+          title: "模板列表",
+          columnResize: { persistenceKey: "boat-templates-width" },
+          columnSetting: { persistenceKey: "boat-templates-columns" },
+          extra: (_ctx, columnSetting) => columnSetting?.trigger ?? null,
+          scroll: { x: 1070 },
+          pagination: listPagination,
+        }}
+        request={request}
+        initialValues={{ pageSize: 20 }}
+      />
 
-      <div className="boat-table-wrap">
-        <Table<Template>
-          rowKey="id"
-          size="small"
-          loading={loading}
-          columns={columns}
-          dataSource={templates}
-          pagination={false}
-          scroll={{ x: 1070 }}
-          locale={{
-            emptyText: (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="还没有模板"
-              >
-                <Button type="primary" onClick={openCreate}>
-                  新建模板
-                </Button>
-              </Empty>
-            ),
-          }}
-        />
-      </div>
-
-      <Drawer
-        className="template-drawer"
+      <ProDrawer
         title={editingId ? "编辑模板" : "新建模板"}
         open={open}
+        size={880}
         onClose={() => {
           if (!saving) setOpen(false);
-        }}
-        destroyOnHidden
-        width={880}
-        mask={{ closable: !saving }}
-        styles={{
-          body: { padding: "0 24px 24px 0" },
         }}
         extra={
           <Space>
@@ -413,561 +420,326 @@ export default function TemplatesPage() {
           </Space>
         }
       >
-        <Form
-          layout="horizontal"
-          disabled={saving}
-          labelCol={{ flex: "96px" }}
-          wrapperCol={{ flex: 1 }}
-          labelAlign="right"
-          colon={false}
-        >
-          <Tabs
-            className="template-drawer-tabs"
-            tabPosition="left"
-            activeKey={activeTab}
-            onChange={setActiveTab}
-            items={[
-              {
-                key: "basic",
-                label: "基本信息",
-                children: (
-                  <div
-                    className="template-drawer-panel"
-                    style={{ paddingTop: 24 }}
-                  >
-                    {editingId ? (
-                      <Form.Item label="模板 ID">
-                        <Input value={editingId} disabled />
-                      </Form.Item>
-                    ) : null}
-                    <Form.Item label="显示名称" required>
-                      <Input
-                        value={form.name}
-                        maxLength={64}
-                        placeholder="模板显示名"
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, name: e.target.value }))
-                        }
-                      />
-                    </Form.Item>
-                    <Form.Item label="描述">
-                      <Input.TextArea
-                        value={form.description}
-                        maxLength={200}
-                        rows={3}
-                        placeholder="可选"
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            description: e.target.value,
-                          }))
-                        }
-                      />
-                    </Form.Item>
-                  </div>
-                ),
-              },
-              {
-                key: "image",
-                label: "镜像",
-                children: (
-                  <div
-                    className="template-drawer-panel"
-                    style={{ paddingTop: 24 }}
-                  >
-                    <Form.Item label="镜像名" required>
-                      <Input
-                        value={form.image}
-                        maxLength={256}
-                        placeholder="nginx:alpine"
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, image: e.target.value }))
-                        }
-                      />
-                    </Form.Item>
-                    <Form.Item
-                      label="私有镜像"
-                      style={{ marginBottom: form.privateImage ? 20 : 0 }}
+        <div className="template-drawer">
+          <Form
+            layout="horizontal"
+            disabled={saving}
+            labelCol={{ flex: "96px" }}
+            wrapperCol={{ flex: 1 }}
+            labelAlign="right"
+            colon={false}
+          >
+            <Tabs
+              className="template-drawer-tabs"
+              tabPosition="left"
+              activeKey={activeTab}
+              onChange={setActiveTab}
+              items={[
+                {
+                  key: "basic",
+                  label: "基本信息",
+                  children: (
+                    <div
+                      className="template-drawer-panel"
+                      style={{ paddingTop: 24 }}
                     >
-                      <Switch
-                        checked={form.privateImage}
-                        onChange={(checked) =>
-                          setForm((f) => ({ ...f, privateImage: checked }))
-                        }
-                      />
-                    </Form.Item>
-                    {form.privateImage ? (
-                      <>
-                        <Form.Item label="仓库地址" required>
-                          <Input
-                            value={form.registryServer}
-                            placeholder="registry.example.com"
-                            onChange={(e) =>
-                              setForm((f) => ({
-                                ...f,
-                                registryServer: e.target.value,
-                              }))
-                            }
-                          />
+                      {editingId ? (
+                        <Form.Item label="模板 ID">
+                          <Input value={editingId} disabled />
                         </Form.Item>
-                        <Form.Item label="用户名" required>
-                          <Input
-                            value={form.registryUsername}
-                            onChange={(e) =>
-                              setForm((f) => ({
-                                ...f,
-                                registryUsername: e.target.value,
-                              }))
-                            }
-                          />
-                        </Form.Item>
-                        <Form.Item label="密码 / Token" required>
-                          <Input.Password
-                            value={form.registryPassword}
-                            onChange={(e) =>
-                              setForm((f) => ({
-                                ...f,
-                                registryPassword: e.target.value,
-                              }))
-                            }
-                          />
-                        </Form.Item>
-                      </>
-                    ) : null}
-                  </div>
-                ),
-              },
-              {
-                key: "command",
-                label: "运行命令",
-                children: (
-                  <div
-                    className="template-drawer-panel"
-                    style={{ paddingTop: 24 }}
-                  >
-                    <Form.Item label="Command">
-                      <Input
-                        value={form.command}
-                        placeholder="node（可留空）"
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, command: e.target.value }))
-                        }
-                      />
-                    </Form.Item>
-                    <Form.Item label="Args">
-                      <Input
-                        value={form.argsText}
-                        placeholder="server.js --port 3000"
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, argsText: e.target.value }))
-                        }
-                      />
-                    </Form.Item>
-                  </div>
-                ),
-              },
-              {
-                key: "resources",
-                label: "资源配额",
-                children: (
-                  <div
-                    className="template-drawer-panel"
-                    style={{ paddingTop: 24 }}
-                  >
-                    <Form.Item label="实例数">
-                      <InputNumber
-                        min={1}
-                        max={20}
-                        value={form.replicas}
-                        addonAfter="个"
-                        style={{ width: 140 }}
-                        onChange={(v) =>
-                          setForm((f) => ({
-                            ...f,
-                            replicas: Number(v) || 1,
-                          }))
-                        }
-                      />
-                    </Form.Item>
-                    <div style={{ marginTop: 8 }}>
-                      <ResourceConfig
-                        value={form.resources}
-                        onChange={(resources) =>
-                          setForm((f) => ({ ...f, resources }))
-                        }
-                        disabled={saving}
-                        showDisk={false}
-                      />
-                    </div>
-                    <div style={{ marginTop: 24 }}>
-                      <IdleShutdownConfig
-                        value={{
-                          autoShutdown: form.autoShutdown,
-                          idleMinutes: form.idleMinutes,
-                        }}
-                        onChange={(idle) =>
-                          setForm((f) => ({
-                            ...f,
-                            autoShutdown: idle.autoShutdown,
-                            idleMinutes: idle.idleMinutes,
-                          }))
-                        }
-                        disabled={saving}
-                      />
-                    </div>
-                  </div>
-                ),
-              },
-              {
-                key: "network",
-                label: "网络",
-                children: (
-                  <div
-                    className="template-drawer-panel is-wide"
-                    style={{ paddingTop: 24 }}
-                  >
-                    <Table
-                      className="template-drawer-edit-table"
-                      size="small"
-                      pagination={false}
-                      rowKey={(_, index) => `port-${index}`}
-                      dataSource={form.ports}
-                      columns={[
-                        {
-                          title: "端口号",
-                          dataIndex: "number",
-                          width: 120,
-                          render: (value, _, index) => (
-                            <InputNumber
-                              min={1}
-                              max={65535}
-                              value={value}
-                              style={{ width: "100%" }}
-                              onChange={(v) =>
-                                setForm((f) => {
-                                  const ports = [...f.ports];
-                                  ports[index] = {
-                                    ...ports[index]!,
-                                    number: Number(v) || 80,
-                                  };
-                                  return { ...f, ports };
-                                })
-                              }
-                            />
-                          ),
-                        },
-                        {
-                          title: "协议",
-                          dataIndex: "protocol",
-                          width: 130,
-                          render: (value, _, index) => (
-                            <Select
-                              style={{ width: "100%" }}
-                              value={value}
-                              options={[
-                                { value: "http", label: "HTTP" },
-                                { value: "grpc", label: "GRPC" },
-                                { value: "ws", label: "WS" },
-                                { value: "tcp", label: "TCP" },
-                                { value: "udp", label: "UDP" },
-                                { value: "sctp", label: "SCTP" },
-                              ]}
-                              onChange={(protocol) =>
-                                setForm((f) => {
-                                  const ports = [...f.ports];
-                                  ports[index] = {
-                                    ...ports[index]!,
-                                    protocol,
-                                  };
-                                  return { ...f, ports };
-                                })
-                              }
-                            />
-                          ),
-                        },
-                        {
-                          title: "公网访问",
-                          dataIndex: "isPublic",
-                          width: 100,
-                          align: "center",
-                          render: (value, _, index) => (
-                            <Switch
-                              size="small"
-                              checked={value}
-                              onChange={(checked) =>
-                                setForm((f) => {
-                                  const ports = [...f.ports];
-                                  ports[index] = {
-                                    ...ports[index]!,
-                                    isPublic: checked,
-                                  };
-                                  return { ...f, ports };
-                                })
-                              }
-                            />
-                          ),
-                        },
-                        {
-                          title: "",
-                          key: "action",
-                          width: 64,
-                          align: "right",
-                          render: (_, __, index) => (
-                            <Button
-                              type="link"
-                              danger
-                              size="small"
-                              disabled={form.ports.length <= 1}
-                              style={{ paddingInline: 0 }}
-                              onClick={() =>
-                                setForm((f) => ({
-                                  ...f,
-                                  ports: f.ports.filter((_, i) => i !== index),
-                                }))
-                              }
-                            >
-                              删除
-                            </Button>
-                          ),
-                        },
-                      ]}
-                    />
-                    <Button
-                      type="dashed"
-                      block
-                      icon={<PlusOutlined />}
-                      onClick={() =>
-                        setForm((f) => ({
-                          ...f,
-                          ports: [
-                            ...f.ports,
-                            { number: 80, protocol: "http", isPublic: true },
-                          ],
-                        }))
-                      }
-                    >
-                      添加端口
-                    </Button>
-                  </div>
-                ),
-              },
-              {
-                key: "storage",
-                label: "本地存储",
-                children: (
-                  <div
-                    className="template-drawer-panel is-wide"
-                    style={{ paddingTop: 24 }}
-                  >
-                    <Table
-                      className="template-drawer-edit-table"
-                      size="small"
-                      pagination={false}
-                      rowKey={(_, index) => `storage-${index}`}
-                      dataSource={form.storage}
-                      columns={[
-                        {
-                          title: "名称",
-                          dataIndex: "name",
-                          width: 140,
-                          render: (value, _, index) => (
-                            <Input
-                              value={value}
-                              onChange={(e) =>
-                                setForm((f) => {
-                                  const storage = [...f.storage];
-                                  storage[index] = {
-                                    ...storage[index]!,
-                                    name: e.target.value,
-                                  };
-                                  return { ...f, storage };
-                                })
-                              }
-                            />
-                          ),
-                        },
-                        {
-                          title: "挂载路径",
-                          dataIndex: "path",
-                          render: (value, _, index) => (
-                            <Input
-                              value={value}
-                              placeholder="/data"
-                              onChange={(e) =>
-                                setForm((f) => {
-                                  const storage = [...f.storage];
-                                  storage[index] = {
-                                    ...storage[index]!,
-                                    path: e.target.value,
-                                  };
-                                  return { ...f, storage };
-                                })
-                              }
-                            />
-                          ),
-                        },
-                        {
-                          title: "容量",
-                          dataIndex: "size",
-                          width: 140,
-                          render: (value, _, index) => (
-                            <InputNumber
-                              min={1}
-                              max={1000}
-                              step={1}
-                              value={parseSizeToGi(value)}
-                              addonAfter="Gi"
-                              style={{ width: "100%" }}
-                              onChange={(v) =>
-                                setForm((f) => {
-                                  const storage = [...f.storage];
-                                  storage[index] = {
-                                    ...storage[index]!,
-                                    size: formatSizeGi(Number(v) || 1),
-                                  };
-                                  return { ...f, storage };
-                                })
-                              }
-                            />
-                          ),
-                        },
-                        {
-                          title: "",
-                          key: "action",
-                          width: 64,
-                          align: "right",
-                          render: (_, __, index) => (
-                            <Button
-                              type="link"
-                              danger
-                              size="small"
-                              style={{ paddingInline: 0 }}
-                              onClick={() =>
-                                setForm((f) => ({
-                                  ...f,
-                                  storage: f.storage.filter(
-                                    (_, i) => i !== index,
-                                  ),
-                                }))
-                              }
-                            >
-                              删除
-                            </Button>
-                          ),
-                        },
-                      ]}
-                    />
-                    <Button
-                      type="dashed"
-                      block
-                      icon={<PlusOutlined />}
-                      onClick={() =>
-                        setForm((f) => ({
-                          ...f,
-                          storage: [
-                            ...f.storage,
-                            {
-                              name:
-                                f.storage.length === 0
-                                  ? "data"
-                                  : `data-${f.storage.length + 1}`,
-                              path:
-                                f.storage.length === 0
-                                  ? "/data"
-                                  : `/data${f.storage.length + 1}`,
-                              size: "1Gi",
-                            },
-                          ],
-                        }))
-                      }
-                    >
-                      添加存储
-                    </Button>
-                  </div>
-                ),
-              },
-              {
-                key: "configMap",
-                label: "ConfigMap",
-                children: (
-                  <div
-                    className="template-drawer-panel is-wide"
-                    style={{ paddingTop: 24 }}
-                  >
-                    <Space
-                      direction="vertical"
-                      size={12}
-                      style={{ width: "100%" }}
-                    >
-                      {form.configMap.map((item, index) => (
-                        <div
-                          key={index}
-                          style={{
-                            border: "1px solid #f0f0f0",
-                            borderRadius: 8,
-                            padding: 12,
-                          }}
-                        >
-                          <Flex
-                            align="center"
-                            justify="space-between"
-                            gap={12}
-                            style={{ marginBottom: 10 }}
-                          >
-                            <Input
-                              value={item.path}
-                              placeholder="挂载路径，如 /etc/nginx/nginx.conf"
-                              onChange={(e) =>
-                                setForm((f) => {
-                                  const configMap = [...f.configMap];
-                                  configMap[index] = {
-                                    ...configMap[index]!,
-                                    path: e.target.value,
-                                  };
-                                  return { ...f, configMap };
-                                })
-                              }
-                            />
-                            <Button
-                              type="link"
-                              danger
-                              size="small"
-                              style={{ paddingInline: 0, flexShrink: 0 }}
-                              onClick={() =>
-                                setForm((f) => ({
-                                  ...f,
-                                  configMap: f.configMap.filter(
-                                    (_, i) => i !== index,
-                                  ),
-                                }))
-                              }
-                            >
-                              删除
-                            </Button>
-                          </Flex>
-                          <Input.TextArea
-                            value={item.value}
-                            rows={6}
-                            placeholder="文件内容"
-                            style={{ fontFamily: "var(--font-mono)" }}
-                            onChange={(e) =>
-                              setForm((f) => {
-                                const configMap = [...f.configMap];
-                                configMap[index] = {
-                                  ...configMap[index]!,
-                                  value: e.target.value,
-                                };
-                                return { ...f, configMap };
-                              })
-                            }
-                          />
-                        </div>
-                      ))}
-                      {form.configMap.length === 0 ? (
-                        <Typography.Text type="secondary">
-                          暂无 ConfigMap
-                        </Typography.Text>
                       ) : null}
+                      <Form.Item label="显示名称" required>
+                        <Input
+                          value={form.name}
+                          maxLength={64}
+                          placeholder="模板显示名"
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, name: e.target.value }))
+                          }
+                        />
+                      </Form.Item>
+                      <Form.Item label="描述">
+                        <Input.TextArea
+                          value={form.description}
+                          maxLength={200}
+                          rows={3}
+                          placeholder="可选"
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              description: e.target.value,
+                            }))
+                          }
+                        />
+                      </Form.Item>
+                    </div>
+                  ),
+                },
+                {
+                  key: "image",
+                  label: "镜像",
+                  children: (
+                    <div
+                      className="template-drawer-panel"
+                      style={{ paddingTop: 24 }}
+                    >
+                      <Form.Item label="镜像名" required>
+                        <Input
+                          value={form.image}
+                          maxLength={256}
+                          placeholder="nginx:alpine"
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, image: e.target.value }))
+                          }
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        label="私有镜像"
+                        style={{ marginBottom: form.privateImage ? 20 : 0 }}
+                      >
+                        <Switch
+                          checked={form.privateImage}
+                          onChange={(checked) =>
+                            setForm((f) => ({ ...f, privateImage: checked }))
+                          }
+                        />
+                      </Form.Item>
+                      {form.privateImage ? (
+                        <>
+                          <Form.Item label="仓库地址" required>
+                            <Input
+                              value={form.registryServer}
+                              placeholder="registry.example.com"
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  registryServer: e.target.value,
+                                }))
+                              }
+                            />
+                          </Form.Item>
+                          <Form.Item label="用户名" required>
+                            <Input
+                              value={form.registryUsername}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  registryUsername: e.target.value,
+                                }))
+                              }
+                            />
+                          </Form.Item>
+                          <Form.Item label="密码 / Token" required>
+                            <Input.Password
+                              value={form.registryPassword}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  registryPassword: e.target.value,
+                                }))
+                              }
+                            />
+                          </Form.Item>
+                        </>
+                      ) : null}
+                    </div>
+                  ),
+                },
+                {
+                  key: "command",
+                  label: "运行命令",
+                  children: (
+                    <div
+                      className="template-drawer-panel"
+                      style={{ paddingTop: 24 }}
+                    >
+                      <Form.Item label="Command">
+                        <Input
+                          value={form.command}
+                          placeholder="node（可留空）"
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, command: e.target.value }))
+                          }
+                        />
+                      </Form.Item>
+                      <Form.Item label="Args">
+                        <Input
+                          value={form.argsText}
+                          placeholder="server.js --port 3000"
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, argsText: e.target.value }))
+                          }
+                        />
+                      </Form.Item>
+                    </div>
+                  ),
+                },
+                {
+                  key: "resources",
+                  label: "资源配额",
+                  children: (
+                    <div
+                      className="template-drawer-panel"
+                      style={{ paddingTop: 24 }}
+                    >
+                      <Form.Item label="实例数">
+                        <InputNumber
+                          min={1}
+                          max={20}
+                          value={form.replicas}
+                          addonAfter="个"
+                          style={{ width: 140 }}
+                          onChange={(v) =>
+                            setForm((f) => ({
+                              ...f,
+                              replicas: Number(v) || 1,
+                            }))
+                          }
+                        />
+                      </Form.Item>
+                      <div style={{ marginTop: 8 }}>
+                        <ResourceConfig
+                          value={form.resources}
+                          onChange={(resources) =>
+                            setForm((f) => ({ ...f, resources }))
+                          }
+                          disabled={saving}
+                          showDisk={false}
+                        />
+                      </div>
+                      <div style={{ marginTop: 24 }}>
+                        <IdleShutdownConfig
+                          value={{
+                            autoShutdown: form.autoShutdown,
+                            idleMinutes: form.idleMinutes,
+                          }}
+                          onChange={(idle) =>
+                            setForm((f) => ({
+                              ...f,
+                              autoShutdown: idle.autoShutdown,
+                              idleMinutes: idle.idleMinutes,
+                            }))
+                          }
+                          disabled={saving}
+                        />
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  key: "network",
+                  label: "网络",
+                  children: (
+                    <div
+                      className="template-drawer-panel is-wide"
+                      style={{ paddingTop: 24 }}
+                    >
+                      <Table
+                        className="template-drawer-edit-table"
+                        size="small"
+                        pagination={false}
+                        rowKey={(_, index) => `port-${index}`}
+                        dataSource={form.ports}
+                        columns={[
+                          {
+                            title: "端口号",
+                            dataIndex: "number",
+                            width: 120,
+                            render: (value, _, index) => (
+                              <InputNumber
+                                min={1}
+                                max={65535}
+                                value={value}
+                                style={{ width: "100%" }}
+                                onChange={(v) =>
+                                  setForm((f) => {
+                                    const ports = [...f.ports];
+                                    ports[index] = {
+                                      ...ports[index]!,
+                                      number: Number(v) || 80,
+                                    };
+                                    return { ...f, ports };
+                                  })
+                                }
+                              />
+                            ),
+                          },
+                          {
+                            title: "协议",
+                            dataIndex: "protocol",
+                            width: 130,
+                            render: (value, _, index) => (
+                              <Select
+                                style={{ width: "100%" }}
+                                value={value}
+                                options={[
+                                  { value: "http", label: "HTTP" },
+                                  { value: "grpc", label: "GRPC" },
+                                  { value: "ws", label: "WS" },
+                                  { value: "tcp", label: "TCP" },
+                                  { value: "udp", label: "UDP" },
+                                  { value: "sctp", label: "SCTP" },
+                                ]}
+                                onChange={(protocol) =>
+                                  setForm((f) => {
+                                    const ports = [...f.ports];
+                                    ports[index] = {
+                                      ...ports[index]!,
+                                      protocol,
+                                    };
+                                    return { ...f, ports };
+                                  })
+                                }
+                              />
+                            ),
+                          },
+                          {
+                            title: "公网访问",
+                            dataIndex: "isPublic",
+                            width: 100,
+                            align: "center",
+                            render: (value, _, index) => (
+                              <Switch
+                                size="small"
+                                checked={value}
+                                onChange={(checked) =>
+                                  setForm((f) => {
+                                    const ports = [...f.ports];
+                                    ports[index] = {
+                                      ...ports[index]!,
+                                      isPublic: checked,
+                                    };
+                                    return { ...f, ports };
+                                  })
+                                }
+                              />
+                            ),
+                          },
+                          {
+                            title: "",
+                            key: "action",
+                            width: 64,
+                            align: "right",
+                            render: (_, __, index) => (
+                              <Button
+                                type="link"
+                                danger
+                                size="small"
+                                disabled={form.ports.length <= 1}
+                                style={{ paddingInline: 0 }}
+                                onClick={() =>
+                                  setForm((f) => ({
+                                    ...f,
+                                    ports: f.ports.filter((_, i) => i !== index),
+                                  }))
+                                }
+                              >
+                                删除
+                              </Button>
+                            ),
+                          },
+                        ]}
+                      />
                       <Button
                         type="dashed"
                         block
@@ -975,120 +747,357 @@ export default function TemplatesPage() {
                         onClick={() =>
                           setForm((f) => ({
                             ...f,
-                            configMap: [
-                              ...f.configMap,
-                              { path: "", value: "" },
+                            ports: [
+                              ...f.ports,
+                              { number: 80, protocol: "http", isPublic: true },
                             ],
                           }))
                         }
                       >
-                        添加 ConfigMap
+                        添加端口
                       </Button>
-                    </Space>
-                  </div>
-                ),
-              },
-              {
-                key: "env",
-                label: "环境变量",
-                children: (
-                  <div
-                    className="template-drawer-panel is-wide"
-                    style={{ paddingTop: 24 }}
-                  >
-                    <Table
-                      className="template-drawer-edit-table"
-                      size="small"
-                      pagination={false}
-                      rowKey={(_, index) => `env-${index}`}
-                      dataSource={form.env}
-                      locale={{ emptyText: "暂无环境变量" }}
-                      columns={[
-                        {
-                          title: "变量名",
-                          dataIndex: "name",
-                          width: "36%",
-                          render: (value, _, index) => (
-                            <Input
-                              value={value}
-                              placeholder="KEY"
+                    </div>
+                  ),
+                },
+                {
+                  key: "storage",
+                  label: "本地存储",
+                  children: (
+                    <div
+                      className="template-drawer-panel is-wide"
+                      style={{ paddingTop: 24 }}
+                    >
+                      <Table
+                        className="template-drawer-edit-table"
+                        size="small"
+                        pagination={false}
+                        rowKey={(_, index) => `storage-${index}`}
+                        dataSource={form.storage}
+                        columns={[
+                          {
+                            title: "名称",
+                            dataIndex: "name",
+                            width: 140,
+                            render: (value, _, index) => (
+                              <Input
+                                value={value}
+                                onChange={(e) =>
+                                  setForm((f) => {
+                                    const storage = [...f.storage];
+                                    storage[index] = {
+                                      ...storage[index]!,
+                                      name: e.target.value,
+                                    };
+                                    return { ...f, storage };
+                                  })
+                                }
+                              />
+                            ),
+                          },
+                          {
+                            title: "挂载路径",
+                            dataIndex: "path",
+                            render: (value, _, index) => (
+                              <Input
+                                value={value}
+                                placeholder="/data"
+                                onChange={(e) =>
+                                  setForm((f) => {
+                                    const storage = [...f.storage];
+                                    storage[index] = {
+                                      ...storage[index]!,
+                                      path: e.target.value,
+                                    };
+                                    return { ...f, storage };
+                                  })
+                                }
+                              />
+                            ),
+                          },
+                          {
+                            title: "容量",
+                            dataIndex: "size",
+                            width: 140,
+                            render: (value, _, index) => (
+                              <InputNumber
+                                min={1}
+                                max={1000}
+                                step={1}
+                                value={parseSizeToGi(value)}
+                                addonAfter="Gi"
+                                style={{ width: "100%" }}
+                                onChange={(v) =>
+                                  setForm((f) => {
+                                    const storage = [...f.storage];
+                                    storage[index] = {
+                                      ...storage[index]!,
+                                      size: formatSizeGi(Number(v) || 1),
+                                    };
+                                    return { ...f, storage };
+                                  })
+                                }
+                              />
+                            ),
+                          },
+                          {
+                            title: "",
+                            key: "action",
+                            width: 64,
+                            align: "right",
+                            render: (_, __, index) => (
+                              <Button
+                                type="link"
+                                danger
+                                size="small"
+                                style={{ paddingInline: 0 }}
+                                onClick={() =>
+                                  setForm((f) => ({
+                                    ...f,
+                                    storage: f.storage.filter(
+                                      (_, i) => i !== index,
+                                    ),
+                                  }))
+                                }
+                              >
+                                删除
+                              </Button>
+                            ),
+                          },
+                        ]}
+                      />
+                      <Button
+                        type="dashed"
+                        block
+                        icon={<PlusOutlined />}
+                        onClick={() =>
+                          setForm((f) => ({
+                            ...f,
+                            storage: [
+                              ...f.storage,
+                              {
+                                name:
+                                  f.storage.length === 0
+                                    ? "data"
+                                    : `data-${f.storage.length + 1}`,
+                                path:
+                                  f.storage.length === 0
+                                    ? "/data"
+                                    : `/data${f.storage.length + 1}`,
+                                size: "1Gi",
+                              },
+                            ],
+                          }))
+                        }
+                      >
+                        添加存储
+                      </Button>
+                    </div>
+                  ),
+                },
+                {
+                  key: "configMap",
+                  label: "ConfigMap",
+                  children: (
+                    <div
+                      className="template-drawer-panel is-wide"
+                      style={{ paddingTop: 24 }}
+                    >
+                      <Space
+                        direction="vertical"
+                        size={12}
+                        style={{ width: "100%" }}
+                      >
+                        {form.configMap.map((item, index) => (
+                          <div
+                            key={index}
+                            style={{
+                              border: "1px solid #f0f0f0",
+                              borderRadius: 8,
+                              padding: 12,
+                            }}
+                          >
+                            <Flex
+                              align="center"
+                              justify="space-between"
+                              gap={12}
+                              style={{ marginBottom: 10 }}
+                            >
+                              <Input
+                                value={item.path}
+                                placeholder="挂载路径，如 /etc/nginx/nginx.conf"
+                                onChange={(e) =>
+                                  setForm((f) => {
+                                    const configMap = [...f.configMap];
+                                    configMap[index] = {
+                                      ...configMap[index]!,
+                                      path: e.target.value,
+                                    };
+                                    return { ...f, configMap };
+                                  })
+                                }
+                              />
+                              <Button
+                                type="link"
+                                danger
+                                size="small"
+                                style={{ paddingInline: 0, flexShrink: 0 }}
+                                onClick={() =>
+                                  setForm((f) => ({
+                                    ...f,
+                                    configMap: f.configMap.filter(
+                                      (_, i) => i !== index,
+                                    ),
+                                  }))
+                                }
+                              >
+                                删除
+                              </Button>
+                            </Flex>
+                            <Input.TextArea
+                              value={item.value}
+                              rows={6}
+                              placeholder="文件内容"
+                              style={{ fontFamily: "var(--font-mono)" }}
                               onChange={(e) =>
                                 setForm((f) => {
-                                  const env = [...f.env];
-                                  env[index] = {
-                                    ...env[index]!,
-                                    name: e.target.value,
-                                  };
-                                  return { ...f, env };
-                                })
-                              }
-                            />
-                          ),
-                        },
-                        {
-                          title: "值",
-                          dataIndex: "value",
-                          render: (value, _, index) => (
-                            <Input
-                              value={value}
-                              placeholder="VALUE"
-                              onChange={(e) =>
-                                setForm((f) => {
-                                  const env = [...f.env];
-                                  env[index] = {
-                                    ...env[index]!,
+                                  const configMap = [...f.configMap];
+                                  configMap[index] = {
+                                    ...configMap[index]!,
                                     value: e.target.value,
                                   };
-                                  return { ...f, env };
+                                  return { ...f, configMap };
                                 })
                               }
                             />
-                          ),
-                        },
-                        {
-                          title: "",
-                          key: "action",
-                          width: 64,
-                          align: "right",
-                          render: (_, __, index) => (
-                            <Button
-                              type="link"
-                              danger
-                              size="small"
-                              style={{ paddingInline: 0 }}
-                              onClick={() =>
-                                setForm((f) => ({
-                                  ...f,
-                                  env: f.env.filter((_, i) => i !== index),
-                                }))
-                              }
-                            >
-                              删除
-                            </Button>
-                          ),
-                        },
-                      ]}
-                    />
-                    <Button
-                      type="dashed"
-                      block
-                      icon={<PlusOutlined />}
-                      onClick={() =>
-                        setForm((f) => ({
-                          ...f,
-                          env: [...f.env, { name: "", value: "" }],
-                        }))
-                      }
+                          </div>
+                        ))}
+                        {form.configMap.length === 0 ? (
+                          <Typography.Text type="secondary">
+                            暂无 ConfigMap
+                          </Typography.Text>
+                        ) : null}
+                        <Button
+                          type="dashed"
+                          block
+                          icon={<PlusOutlined />}
+                          onClick={() =>
+                            setForm((f) => ({
+                              ...f,
+                              configMap: [
+                                ...f.configMap,
+                                { path: "", value: "" },
+                              ],
+                            }))
+                          }
+                        >
+                          添加 ConfigMap
+                        </Button>
+                      </Space>
+                    </div>
+                  ),
+                },
+                {
+                  key: "env",
+                  label: "环境变量",
+                  children: (
+                    <div
+                      className="template-drawer-panel is-wide"
+                      style={{ paddingTop: 24 }}
                     >
-                      添加环境变量
-                    </Button>
-                  </div>
-                ),
-              },
-            ]}
-          />
-        </Form>
-      </Drawer>
+                      <Table
+                        className="template-drawer-edit-table"
+                        size="small"
+                        pagination={false}
+                        rowKey={(_, index) => `env-${index}`}
+                        dataSource={form.env}
+                        locale={{ emptyText: "暂无环境变量" }}
+                        columns={[
+                          {
+                            title: "变量名",
+                            dataIndex: "name",
+                            width: "36%",
+                            render: (value, _, index) => (
+                              <Input
+                                value={value}
+                                placeholder="KEY"
+                                onChange={(e) =>
+                                  setForm((f) => {
+                                    const env = [...f.env];
+                                    env[index] = {
+                                      ...env[index]!,
+                                      name: e.target.value,
+                                    };
+                                    return { ...f, env };
+                                  })
+                                }
+                              />
+                            ),
+                          },
+                          {
+                            title: "值",
+                            dataIndex: "value",
+                            render: (value, _, index) => (
+                              <Input
+                                value={value}
+                                placeholder="VALUE"
+                                onChange={(e) =>
+                                  setForm((f) => {
+                                    const env = [...f.env];
+                                    env[index] = {
+                                      ...env[index]!,
+                                      value: e.target.value,
+                                    };
+                                    return { ...f, env };
+                                  })
+                                }
+                              />
+                            ),
+                          },
+                          {
+                            title: "",
+                            key: "action",
+                            width: 64,
+                            align: "right",
+                            render: (_, __, index) => (
+                              <Button
+                                type="link"
+                                danger
+                                size="small"
+                                style={{ paddingInline: 0 }}
+                                onClick={() =>
+                                  setForm((f) => ({
+                                    ...f,
+                                    env: f.env.filter((_, i) => i !== index),
+                                  }))
+                                }
+                              >
+                                删除
+                              </Button>
+                            ),
+                          },
+                        ]}
+                      />
+                      <Button
+                        type="dashed"
+                        block
+                        icon={<PlusOutlined />}
+                        onClick={() =>
+                          setForm((f) => ({
+                            ...f,
+                            env: [...f.env, { name: "", value: "" }],
+                          }))
+                        }
+                      >
+                        添加环境变量
+                      </Button>
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          </Form>
+        </div>
+      </ProDrawer>
     </>
   );
 }

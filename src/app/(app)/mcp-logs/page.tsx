@@ -6,24 +6,31 @@ import {
   App,
   Button,
   DatePicker,
-  Drawer,
-  Empty,
-  Flex,
   Select,
   Space,
-  Table,
   Tag,
   Typography,
 } from "antd";
-import type { ColumnsType } from "antd/es/table";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
+import {
+  ListPage,
+  type FilterItem,
+  type ListPageColumnType,
+} from "listpage-components/ListPage";
+import { ProDrawer } from "listpage-components/ProDrawer";
+import { listPagination, paginate } from "@/components/list-page";
 import { boatClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
 
 type McpLogRow = Awaited<
   ReturnType<typeof boatClient.listMcpLogs>
 >["logs"][number];
+
+type McpLogFilters = {
+  apiKeyId?: string;
+  range?: [Dayjs, Dayjs] | null;
+};
 
 function formatTime(value?: string | null) {
   if (!value) return "—";
@@ -57,11 +64,7 @@ function sandboxIdOf(args: Record<string, unknown> | undefined) {
 
 export default function McpLogsPage() {
   const { message } = App.useApp();
-  const [logs, setLogs] = useState<McpLogRow[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [apiKeyId, setApiKeyId] = useState<string | undefined>();
-  const [range, setRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detail, setDetail] = useState<Awaited<
@@ -75,26 +78,27 @@ export default function McpLogsPage() {
       .catch(() => undefined);
   }, []);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await boatClient.listMcpLogs({
-        limit: 100,
-        ...(apiKeyId ? { apiKeyId } : {}),
-        ...(range?.[0] ? { from: range[0].toISOString() } : {}),
-        ...(range?.[1] ? { to: range[1].toISOString() } : {}),
-      });
-      setLogs(res.logs);
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "加载失败");
-    } finally {
-      setLoading(false);
-    }
-  }, [apiKeyId, message, range]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const request = useCallback(
+    async (
+      page: { current: number; pageSize: number },
+      filters: McpLogFilters,
+    ) => {
+      try {
+        const range = filters.range;
+        const res = await boatClient.listMcpLogs({
+          limit: 100,
+          ...(filters.apiKeyId ? { apiKeyId: filters.apiKeyId } : {}),
+          ...(range?.[0] ? { from: range[0].toISOString() } : {}),
+          ...(range?.[1] ? { to: range[1].toISOString() } : {}),
+        });
+        return paginate(res.logs, page.current, page.pageSize);
+      } catch (err) {
+        message.error(err instanceof Error ? err.message : "加载失败");
+        return { list: [], total: 0 };
+      }
+    },
+    [message],
+  );
 
   useEffect(() => {
     if (!viewId) {
@@ -123,7 +127,7 @@ export default function McpLogsPage() {
     };
   }, [message, viewId]);
 
-  const columns: ColumnsType<McpLogRow> = useMemo(
+  const columns: ListPageColumnType<McpLogRow, McpLogFilters>[] = useMemo(
     () => [
       {
         title: "开始时间",
@@ -219,94 +223,93 @@ export default function McpLogsPage() {
     [],
   );
 
-  const hasFilter = !!apiKeyId || !!(range?.[0] || range?.[1]);
+  const filterItems = useMemo<FilterItem<McpLogFilters>[]>(
+    () => [
+      {
+        name: "apiKeyId",
+        label: "API Key",
+        colSpan: 3,
+        component: (
+          <Select
+            allowClear
+            placeholder="全部 API Key"
+            options={[
+              { value: "session", label: "会话登录" },
+              ...apiKeys.map((key) => ({
+                value: key.id,
+                label: key.name,
+              })),
+            ]}
+          />
+        ),
+      },
+      {
+        name: "range",
+        label: "开始时间",
+        colSpan: 4 as const,
+        component: (
+          <DatePicker.RangePicker
+            showTime
+            style={{ width: "100%" }}
+            placeholder={["开始时间起", "开始时间止"]}
+            presets={[
+              {
+                label: "近 1 小时",
+                value: [dayjs().subtract(1, "hour"), dayjs()],
+              },
+              {
+                label: "近 24 小时",
+                value: [dayjs().subtract(24, "hour"), dayjs()],
+              },
+              {
+                label: "近 7 天",
+                value: [dayjs().subtract(7, "day"), dayjs()],
+              },
+            ]}
+          />
+        ),
+      },
+    ],
+    [apiKeys],
+  );
 
   return (
-    <div>
-      <Flex align="center" justify="space-between" style={{ marginBottom: 16 }}>
-        <div>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            调用日志
-          </Typography.Title>
-          <Typography.Paragraph type="secondary" style={{ margin: "6px 0 0" }}>
-            只记录 runSandboxCommand（MCP 与 REST）；命令结果存在对象存储
-          </Typography.Paragraph>
-        </div>
-        <Button onClick={() => void refresh()} loading={loading}>
-          刷新
-        </Button>
-      </Flex>
-
-      <Flex gap={12} wrap="wrap" style={{ marginBottom: 16 }}>
-        <Select
-          allowClear
-          placeholder="全部 API Key"
-          value={apiKeyId}
-          style={{ width: 220 }}
-          options={[
-            { value: "session", label: "会话登录" },
-            ...apiKeys.map((key) => ({
-              value: key.id,
-              label: key.name,
-            })),
-          ]}
-          onChange={(value) => setApiKeyId(value)}
-        />
-        <DatePicker.RangePicker
-          showTime
-          value={range}
-          style={{ width: 380 }}
-          placeholder={["开始时间起", "开始时间止"]}
-          onChange={(value) => setRange(value)}
-          presets={[
-            {
-              label: "近 1 小时",
-              value: [dayjs().subtract(1, "hour"), dayjs()],
-            },
-            {
-              label: "近 24 小时",
-              value: [dayjs().subtract(24, "hour"), dayjs()],
-            },
-            {
-              label: "近 7 天",
-              value: [dayjs().subtract(7, "day"), dayjs()],
-            },
-          ]}
-        />
-        {hasFilter ? (
-          <Button
-            onClick={() => {
-              setApiKeyId(undefined);
-              setRange(null);
-            }}
-          >
-            清除筛选
-          </Button>
-        ) : null}
-      </Flex>
-
-      <Table
-        rowKey="id"
-        loading={loading}
-        columns={columns}
-        dataSource={logs}
-        pagination={{ pageSize: 20, showSizeChanger: false }}
-        locale={{
-          emptyText: (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={hasFilter ? "没有符合条件的日志" : "还没有命令日志"}
-            />
-          ),
+    <>
+      <ListPage<McpLogRow, McpLogFilters>
+        title={
+          <div>
+            <Typography.Title level={3} style={{ margin: 0 }}>
+              调用日志
+            </Typography.Title>
+            <Typography.Text type="secondary">
+              只记录 runSandboxCommand（MCP 与 REST）；命令结果存在对象存储
+            </Typography.Text>
+          </div>
+        }
+        extra={(ctx) => (
+          <Button onClick={() => ctx.refreshTable()}>刷新</Button>
+        )}
+        filter={{ items: filterItems }}
+        table={{
+          rowKey: "id",
+          columns,
+          density: "compact",
+          title: "日志",
+          columnResize: { persistenceKey: "boat-mcp-logs-width" },
+          columnSetting: { persistenceKey: "boat-mcp-logs-columns" },
+          extra: (_ctx, columnSetting) => columnSetting?.trigger ?? null,
+          scroll: { x: 1100 },
+          pagination: listPagination,
         }}
+        request={request}
+        initialValues={{ pageSize: 20 }}
       />
 
-      <Drawer
-        title={detail?.log.tool ?? "调用详情"}
+      <ProDrawer
         open={!!viewId}
+        size="medium"
+        title={detail?.log.tool ?? "调用详情"}
         onClose={() => setViewId(null)}
-        width={720}
-        destroyOnHidden
       >
         {detailLoading || !detail ? (
           <Typography.Text type="secondary">加载中…</Typography.Text>
@@ -314,20 +317,7 @@ export default function McpLogsPage() {
           <Space direction="vertical" size={20} style={{ width: "100%" }}>
             <div>
               <Typography.Text type="secondary">参数</Typography.Text>
-              <pre
-                style={{
-                  margin: "8px 0 0",
-                  padding: 12,
-                  background: "#fafafa",
-                  border: "1px solid #f0f0f0",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  overflow: "auto",
-                  maxHeight: 240,
-                }}
-              >
-                {prettyJson(detail.log.arguments)}
-              </pre>
+              <pre className="boat-json-block">{prettyJson(detail.log.arguments)}</pre>
             </div>
             <div>
               <Typography.Text type="secondary">结果</Typography.Text>
@@ -343,25 +333,12 @@ export default function McpLogsPage() {
                   无结果
                 </Typography.Paragraph>
               ) : (
-                <pre
-                  style={{
-                    margin: "8px 0 0",
-                    padding: 12,
-                    background: "#fafafa",
-                    border: "1px solid #f0f0f0",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    overflow: "auto",
-                    maxHeight: 360,
-                  }}
-                >
-                  {prettyJson(detail.result)}
-                </pre>
+                <pre className="boat-json-block">{prettyJson(detail.result)}</pre>
               )}
             </div>
           </Space>
         )}
-      </Drawer>
-    </div>
+      </ProDrawer>
+    </>
   );
 }

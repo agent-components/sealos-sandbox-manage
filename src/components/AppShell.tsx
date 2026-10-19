@@ -1,17 +1,62 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Button, Flex, Menu, Typography } from "antd";
-import { Brand } from "@/components/Brand";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import {
+  CloudServerOutlined,
+  FileSearchOutlined,
+  KeyOutlined,
+  AppstoreOutlined,
+} from "@ant-design/icons";
+import { Layout, useLayoutTabs } from "listpage-components/Layout";
+import { useBoatTheme } from "@/components/AntdProvider";
 import { boatClient, type BoatUser } from "@/lib/client";
+
+const ROUTES = [
+  {
+    key: "sandboxes",
+    path: "/sandboxes",
+    label: "沙箱",
+    icon: <CloudServerOutlined />,
+    pinned: true,
+  },
+  {
+    key: "templates",
+    path: "/templates",
+    label: "模板",
+    icon: <AppstoreOutlined />,
+  },
+  {
+    key: "mcp-logs",
+    path: "/mcp-logs",
+    label: "调用日志",
+    icon: <FileSearchOutlined />,
+  },
+  {
+    key: "apikeys",
+    path: "/apikeys",
+    label: "API Key",
+    icon: <KeyOutlined />,
+  },
+];
+
+function tabPathOf(pathname: string) {
+  return ROUTES.find((route) => pathname.startsWith(route.path))?.path ?? pathname;
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const theme = useBoatTheme();
   const [user, setUser] = useState<BoatUser | null>(null);
-  const [ready, setReady] = useState(false);
+  const tabPath = tabPathOf(pathname);
+
+  const { tabs, activeKey, activateTab, closeTab, reorderTabs } = useLayoutTabs({
+    routes: ROUTES,
+    pathname: tabPath,
+    navigate: (path) => router.push(path),
+    homepageKey: "sandboxes",
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -24,7 +69,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           return;
         }
         setUser(res.user);
-        setReady(true);
       })
       .catch(() => {
         if (!cancelled) router.replace("/login");
@@ -39,100 +83,75 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }
 
-  if (!ready) {
-    return (
-      <Flex
-        align="center"
-        justify="center"
-        style={{ minHeight: "100vh", background: "#fff" }}
-      >
-        <Typography.Text type="secondary">正在进入控制台…</Typography.Text>
-      </Flex>
-    );
-  }
+  const menuSections = useMemo(
+    () => [
+      {
+        key: "main",
+        items: ROUTES.map((route) => ({
+          key: route.key,
+          label: route.label,
+          icon: route.icon,
+        })),
+      },
+    ],
+    [],
+  );
+
+  const selectedKey =
+    ROUTES.find((route) => route.path === tabPath)?.key ?? "sandboxes";
 
   return (
-    <div style={{ minHeight: "100vh", background: "#fff" }}>
-      <div
-        style={{
-          borderBottom: "1px solid #f0f0f0",
-          background: "#fff",
-          position: "sticky",
-          top: 0,
-          zIndex: 50,
-        }}
-      >
-        <Flex
-          align="center"
-          justify="space-between"
-          style={{
-            maxWidth: 1024,
-            margin: "0 auto",
-            padding: "0 24px",
-            height: 56,
-          }}
-        >
-          <Flex align="center" gap={24}>
-            <Link href="/sandboxes">
-              <Brand />
-            </Link>
-            <Menu
-              mode="horizontal"
-              selectedKeys={
-                pathname.startsWith("/apikeys")
-                  ? ["apikeys"]
-                  : pathname.startsWith("/mcp-logs")
-                    ? ["mcp-logs"]
-                    : pathname.startsWith("/templates")
-                      ? ["templates"]
-                      : pathname.startsWith("/sandboxes")
-                        ? ["sandboxes"]
-                        : []
-              }
-              items={[
-                {
-                  key: "sandboxes",
-                  label: <Link href="/sandboxes">沙箱</Link>,
-                },
-                {
-                  key: "templates",
-                  label: <Link href="/templates">模板</Link>,
-                },
-                {
-                  key: "mcp-logs",
-                  label: <Link href="/mcp-logs">调用日志</Link>,
-                },
-                {
-                  key: "apikeys",
-                  label: <Link href="/apikeys">API Key</Link>,
-                },
-              ]}
-              style={{
-                border: "none",
-                background: "transparent",
-                minWidth: 360,
-                lineHeight: "54px",
-              }}
-            />
-          </Flex>
-          <Flex align="center" gap={12}>
-            <Typography.Text type="secondary">{user?.username}</Typography.Text>
-            <Button size="small" onClick={logout}>
-              退出
-            </Button>
-          </Flex>
-        </Flex>
-      </div>
-      <div
-        style={{
-          maxWidth: 1024,
-          margin: "0 auto",
-          padding: "24px",
-          background: "#fff",
-        }}
+    <Layout
+      title="boat"
+      logo={<span className="boat-logo">b</span>}
+      height="fill"
+      contentPadding={24}
+      menuVariant="inline"
+      sidebarTheme={theme.sidebarTheme}
+      menuSections={menuSections}
+      selectedMenuKey={selectedKey}
+      onMenuChange={(key) => {
+        const route = ROUTES.find((item) => item.key === key);
+        if (route) router.push(route.path);
+      }}
+      userProfile={
+        user
+          ? {
+            name: user.username,
+            items: [theme.themeUserProfileItem],
+            logout: {
+              key: "logout",
+              label: "退出",
+              onClick: () => {
+                void logout();
+              },
+            },
+          }
+          : undefined
+      }
+      tabs={{
+        items: tabs.map((tab) => ({
+          key: tab.key,
+          label: tab.label,
+          icon: tab.icon,
+          closable: tab.key !== "sandboxes",
+          pinned: tab.key === "sandboxes",
+        })),
+        activeKey,
+        onChange: activateTab,
+        onClose: closeTab,
+        onReorder: reorderTabs,
+      }}
+    >
+      <Suspense
+        fallback={
+          <div style={{ color: "var(--ant-color-text-secondary)", fontSize: 14 }}>
+            加载中…
+          </div>
+        }
       >
         {children}
-      </div>
-    </div>
+      </Suspense>
+    </Layout>
   );
 }

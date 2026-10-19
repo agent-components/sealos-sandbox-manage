@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  transpilePackages: ["listpage-components"],
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

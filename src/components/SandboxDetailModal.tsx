@@ -5,13 +5,13 @@ import {
   Alert,
   Button,
   Descriptions,
-  Drawer,
   Flex,
   Select,
   Skeleton,
   Space,
   Typography,
 } from "antd";
+import { ProDrawer } from "listpage-components/ProDrawer";
 import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { StateBadge } from "@/components/StateBadge";
@@ -141,17 +141,12 @@ export function SandboxDetailModal({
   const dirty = resourceDirty || tagsDirty || idleDirty;
 
   return (
-    <Drawer
+    <ProDrawer
       title={sandboxId}
       open={open}
+      size={720}
       onClose={() => {
         if (busy === null) onClose();
-      }}
-      destroyOnHidden
-      width={720}
-      mask={{ closable: busy === null }}
-      styles={{
-        body: { paddingBottom: 24 },
       }}
       extra={
         <Space>
@@ -325,6 +320,6 @@ export function SandboxDetailModal({
           </div>
         </Space>
       )}
-    </Drawer>
+    </ProDrawer>
   );
 }
