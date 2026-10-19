@@ -25,12 +25,33 @@ export type UpdateSandboxBody = Partial<ResourceSpec> & {
   idleMinutes?: number;
 };
 
-export type ListSandboxesQuery = {
+export type PageResult<T> = {
+  list: T[];
+  total: number;
+};
+
+export type PageQuery = {
+  /** 页码，从 1 开始 */
+  current?: number;
+  /** 每页条数。省略时接口返回全部匹配结果（调用日志除外） */
+  pageSize?: number;
+};
+
+export type ListSandboxesQuery = PageQuery & {
   /** 精确标签，需同时包含 */
   tag?: string[];
   /** 标签关键词，空格或逗号分隔，每个词都要能在某个标签中找到 */
   q?: string;
+  /** 匹配沙箱 ID、镜像或模板名称 */
+  keyword?: string;
+  state?: Sandbox["state"];
+  templateId?: string;
 };
+
+function appendPage(q: URLSearchParams, query?: PageQuery) {
+  if (query?.current) q.set("current", String(query.current));
+  if (query?.pageSize) q.set("pageSize", String(query.pageSize));
+}
 
 export type CreateTemplateBody = Omit<
   Template,
@@ -71,8 +92,12 @@ export const sandboxClient = {
     const q = new URLSearchParams();
     for (const tag of query?.tag ?? []) q.append("tag", tag);
     if (query?.q?.trim()) q.set("q", query.q.trim());
+    if (query?.keyword?.trim()) q.set("keyword", query.keyword.trim());
+    if (query?.state) q.set("state", query.state);
+    if (query?.templateId) q.set("templateId", query.templateId);
+    appendPage(q, query);
     const qs = q.toString();
-    return request<{ sandboxes: Sandbox[] }>(
+    return request<PageResult<Sandbox>>(
       `/api/v1/sandboxes${qs ? `?${qs}` : ""}`,
     );
   },
@@ -127,8 +152,15 @@ export const sandboxClient = {
     );
   },
 
-  listTemplates: () =>
-    request<{ templates: Template[] }>("/api/v1/templates"),
+  listTemplates: (query?: PageQuery & { q?: string }) => {
+    const q = new URLSearchParams();
+    if (query?.q?.trim()) q.set("q", query.q.trim());
+    appendPage(q, query);
+    const qs = q.toString();
+    return request<PageResult<Template>>(
+      `/api/v1/templates${qs ? `?${qs}` : ""}`,
+    );
+  },
   createTemplate: (body: CreateTemplateBody) =>
     request<{ template: Template }>("/api/v1/templates", {
       method: "POST",
@@ -144,27 +176,21 @@ export const sandboxClient = {
       method: "DELETE",
     }),
 
-  listMcpLogs: (query?: {
+  listMcpLogs: (query?: PageQuery & {
     tool?: string;
-    page?: number;
-    pageSize?: number;
     apiKeyId?: string;
     from?: string;
     to?: string;
   }) => {
     const q = new URLSearchParams();
     if (query?.tool) q.set("tool", query.tool);
-    if (query?.page) q.set("page", String(query.page));
-    if (query?.pageSize) q.set("pageSize", String(query.pageSize));
+    appendPage(q, query);
     if (query?.apiKeyId) q.set("apiKeyId", query.apiKeyId);
     if (query?.from) q.set("from", query.from);
     if (query?.to) q.set("to", query.to);
     const qs = q.toString();
-    return request<{
-      total: number;
-      page: number;
-      pageSize: number;
-      logs: {
+    return request<
+      PageResult<{
         id: string;
         username?: string;
         apiKeyId?: string | null;
@@ -182,8 +208,8 @@ export const sandboxClient = {
         completedAt: string;
         durationMs: number;
         createdAt: string;
-      }[];
-    }>(`/api/v1/mcp-logs${qs ? `?${qs}` : ""}`);
+      }>
+    >(`/api/v1/mcp-logs${qs ? `?${qs}` : ""}`);
   },
   getMcpLog: (id: string) =>
     request<{
@@ -210,7 +236,15 @@ export const sandboxClient = {
       resultLoadError: string | null;
     }>(`/api/v1/mcp-logs/${encodeURIComponent(id)}`),
 
-  listApiKeys: () => request<{ apiKeys: ApiKey[] }>("/api/v1/apikeys"),
+  listApiKeys: (query?: PageQuery & { q?: string }) => {
+    const q = new URLSearchParams();
+    if (query?.q?.trim()) q.set("q", query.q.trim());
+    appendPage(q, query);
+    const qs = q.toString();
+    return request<PageResult<ApiKey>>(
+      `/api/v1/apikeys${qs ? `?${qs}` : ""}`,
+    );
+  },
   createApiKey: (body: { name: string; sandboxIds?: string[] }) =>
     request<{ apiKey: ApiKey }>("/api/v1/apikeys", {
       method: "POST",

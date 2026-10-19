@@ -74,14 +74,14 @@ export function CreateSandboxModal({
       .listTemplates()
       .then((res) => {
         if (cancelled) return;
-        if (res.templates.length === 0) {
+        if (res.list.length === 0) {
           message.warning("请先创建模板，再创建沙箱");
           onClose();
           router.push("/templates");
           return;
         }
-        setTemplates(res.templates);
-        applyTemplate(res.templates[0]!);
+        setTemplates(res.list);
+        applyTemplate(res.list[0]!);
       })
       .catch((err: unknown) => {
         if (cancelled) return;

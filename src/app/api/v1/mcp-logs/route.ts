@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireSessionUser } from "@/lib/auth/resolve";
+import { parsePageQuery } from "@/lib/api/page";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { listMcpLogs } from "@/lib/mcp/logs";
 
@@ -18,13 +19,7 @@ export async function GET(req: NextRequest) {
     const apiKeyId = params.get("apiKeyId")?.trim() || undefined;
     const from = parseTime(params.get("from"));
     const to = parseTime(params.get("to"));
-    const pageRaw = Number(params.get("page") ?? "1");
-    const page = Number.isFinite(pageRaw) ? pageRaw : 1;
-    const pageSizeParam = params.get("pageSize");
-    const limitParam = params.get("limit");
-    const sized = pageSizeParam != null || limitParam != null;
-    const sizeRaw = Number(pageSizeParam ?? limitParam ?? (sized ? "20" : "100"));
-    const pageSize = Number.isFinite(sizeRaw) ? sizeRaw : sized ? 20 : 100;
+    const page = parsePageQuery(params, { defaultPageSize: 100 });
 
     if (params.get("from") && !from) {
       return jsonOk({ error: "from 时间格式无效" }, { status: 400 });
@@ -37,8 +32,8 @@ export async function GET(req: NextRequest) {
     }
 
     const result = await listMcpLogs(user.username, {
-      page,
-      pageSize,
+      page: page.current,
+      pageSize: page.pageSize ?? 100,
       tool,
       apiKeyId,
       from,

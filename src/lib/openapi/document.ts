@@ -205,17 +205,51 @@ export function openApiDocument() {
               description: "标签关键词，空格或逗号分隔，每个词都要能在某个标签中找到",
               schema: { type: "string" },
             },
+            {
+              name: "keyword",
+              in: "query",
+              description: "匹配沙箱 ID、镜像或模板名称，不区分大小写",
+              schema: { type: "string" },
+            },
+            {
+              name: "state",
+              in: "query",
+              description: "按状态筛选",
+              schema: {
+                type: "string",
+                enum: ["starting", "running", "stopped", "error"],
+              },
+            },
+            {
+              name: "templateId",
+              in: "query",
+              description: "按模板 ID 精确筛选",
+              schema: { type: "string" },
+            },
+            {
+              name: "current",
+              in: "query",
+              description: "页码，从 1 开始。也接受别名 page。未传 pageSize 时忽略，返回全部",
+              schema: { type: "integer", minimum: 1, default: 1 },
+            },
+            {
+              name: "pageSize",
+              in: "query",
+              description: "每页条数，最大 100。也接受别名 limit。省略时返回全部匹配结果",
+              schema: { type: "integer", minimum: 1, maximum: 100 },
+            },
           ],
           responses: {
             "200": {
-              description: "当前用户的沙箱列表",
+              description: "当前用户的沙箱列表。list 为当前页，total 为符合筛选条件的总数",
               content: {
                 "application/json": {
                   schema: {
                     type: "object",
-                    required: ["sandboxes"],
+                    required: ["list", "total"],
                     properties: {
-                      sandboxes: { type: "array", items: sandboxSchema },
+                      list: { type: "array", items: sandboxSchema },
+                      total: { type: "integer", minimum: 0 },
                     },
                   },
                 },

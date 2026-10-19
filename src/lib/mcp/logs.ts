@@ -83,9 +83,9 @@ function logFilter(username: string, opts?: ListMcpLogsOpts) {
 export async function listMcpLogs(
   username: string,
   opts?: ListMcpLogsOpts,
-): Promise<{ logs: McpCallLogView[]; total: number; page: number; pageSize: number }> {
+): Promise<{ list: McpCallLogView[]; total: number }> {
   if (opts?.tool && opts.tool !== AUDITED_TOOL) {
-    return { logs: [], total: 0, page: 1, pageSize: opts?.pageSize ?? opts?.limit ?? 20 };
+    return { list: [], total: 0 };
   }
 
   const pageSize = Math.min(
@@ -110,10 +110,8 @@ export async function listMcpLogs(
     [...filter.params, pageSize, (page - 1) * pageSize],
   );
   return {
-    logs: listed.rows.map(toView),
+    list: listed.rows.map(toView),
     total: Number(count.rows[0]?.count ?? 0),
-    page,
-    pageSize,
   };
 }
 

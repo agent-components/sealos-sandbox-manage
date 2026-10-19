@@ -7,7 +7,7 @@ import {
   useListPageContext,
   type FloatComponentProps,
 } from "listpage-components/ListPage";
-import { listPagination, paginate } from "@/components/list-page";
+import { listPagination } from "@/components/list-page";
 import { sandboxClient } from "@/lib/client";
 import type { Template } from "@/lib/template/schema";
 import { templateColumns, type TemplateFilters } from "./columns";
@@ -37,18 +37,12 @@ export default function TemplatesPage() {
       filters: TemplateFilters,
     ) => {
       try {
-        const res = await sandboxClient.listTemplates();
-        let list = res.templates;
-        const keyword = filters.q?.trim().toLowerCase();
-        if (keyword) {
-          list = list.filter(
-            (tpl) =>
-              tpl.name.toLowerCase().includes(keyword) ||
-              tpl.id.toLowerCase().includes(keyword) ||
-              tpl.image.toLowerCase().includes(keyword),
-          );
-        }
-        return paginate(list, page.current, page.pageSize);
+        const res = await sandboxClient.listTemplates({
+          current: page.current,
+          pageSize: page.pageSize,
+          ...(filters.q?.trim() ? { q: filters.q.trim() } : {}),
+        });
+        return { list: res.list, total: res.total };
       } catch (err) {
         message.error(err instanceof Error ? err.message : "加载失败");
         return { list: [], total: 0 };

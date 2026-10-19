@@ -7,7 +7,7 @@ import {
   useListPageContext,
   type FloatComponentProps,
 } from "listpage-components/ListPage";
-import { listPagination, paginate } from "@/components/list-page";
+import { listPagination } from "@/components/list-page";
 import { sandboxClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
 import { apiKeyColumns, type ApiKeyFilters } from "./columns";
@@ -37,17 +37,12 @@ export default function ApiKeysPage() {
       filters: ApiKeyFilters,
     ) => {
       try {
-        const res = await sandboxClient.listApiKeys();
-        let list = res.apiKeys;
-        const keyword = filters.q?.trim().toLowerCase();
-        if (keyword) {
-          list = list.filter(
-            (item) =>
-              item.name.toLowerCase().includes(keyword) ||
-              item.key.toLowerCase().includes(keyword),
-          );
-        }
-        return paginate(list, page.current, page.pageSize);
+        const res = await sandboxClient.listApiKeys({
+          current: page.current,
+          pageSize: page.pageSize,
+          ...(filters.q?.trim() ? { q: filters.q.trim() } : {}),
+        });
+        return { list: res.list, total: res.total };
       } catch (err) {
         message.error(err instanceof Error ? err.message : "加载失败");
         return { list: [], total: 0 };

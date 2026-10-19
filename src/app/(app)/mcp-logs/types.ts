@@ -3,7 +3,7 @@ import { sandboxClient } from "@/lib/client";
 
 export type McpLogRow = Awaited<
   ReturnType<typeof sandboxClient.listMcpLogs>
->["logs"][number];
+>["list"][number];
 
 export type McpLogFilters = {
   apiKeyId?: string;

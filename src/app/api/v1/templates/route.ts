@@ -1,19 +1,27 @@
 import { NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth/resolve";
+import { parsePageQuery } from "@/lib/api/page";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { createTemplateId } from "@/lib/template/id";
 import { CreateTemplateSchema } from "@/lib/template/schema";
 import {
   createTemplate,
   getTemplate,
-  listTemplates,
+  listTemplatesPage,
 } from "@/lib/template/store";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await requireUser();
-    const templates = await listTemplates();
-    return jsonOk({ templates });
+    const page = parsePageQuery(req.nextUrl.searchParams);
+    const q = req.nextUrl.searchParams.get("q")?.trim() || undefined;
+    return jsonOk(
+      await listTemplatesPage({
+        q,
+        current: page.current,
+        pageSize: page.pageSize,
+      }),
+    );
   } catch (error) {
     return jsonError(error);
   }

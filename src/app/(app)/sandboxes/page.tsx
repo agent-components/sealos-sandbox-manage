@@ -8,7 +8,7 @@ import {
   useListPageContext,
   type FloatComponentProps,
 } from "listpage-components/ListPage";
-import { AutoRefreshList, paginate } from "@/components/list-page";
+import { AutoRefreshList } from "@/components/list-page";
 import { SandboxDetailModal } from "@/components/SandboxDetailModal";
 import { SandboxLogsModal } from "@/components/SandboxLogsModal";
 import { sandboxClient } from "@/lib/client";
@@ -19,11 +19,6 @@ import { CreateSandboxModal } from "./create";
 import { DeleteSandboxModal } from "./delete";
 import { sandboxFilters, type SandboxFilters } from "./filters";
 import { SandboxTable } from "./table";
-
-function createdAtMs(value?: string) {
-  const time = value ? Date.parse(value) : Number.NaN;
-  return Number.isNaN(time) ? 0 : time;
-}
 
 function CreateSandboxFloat({ onClose }: FloatComponentProps<Sandbox>) {
   const { refreshTable } = useListPageContext<Sandbox, SandboxFilters>();
@@ -98,7 +93,7 @@ export default function SandboxesPage() {
   const loadTemplates = useCallback(async () => {
     try {
       const res = await sandboxClient.listTemplates();
-      setTemplates(res.templates);
+      setTemplates(res.list);
     } catch (err) {
       message.error(err instanceof Error ? err.message : "加载模板失败");
     }
@@ -114,50 +109,21 @@ export default function SandboxesPage() {
       filters: SandboxFilters,
     ) => {
       try {
-        const res = await sandboxClient.listSandboxes();
-        let list = res.sandboxes;
-        const keyword = filters.q?.trim().toLowerCase();
-        if (keyword) {
-          list = list.filter((sandbox) => {
-            const templateName = templates
-              .find((item) => item.id === sandbox.templateId)
-              ?.name?.toLowerCase();
-            return (
-              sandbox.id.toLowerCase().includes(keyword) ||
-              (sandbox.image ?? "").toLowerCase().includes(keyword) ||
-              (templateName ?? "").includes(keyword)
-            );
-          });
-        }
-        const terms = (filters.tag ?? "")
-          .split(/[\s,]+/)
-          .map((term) => term.trim().toLowerCase())
-          .filter(Boolean);
-        if (terms.length > 0) {
-          list = list.filter((sandbox) =>
-            terms.every((term) =>
-              sandbox.tags.some((tag) => tag.toLowerCase().includes(term)),
-            ),
-          );
-        }
-        if (filters.state) {
-          list = list.filter((sandbox) => sandbox.state === filters.state);
-        }
-        if (filters.templateId) {
-          list = list.filter(
-            (sandbox) => sandbox.templateId === filters.templateId,
-          );
-        }
-        list = [...list].sort(
-          (a, b) => createdAtMs(b.createdAt) - createdAtMs(a.createdAt),
-        );
-        return paginate(list, page.current, page.pageSize);
+        const res = await sandboxClient.listSandboxes({
+          current: page.current,
+          pageSize: page.pageSize,
+          ...(filters.q?.trim() ? { keyword: filters.q.trim() } : {}),
+          ...(filters.tag?.trim() ? { q: filters.tag.trim() } : {}),
+          ...(filters.state ? { state: filters.state } : {}),
+          ...(filters.templateId ? { templateId: filters.templateId } : {}),
+        });
+        return { list: res.list, total: res.total };
       } catch (err) {
         message.error(err instanceof Error ? err.message : "加载失败");
         return { list: [], total: 0 };
       }
     },
-    [message, templates],
+    [message],
   );
 
   const filterItems = useMemo(() => sandboxFilters(templates), [templates]);

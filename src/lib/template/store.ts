@@ -63,11 +63,41 @@ function jsonb(value: unknown): string | null {
   return JSON.stringify(value);
 }
 
+function containsPattern(value: string): string {
+  return `%${value.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+}
+
 export async function listTemplates(): Promise<Template[]> {
-  const result = await query<TemplateRow>(
-    `SELECT ${SELECT_COLUMNS} FROM sandbox.templates ORDER BY created_at ASC`,
+  const page = await listTemplatesPage();
+  return page.list;
+}
+
+export async function listTemplatesPage(opts?: {
+  q?: string;
+  current?: number;
+  pageSize?: number | null;
+}): Promise<{ list: Template[]; total: number }> {
+  const keyword = opts?.q?.trim();
+  const where = keyword
+    ? `WHERE id ILIKE $1 ESCAPE '\\' OR name ILIKE $1 ESCAPE '\\' OR image ILIKE $1 ESCAPE '\\'`
+    : "";
+  const params: unknown[] = keyword ? [containsPattern(keyword)] : [];
+  const count = await query<{ count: string }>(
+    `SELECT count(*)::text AS count FROM sandbox.templates ${where}`,
+    params,
   );
-  return result.rows.map(toTemplate);
+  let sql = `SELECT ${SELECT_COLUMNS} FROM sandbox.templates ${where} ORDER BY created_at ASC`;
+  if (opts?.pageSize != null) {
+    const pageSize = opts.pageSize;
+    const current = Math.max(opts.current ?? 1, 1);
+    params.push(pageSize, (current - 1) * pageSize);
+    sql += ` LIMIT $${params.length - 1} OFFSET $${params.length}`;
+  }
+  const result = await query<TemplateRow>(sql, params);
+  return {
+    list: result.rows.map(toTemplate),
+    total: Number(count.rows[0]?.count ?? 0),
+  };
 }
 
 export async function getTemplate(id: string): Promise<Template | null> {

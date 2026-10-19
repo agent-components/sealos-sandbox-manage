@@ -3,14 +3,6 @@
 import { useEffect } from "react";
 import { useListPageContext } from "listpage-components/ListPage";
 
-export function paginate<T>(list: T[], current: number, pageSize: number) {
-  const start = Math.max(0, (current - 1) * pageSize);
-  return {
-    list: list.slice(start, start + pageSize),
-    total: list.length,
-  };
-}
-
 export const listPagination = {
   showSizeChanger: true,
   pageSizeOptions: [10, 20, 50],

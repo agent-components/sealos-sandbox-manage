@@ -21,7 +21,7 @@ export default function McpLogsPage() {
   useEffect(() => {
     void sandboxClient
       .listApiKeys()
-      .then((res) => setApiKeys(res.apiKeys))
+      .then((res) => setApiKeys(res.list))
       .catch(() => undefined);
   }, []);
 
@@ -33,13 +33,13 @@ export default function McpLogsPage() {
       try {
         const range = filters.range;
         const res = await sandboxClient.listMcpLogs({
-          page: page.current,
+          current: page.current,
           pageSize: page.pageSize,
           ...(filters.apiKeyId ? { apiKeyId: filters.apiKeyId } : {}),
           ...(range?.[0] ? { from: range[0].toISOString() } : {}),
           ...(range?.[1] ? { to: range[1].toISOString() } : {}),
         });
-        return { list: res.logs, total: res.total };
+        return { list: res.list, total: res.total };
       } catch (err) {
         message.error(err instanceof Error ? err.message : "加载失败");
         return { list: [], total: 0 };

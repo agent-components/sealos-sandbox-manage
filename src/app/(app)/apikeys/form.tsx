@@ -31,10 +31,10 @@ export function ApiKeyFormModal({
     try {
       const [sandboxRes, templateRes] = await Promise.all([
         sandboxClient.listSandboxes(),
-        sandboxClient.listTemplates().catch(() => ({ templates: [] as Template[] })),
+        sandboxClient.listTemplates().catch(() => ({ list: [] as Template[], total: 0 })),
       ]);
-      setSandboxes(sandboxRes.sandboxes);
-      setTemplates(templateRes.templates);
+      setSandboxes(sandboxRes.list);
+      setTemplates(templateRes.list);
     } catch (err) {
       message.error(err instanceof Error ? err.message : "沙箱列表加载失败");
     } finally {

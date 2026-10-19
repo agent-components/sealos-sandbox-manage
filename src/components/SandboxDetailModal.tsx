@@ -171,7 +171,7 @@ export function SandboxDetailModal({
       .then((res) => {
         if (cancelled) return;
         setTemplateNames(
-          new Map(res.templates.map((item) => [item.id, item.name || item.id])),
+          new Map(res.list.map((item) => [item.id, item.name || item.id])),
         );
       })
       .catch(() => undefined);

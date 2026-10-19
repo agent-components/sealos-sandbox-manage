@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireSessionUser } from "@/lib/auth/resolve";
+import { parsePageQuery, slicePage } from "@/lib/api/page";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { createApiKeyId } from "@/lib/apikey/id";
 import { CreateApiKeySchema, MAX_API_KEYS_PER_USER } from "@/lib/apikey/schema";
@@ -12,11 +13,20 @@ import {
 } from "@/lib/apikey/store";
 import { findUnownedSandboxIds } from "@/lib/sandbox/owned";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const user = await requireSessionUser();
-    const apiKeys = await listApiKeys(user.username);
-    return jsonOk({ apiKeys });
+    const page = parsePageQuery(req.nextUrl.searchParams);
+    const keyword = (req.nextUrl.searchParams.get("q") ?? "").trim().toLowerCase();
+    let apiKeys = await listApiKeys(user.username);
+    if (keyword) {
+      apiKeys = apiKeys.filter(
+        (item) =>
+          item.name.toLowerCase().includes(keyword) ||
+          item.key.toLowerCase().includes(keyword),
+      );
+    }
+    return jsonOk(slicePage(apiKeys, page));
   } catch (error) {
     return jsonError(error);
   }
