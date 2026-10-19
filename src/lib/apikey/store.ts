@@ -1,7 +1,7 @@
 import type { Document, UpdateFilter } from "mongodb";
 import { getCollection } from "@/lib/db/mongo";
 import type { ApiKey } from "@/lib/apikey/schema";
-import { isApiKeySecret } from "@/lib/apikey/secret";
+import { isApiKeySecret, maskApiKeySecret } from "@/lib/apikey/secret";
 
 type ApiKeyDoc = Document & {
   id: string;
@@ -17,7 +17,7 @@ function toApiKey(doc: ApiKeyDoc): ApiKey {
   return {
     id: doc.id,
     name: doc.name,
-    key: doc.key,
+    key: maskApiKeySecret(doc.key),
     sandboxIds: doc.sandboxIds ?? [],
     createdAt: doc.createdAt?.toISOString(),
     lastUsedAt: doc.lastUsedAt?.toISOString() ?? null,
@@ -112,6 +112,16 @@ export async function revokeSandboxFromApiKeys(
     { username },
     { $pull: { sandboxIds: sandboxId } } as unknown as UpdateFilter<ApiKeyDoc>,
   );
+}
+
+/** 复制时取回这把 Key 的明文。只能读取当前用户自己的。 */
+export async function getApiKeySecret(
+  id: string,
+  username: string,
+): Promise<string | null> {
+  const col = await apiKeys();
+  const doc = await col.findOne({ id, username }, { projection: { key: 1 } });
+  return doc?.key ?? null;
 }
 
 export async function deleteApiKey(

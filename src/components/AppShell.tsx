@@ -16,14 +16,14 @@ const ROUTES = [
   {
     key: "sandboxes",
     path: "/sandboxes",
-    label: "沙箱",
+    label: "沙箱列表",
     icon: <CloudServerOutlined />,
     pinned: true,
   },
   {
     key: "templates",
     path: "/templates",
-    label: "模板",
+    label: "模板管理",
     icon: <AppstoreOutlined />,
   },
   {
@@ -35,7 +35,7 @@ const ROUTES = [
   {
     key: "apikeys",
     path: "/apikeys",
-    label: "API Key",
+    label: "令牌管理",
     icon: <KeyOutlined />,
   },
 ];

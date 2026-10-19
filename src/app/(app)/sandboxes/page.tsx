@@ -19,6 +19,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import {
   ListPage,
   useListPageContext,
+  type FilterItem,
   type ListPageColumnType,
 } from "listpage-components/ListPage";
 import { ProTable } from "listpage-components/ProTable";
@@ -32,7 +33,7 @@ import {
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { SandboxDetailModal } from "@/components/SandboxDetailModal";
 import { SandboxLogsModal } from "@/components/SandboxLogsModal";
-import { StateBadge } from "@/components/StateBadge";
+import { sandboxStateOptions, StateBadge } from "@/components/StateBadge";
 import { boatClient } from "@/lib/client";
 import { TagsSchema, type Sandbox } from "@/lib/sandbox/schema";
 import {
@@ -54,6 +55,8 @@ function canStart(state: Sandbox["state"]) {
 type SandboxFilters = {
   q?: string;
   tag?: string;
+  state?: Sandbox["state"];
+  templateId?: string;
 };
 
 function SandboxTable({
@@ -62,7 +65,12 @@ function SandboxTable({
   columns: ListPageColumnType<Sandbox, SandboxFilters>[];
 }) {
   const ctx = useListPageContext<Sandbox, SandboxFilters>();
-  const filtering = Boolean(ctx.filters.q?.trim() || ctx.filters.tag?.trim());
+  const filtering = Boolean(
+    ctx.filters.q?.trim() ||
+    ctx.filters.tag?.trim() ||
+    ctx.filters.state ||
+    ctx.filters.templateId,
+  );
   return (
     <ProTable<Sandbox, typeof ctx>
       columns={columns}
@@ -100,7 +108,7 @@ export default function SandboxesPage() {
   const { message } = App.useApp();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const refreshRef = useRef<() => void>(() => {});
+  const refreshRef = useRef<() => void>(() => { });
   const [templates, setTemplates] = useState<Template[]>([]);
   const [resources, setResources] =
     useState<ResourceSpec>(DEFAULT_RESOURCES);
@@ -316,6 +324,14 @@ export default function SandboxesPage() {
             ),
           );
         }
+        if (filters.state) {
+          list = list.filter((sandbox) => sandbox.state === filters.state);
+        }
+        if (filters.templateId) {
+          list = list.filter(
+            (sandbox) => sandbox.templateId === filters.templateId,
+          );
+        }
         return paginate(list, page.current, page.pageSize);
       } catch (err) {
         message.error(err instanceof Error ? err.message : "加载失败");
@@ -323,6 +339,45 @@ export default function SandboxesPage() {
       }
     },
     [message, templates],
+  );
+
+  const filterItems = useMemo<FilterItem<SandboxFilters>[]>(
+    () => [
+      { name: "q", label: "关键词", placeholder: "名称、镜像或模板" },
+      {
+        name: "tag",
+        label: "标签",
+        placeholder: "多个标签用空格分隔",
+      },
+      {
+        name: "state",
+        label: "状态",
+        component: (
+          <Select
+            allowClear
+            placeholder="全部状态"
+            options={sandboxStateOptions}
+          />
+        ),
+      },
+      {
+        name: "templateId",
+        label: "模板",
+        component: (
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder="全部模板"
+            options={templates.map((item) => ({
+              value: item.id,
+              label: item.name || item.id,
+            }))}
+          />
+        ),
+      },
+    ],
+    [templates],
   );
 
   const templateNameById = useMemo(() => {
@@ -493,7 +548,7 @@ export default function SandboxesPage() {
         title={
           <div>
             <Typography.Title level={3} style={{ margin: 0 }}>
-              沙箱
+              沙箱列表
             </Typography.Title>
             <Typography.Text type="secondary">
               基于模板创建 · 状态每 5 秒刷新
@@ -505,16 +560,7 @@ export default function SandboxesPage() {
             新建沙箱
           </Button>
         }
-        filter={{
-          items: [
-            { name: "q", label: "关键词", placeholder: "名称、镜像或模板" },
-            {
-              name: "tag",
-              label: "标签",
-              placeholder: "多个标签用空格分隔",
-            },
-          ],
-        }}
+        filter={{ items: filterItems }}
         middle={
           <>
             <BindListRefresh onReady={bindRefresh} />

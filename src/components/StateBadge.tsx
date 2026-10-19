@@ -8,6 +8,10 @@ const config: Record<SandboxState, { color: string; label: string }> = {
   error: { color: "error", label: "异常" },
 };
 
+export const sandboxStateOptions: { value: SandboxState; label: string }[] = (
+  Object.entries(config) as [SandboxState, { label: string }][]
+).map(([value, item]) => ({ value, label: item.label }));
+
 export function StateBadge({ state }: { state: SandboxState }) {
   const item = config[state];
   return <Tag color={item.color}>{item.label}</Tag>;

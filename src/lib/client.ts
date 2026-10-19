@@ -224,6 +224,10 @@ export const boatClient = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  getApiKeySecret: (id: string) =>
+    request<{ key: string }>(
+      `/api/v1/apikeys/${encodeURIComponent(id)}/secret`,
+    ),
   deleteApiKey: (id: string) =>
     request<{ ok: true }>(`/api/v1/apikeys/${encodeURIComponent(id)}`, {
       method: "DELETE",

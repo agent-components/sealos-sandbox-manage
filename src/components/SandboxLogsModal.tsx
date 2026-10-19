@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { App, Button, Flex, Modal, Select, Space, Typography } from "antd";
+import { App, Button, Flex, Select, Space, Typography } from "antd";
+import { ProDrawer } from "listpage-components/ProDrawer";
 import { boatClient } from "@/lib/client";
 
 type Props = {
@@ -51,14 +52,13 @@ export function SandboxLogsModal({ sandboxId, open, onClose }: Props) {
   }, [open, sandboxId, load]);
 
   return (
-    <Modal
+    <ProDrawer
       title={`日志 · ${sandboxId}`}
       open={open}
-      onCancel={onClose}
-      centered
-      destroyOnHidden
-      width={860}
-      footer={
+      size="large"
+      closable={false}
+      onClose={onClose}
+      extra={
         <Space>
           <Button onClick={onClose}>关闭</Button>
           <Button type="primary" loading={loading} onClick={() => void load(pod)}>
@@ -66,49 +66,59 @@ export function SandboxLogsModal({ sandboxId, open, onClose }: Props) {
           </Button>
         </Space>
       }
-      styles={{ body: { paddingTop: 12 } }}
     >
-      <Flex align="center" gap={12} style={{ marginBottom: 12 }} wrap>
-        <Typography.Text type="secondary">Pod</Typography.Text>
-        <Select
-          style={{ minWidth: 260 }}
-          placeholder={pods.length ? "选择 Pod" : "暂无 Pod"}
-          value={pod ?? undefined}
-          disabled={!pods.length || loading}
-          options={pods.map((p) => ({
-            value: p.name,
-            label: `${p.name}（${p.phase}）`,
-          }))}
-          onChange={(value) => {
-            setPod(value);
-            void load(value);
-          }}
-        />
-      </Flex>
-      {hint ? (
-        <Typography.Paragraph type="warning" style={{ marginBottom: 8 }}>
-          {hint}
-        </Typography.Paragraph>
-      ) : null}
-      <pre
+      <div
         style={{
-          margin: 0,
-          maxHeight: "55vh",
-          overflow: "auto",
-          padding: 12,
-          borderRadius: 8,
-          border: "1px solid #f0f0f0",
-          background: "#0b1020",
-          color: "#d7e0f2",
-          fontSize: 12,
-          lineHeight: 1.55,
-          fontFamily: "var(--font-mono)",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          minHeight: 0,
+          padding: "16px 20px 20px",
         }}
       >
-        {loading && !logs ? "加载中…" : logs || "（无日志输出）"}
-      </pre>
-    </Modal>
+        <Flex align="center" gap={12} style={{ marginBottom: 12 }} wrap>
+          <Typography.Text type="secondary">Pod</Typography.Text>
+          <Select
+            style={{ minWidth: 320 }}
+            placeholder={pods.length ? "选择 Pod" : "暂无 Pod"}
+            value={pod ?? undefined}
+            disabled={!pods.length || loading}
+            options={pods.map((p) => ({
+              value: p.name,
+              label: `${p.name}（${p.phase}）`,
+            }))}
+            onChange={(value) => {
+              setPod(value);
+              void load(value);
+            }}
+          />
+        </Flex>
+        {hint ? (
+          <Typography.Paragraph type="warning" style={{ marginBottom: 8 }}>
+            {hint}
+          </Typography.Paragraph>
+        ) : null}
+        <pre
+          style={{
+            flex: 1,
+            minHeight: 0,
+            margin: 0,
+            overflow: "auto",
+            padding: 12,
+            borderRadius: 8,
+            border: "1px solid #f0f0f0",
+            background: "#0b1020",
+            color: "#d7e0f2",
+            fontSize: 12,
+            lineHeight: 1.55,
+            fontFamily: "var(--font-mono)",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        >
+          {loading && !logs ? "加载中…" : logs || "（无日志输出）"}
+        </pre>
+      </div>
+    </ProDrawer>
   );
 }

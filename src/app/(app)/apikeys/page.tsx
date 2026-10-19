@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { App, Button, Form, Input, Select, Space, Typography } from "antd";
+import { CopyOutlined } from "@ant-design/icons";
+import { App, Button, Form, Input, Select, Space, Tag, Tooltip, Typography } from "antd";
 import { ListPage, type ListPageColumnType } from "listpage-components/ListPage";
 import { FormModal } from "listpage-components/FormModal";
 import { BindListRefresh, listPagination, paginate } from "@/components/list-page";
 import { boatClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
 import type { Sandbox } from "@/lib/sandbox/schema";
+import type { Template } from "@/lib/template/schema";
 
 function formatTime(value?: string | null) {
   if (!value) return "—";
@@ -16,8 +18,8 @@ function formatTime(value?: string | null) {
   return date.toLocaleString("zh-CN", { hour12: false });
 }
 
-/** Cursor / MCP 客户端接入用的配置片段 */
-function mcpConnectJson(apiKey: ApiKey) {
+/** Cursor / MCP 客户端接入用的配置片段。key 必须是复制接口返回的明文。 */
+function mcpConnectJson(key: string) {
   const origin =
     typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
   return JSON.stringify(
@@ -26,13 +28,39 @@ function mcpConnectJson(apiKey: ApiKey) {
         boat: {
           url: `${origin}/api/mcp`,
           headers: {
-            Authorization: `Bearer ${apiKey.key}`,
+            Authorization: `Bearer ${key}`,
           },
         },
       },
     },
     null,
     2,
+  );
+}
+
+function SandboxAccess({ ids }: { ids?: string[] }) {
+  const list = ids ?? [];
+  if (list.length === 0) {
+    return <Typography.Text type="secondary">无</Typography.Text>;
+  }
+  const [first, ...rest] = list;
+  return (
+    <Space size={6}>
+      <span>{first}</span>
+      {rest.length > 0 ? (
+        <Tooltip
+          title={
+            <div>
+              {rest.map((id) => (
+                <div key={id}>{id}</div>
+              ))}
+            </div>
+          }
+        >
+          <Tag style={{ marginInlineEnd: 0, cursor: "default" }}>+{rest.length}</Tag>
+        </Tooltip>
+      ) : null}
+    </Space>
   );
 }
 
@@ -45,6 +73,7 @@ export default function ApiKeysPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ApiKey | null>(null);
   const [sandboxes, setSandboxes] = useState<Sandbox[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [sandboxesLoading, setSandboxesLoading] = useState(false);
 
   const bindRefresh = useCallback((refresh: () => void) => {
@@ -79,14 +108,34 @@ export default function ApiKeysPage() {
   const loadSandboxes = useCallback(async () => {
     setSandboxesLoading(true);
     try {
-      const res = await boatClient.listSandboxes();
-      setSandboxes(res.sandboxes);
+      const [sandboxRes, templateRes] = await Promise.all([
+        boatClient.listSandboxes(),
+        boatClient.listTemplates().catch(() => ({ templates: [] as Template[] })),
+      ]);
+      setSandboxes(sandboxRes.sandboxes);
+      setTemplates(templateRes.templates);
     } catch (err) {
       message.error(err instanceof Error ? err.message : "沙箱列表加载失败");
     } finally {
       setSandboxesLoading(false);
     }
   }, [message]);
+
+  const sandboxOptions = useMemo(
+    () => {
+      const templateNameById = new Map(
+        templates.map((item) => [item.id, item.name || item.id]),
+      );
+      return sandboxes.map((item) => ({
+        value: item.id,
+        label: item.id,
+        templateName: item.templateId
+          ? templateNameById.get(item.templateId) || item.templateId
+          : "",
+      }));
+    },
+    [sandboxes, templates],
+  );
 
   function openCreate() {
     setEditing(null);
@@ -133,6 +182,19 @@ export default function ApiKeysPage() {
     });
   }
 
+  const copyText = useCallback(
+    async (id: string, write: (key: string) => string, success: string) => {
+      try {
+        const { key } = await boatClient.getApiKeySecret(id);
+        await navigator.clipboard.writeText(write(key));
+        message.success(success);
+      } catch (err) {
+        message.error(err instanceof Error ? err.message : "复制失败");
+      }
+    },
+    [message],
+  );
+
   const columns: ListPageColumnType<ApiKey, ApiKeyFilters>[] = useMemo(
     () => [
       {
@@ -144,14 +206,27 @@ export default function ApiKeysPage() {
       {
         title: "密钥",
         dataIndex: "key",
-        render: (key: string) => (
-          <Typography.Text
-            copyable={{ text: key, tooltips: ["复制", "已复制"] }}
-            style={{ fontFamily: "var(--font-mono)" }}
-          >
-            {key}
-          </Typography.Text>
+        width: 200,
+        render: (key: string, item) => (
+          <Space size={4}>
+            <Typography.Text style={{ fontFamily: "var(--font-mono)" }}>
+              {key}
+            </Typography.Text>
+            <Button
+              type="text"
+              size="small"
+              icon={<CopyOutlined />}
+              aria-label="复制密钥"
+              onClick={() => void copyText(item.id, (secret) => secret, "已复制")}
+            />
+          </Space>
         ),
+      },
+      {
+        title: "可访问沙箱",
+        dataIndex: "sandboxIds",
+        width: 240,
+        render: (ids: string[] = []) => <SandboxAccess ids={ids} />,
       },
       {
         title: "创建时间",
@@ -171,21 +246,6 @@ export default function ApiKeysPage() {
         ),
       },
       {
-        title: "可访问沙箱",
-        dataIndex: "sandboxIds",
-        width: 220,
-        render: (ids: string[] = []) =>
-          ids.length === 0 ? (
-            <Typography.Text type="secondary">无</Typography.Text>
-          ) : (
-            <Typography.Text ellipsis={{ tooltip: ids.join("、") }}>
-              {ids.length <= 2
-                ? ids.join("、")
-                : `${ids.slice(0, 2).join("、")} 等 ${ids.length} 个`}
-            </Typography.Text>
-          ),
-      },
-      {
         title: "操作",
         key: "actions",
         width: 180,
@@ -197,12 +257,9 @@ export default function ApiKeysPage() {
               type="link"
               size="small"
               style={{ paddingInline: 4 }}
-              onClick={() => {
-                void navigator.clipboard
-                  .writeText(mcpConnectJson(item))
-                  .then(() => message.success("已复制 MCP 接入配置"))
-                  .catch(() => message.error("复制失败"));
-              }}
+              onClick={() =>
+                void copyText(item.id, mcpConnectJson, "已复制 MCP 接入配置")
+              }
             >
               复制 MCP
             </Button>
@@ -228,7 +285,7 @@ export default function ApiKeysPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [message],
+    [copyText, message],
   );
 
   return (
@@ -237,7 +294,7 @@ export default function ApiKeysPage() {
         title={
           <div>
             <Typography.Title level={3} style={{ margin: 0 }}>
-              API Key
+              令牌管理
             </Typography.Title>
             <Typography.Text type="secondary">
               每把 Key 只能访问被授权的沙箱。用它创建的沙箱会自动加入授权列表
@@ -306,13 +363,32 @@ export default function ApiKeysPage() {
             mode="multiple"
             allowClear
             showSearch
-            optionFilterProp="label"
             placeholder="选择允许访问的沙箱"
             loading={sandboxesLoading}
-            options={sandboxes.map((item) => ({
-              value: item.id,
-              label: item.name || item.id,
-            }))}
+            options={sandboxOptions}
+            filterOption={(input, option) => {
+              const keyword = input.trim().toLowerCase();
+              if (!keyword) return true;
+              const label = String(option?.label ?? "").toLowerCase();
+              const templateName = String(option?.templateName ?? "").toLowerCase();
+              return label.includes(keyword) || templateName.includes(keyword);
+            }}
+            optionRender={(option) => (
+              <div style={{ padding: "2px 0", lineHeight: 1.35 }}>
+                <div>{option.label}</div>
+                {option.data.templateName ? (
+                  <div
+                    style={{
+                      marginTop: 2,
+                      fontSize: 12,
+                      color: "var(--ant-color-text-secondary)",
+                    }}
+                  >
+                    {option.data.templateName}
+                  </div>
+                ) : null}
+              </div>
+            )}
           />
         </Form.Item>
       </FormModal>

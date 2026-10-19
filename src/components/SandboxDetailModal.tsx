@@ -1,14 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Alert,
   Button,
-  Descriptions,
-  Flex,
   Select,
   Skeleton,
   Space,
+  Table,
   Typography,
 } from "antd";
 import { ProDrawer } from "listpage-components/ProDrawer";
@@ -24,6 +23,96 @@ function sameTags(left: string[], right: string[]) {
   return left.every(
     (tag, index) =>
       tag.toLocaleLowerCase() === right[index]?.toLocaleLowerCase(),
+  );
+}
+
+function focusDetailTab(key: string) {
+  document
+    .querySelector<HTMLElement>(
+      `.pro-drawer-tabs .ant-tabs-tab[data-node-key="${key}"]`,
+    )
+    ?.click();
+}
+
+function AddressCell({
+  value,
+  href,
+  empty,
+}: {
+  value: string | null;
+  href?: boolean;
+  empty: string;
+}) {
+  if (!value) return <Typography.Text type="secondary">{empty}</Typography.Text>;
+  const textStyle = { wordBreak: "break-all" as const };
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "flex-start",
+        gap: 4,
+        maxWidth: "100%",
+      }}
+    >
+      {href ? (
+        <Typography.Link
+          href={value.startsWith("http") ? value : `https://${value}`}
+          target="_blank"
+          style={textStyle}
+        >
+          {value}
+        </Typography.Link>
+      ) : (
+        <span style={textStyle}>{value}</span>
+      )}
+      <Typography.Text copyable={{ text: value, tooltips: ["复制", "已复制"] }} />
+    </span>
+  );
+}
+
+function InfoField({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div
+        style={{
+          marginBottom: 6,
+          fontSize: 12,
+          lineHeight: "18px",
+          color: "var(--ant-color-text-secondary)",
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ minWidth: 0, lineHeight: "22px" }}>{children}</div>
+    </div>
+  );
+}
+
+function DetailPane({
+  error,
+  children,
+}: {
+  error: string | null;
+  children: ReactNode;
+}) {
+  return (
+    <div style={{ padding: "16px 20px 24px" }}>
+      {error ? (
+        <Alert
+          type="error"
+          showIcon
+          message={error}
+          style={{ marginBottom: 16 }}
+        />
+      ) : null}
+      {children}
+    </div>
   );
 }
 
@@ -48,6 +137,9 @@ export function SandboxDetailModal({
   const idleDirtyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [templateNames, setTemplateNames] = useState<Map<string, string>>(
+    () => new Map(),
+  );
 
   const load = useCallback(async () => {
     try {
@@ -73,6 +165,23 @@ export function SandboxDetailModal({
 
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
+    void boatClient
+      .listTemplates()
+      .then((res) => {
+        if (cancelled) return;
+        setTemplateNames(
+          new Map(res.templates.map((item) => [item.id, item.name || item.id])),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     tagsDirtyRef.current = false;
     idleDirtyRef.current = false;
     setSandbox(null);
@@ -90,6 +199,7 @@ export function SandboxDetailModal({
     if (!resources || !sandbox) return;
     const parsedTags = TagsSchema.safeParse(tags);
     if (!parsedTags.success) {
+      focusDetailTab("info");
       setError(parsedTags.error.issues[0]?.message ?? "标签无效");
       return;
     }
@@ -144,7 +254,10 @@ export function SandboxDetailModal({
     <ProDrawer
       title={sandboxId}
       open={open}
-      size={720}
+      size="large"
+      closable={false}
+      key={open ? sandboxId : "closed"}
+      defaultActiveTab="info"
       onClose={() => {
         if (busy === null) onClose();
       }}
@@ -163,163 +276,173 @@ export function SandboxDetailModal({
           </Button>
         </Space>
       }
-    >
-      {error ? (
-        <Alert
-          type="error"
-          showIcon
-          message={error}
-          style={{ marginBottom: 16 }}
-        />
-      ) : null}
-
-      {!sandbox || !resources ? (
-        <Skeleton active paragraph={{ rows: 8 }} />
-      ) : (
-        <Space direction="vertical" size={20} style={{ width: "100%" }}>
-          <Flex align="center" gap={12}>
-            <StateBadge state={sandbox.state} />
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              状态约每 5 秒刷新
-            </Typography.Text>
-          </Flex>
-
-          <Descriptions
-            size="small"
-            column={1}
-            bordered
-            items={[
-              {
-                key: "ports",
-                label: "端口与地址",
-                children:
-                  (sandbox.ports ?? []).length > 0 ? (
-                    <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                      {(sandbox.ports ?? []).map((port) => (
-                        <div key={port.number}>
-                          <Typography.Text strong>端口 {port.number}</Typography.Text>
-                          <div style={{ marginTop: 4 }}>
-                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                              公网
-                            </Typography.Text>
-                            <div>
-                              {port.publicAddress ? (
-                                <Space wrap size={8}>
-                                  <Typography.Link
-                                    href={
-                                      port.publicAddress.startsWith("http")
-                                        ? port.publicAddress
-                                        : `https://${port.publicAddress}`
-                                    }
-                                    target="_blank"
-                                  >
-                                    {port.publicAddress}
-                                  </Typography.Link>
-                                  <Button
-                                    size="small"
-                                    onClick={() =>
-                                      void navigator.clipboard.writeText(
-                                        port.publicAddress!,
-                                      )
-                                    }
-                                  >
-                                    复制
-                                  </Button>
-                                </Space>
-                              ) : (
-                                <Typography.Text type="secondary">
-                                  尚未就绪
-                                </Typography.Text>
-                              )}
-                            </div>
-                          </div>
-                          <div style={{ marginTop: 4 }}>
-                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                              内网
-                            </Typography.Text>
-                            <div>
-                              {port.privateAddress ? (
-                                <Space wrap size={8}>
-                                  <Typography.Text copyable>
-                                    {port.privateAddress}
-                                  </Typography.Text>
-                                </Space>
-                              ) : (
-                                <Typography.Text type="secondary">—</Typography.Text>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </Space>
-                  ) : (
-                    <Typography.Text type="secondary">暂无端口信息</Typography.Text>
-                  ),
-              },
-              {
-                key: "template",
-                label: "模板",
-                children: sandbox.templateId || "—",
-              },
-              {
-                key: "image",
-                label: "镜像",
-                children: sandbox.image || "—",
-              },
-              {
-                key: "spec",
-                label: "当前规格",
-                children: `${sandbox.cpu} 核 · ${memoryLabel(sandbox.memoryGi)} · ${sandbox.diskGi}Gi`,
-              },
-              {
-                key: "tags",
-                label: "标签",
-                children: (
-                  <Select
-                    mode="tags"
-                    value={tags}
-                    placeholder="输入后回车，可添加多个"
-                    tokenSeparators={[","]}
-                    open={false}
-                    suffixIcon={null}
-                    disabled={busy !== null}
-                    style={{ width: "100%" }}
-                    onChange={(values: string[]) => {
-                      tagsDirtyRef.current = true;
-                      setTags(
-                        values.map((value) => value.trim()).filter(Boolean),
-                      );
+      tabs={
+        sandbox && resources
+          ? [
+            {
+              key: "info",
+              label: "基本信息",
+              children: (
+                <DetailPane error={error}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                      gap: "20px 32px",
                     }}
+                  >
+                    <InfoField label="状态">
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <StateBadge state={sandbox.state} />
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          约每 5 秒刷新
+                        </Typography.Text>
+                      </span>
+                    </InfoField>
+                    <InfoField label="当前规格">
+                      {sandbox.cpu} 核 · {memoryLabel(sandbox.memoryGi)}
+                    </InfoField>
+                    <InfoField label="模板">
+                      {sandbox.templateId ? (
+                        <div>
+                          <div>
+                            {templateNames.get(sandbox.templateId) ||
+                              sandbox.templateId}
+                          </div>
+                          {templateNames.get(sandbox.templateId) &&
+                            templateNames.get(sandbox.templateId) !==
+                            sandbox.templateId ? (
+                            <Typography.Text
+                              type="secondary"
+                              style={{ fontSize: 12 }}
+                            >
+                              {sandbox.templateId}
+                            </Typography.Text>
+                          ) : null}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
+                    </InfoField>
+                    <InfoField label="镜像">
+                      {sandbox.image ? (
+                        <Typography.Text
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            wordBreak: "break-all",
+                          }}
+                        >
+                          {sandbox.image}
+                        </Typography.Text>
+                      ) : (
+                        "—"
+                      )}
+                    </InfoField>
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <InfoField label="标签">
+                        <Select
+                          mode="tags"
+                          value={tags}
+                          placeholder="输入后回车，可添加多个"
+                          tokenSeparators={[","]}
+                          open={false}
+                          suffixIcon={null}
+                          disabled={busy !== null}
+                          style={{ width: "100%" }}
+                          onChange={(values: string[]) => {
+                            tagsDirtyRef.current = true;
+                            setTags(
+                              values.map((value) => value.trim()).filter(Boolean),
+                            );
+                          }}
+                        />
+                      </InfoField>
+                    </div>
+                  </div>
+                </DetailPane>
+              ),
+            },
+            {
+              key: "ports",
+              label: "端口与地址",
+              children: (
+                <DetailPane error={error}>
+                  <Table
+                    size="small"
+                    pagination={false}
+                    rowKey="number"
+                    dataSource={sandbox.ports ?? []}
+                    locale={{ emptyText: "暂无端口信息" }}
+                    columns={[
+                      {
+                        title: "端口",
+                        dataIndex: "number",
+                        width: 72,
+                        onCell: () => ({ style: { verticalAlign: "top" } }),
+                      },
+                      {
+                        title: "公网",
+                        dataIndex: "publicAddress",
+                        onCell: () => ({ style: { verticalAlign: "top" } }),
+                        render: (value: string | null) => (
+                          <AddressCell value={value} href empty="尚未就绪" />
+                        ),
+                      },
+                      {
+                        title: "内网",
+                        dataIndex: "privateAddress",
+                        onCell: () => ({ style: { verticalAlign: "top" } }),
+                        render: (value: string | null) => (
+                          <AddressCell value={value} empty="—" />
+                        ),
+                      },
+                    ]}
                   />
-                ),
-              },
-            ]}
-          />
-
-          <div>
-            <Typography.Title level={5} style={{ marginTop: 0 }}>
-              资源配置
-            </Typography.Title>
-            <ResourceConfig
-              value={resources}
-              onChange={setResources}
-              disabled={busy !== null}
-              showDisk={false}
-            />
-            <div style={{ marginTop: 28 }}>
-              <IdleShutdownConfig
-                layout="stack"
-                value={idle}
-                disabled={busy !== null}
-                onChange={(next) => {
-                  idleDirtyRef.current = true;
-                  setIdle(next);
-                }}
-              />
-            </div>
-          </div>
-        </Space>
-      )}
+                </DetailPane>
+              ),
+            },
+            {
+              key: "resources",
+              label: "资源配置",
+              children: (
+                <DetailPane error={error}>
+                  <ResourceConfig
+                    value={resources}
+                    onChange={setResources}
+                    disabled={busy !== null}
+                    showDisk={false}
+                  />
+                  <div style={{ marginTop: 28 }}>
+                    <IdleShutdownConfig
+                      layout="stack"
+                      value={idle}
+                      disabled={busy !== null}
+                      onChange={(next) => {
+                        idleDirtyRef.current = true;
+                        setIdle(next);
+                      }}
+                    />
+                  </div>
+                </DetailPane>
+              ),
+            },
+          ]
+          : undefined
+      }
+    >
+      <div style={{ padding: 20 }}>
+        {error ? (
+          <Alert type="error" showIcon message={error} />
+        ) : (
+          <Skeleton active paragraph={{ rows: 8 }} />
+        )}
+      </div>
     </ProDrawer>
   );
 }
