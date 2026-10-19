@@ -1,4 +1,4 @@
-# boat
+# SealOS 沙箱管理
 
 为 Agent 和开发者准备的云端沙箱控制台。每台沙箱是一个 [Sealos](https://sealos.io) 应用：本项目负责登录、模板、生命周期、公网地址，以及在容器里执行命令、读取文件。
 
@@ -20,7 +20,7 @@
 控制台 / curl / MCP 客户端
             │
             ▼
-      Next.js（boat）
+      SealOS 沙箱管理
        │    │    │
        │    │    └── Kubernetes API（Pod exec、日志、读文件）
        │    └─────── Sealos App Launchpad（应用的增删改查、启停、公网域名）
@@ -95,97 +95,6 @@ npm run start
 令牌、令牌明文和调用日志只接受登录会话，不接受 API Key 调用自身。模板接口两种身份都可以访问，模板在整个实例内共享，不按用户拆分。
 
 列表里的 Key 会打码（保留前缀 `boat_` 和一小段字符）。明文只在创建响应，以及 `GET /api/v1/apikeys/{id}/secret` 中返回。数据库里保存的是完整明文。
-
-## REST API
-
-沙箱接口的基路径是 `/api/v1`。完整契约在 `GET /api/openapi.json`（OpenAPI 3.1），其中只包含下面带 `operationId` 的沙箱操作。模板、令牌、日志和更新规格走 REST，没有进 OpenAPI，也没有对应的 MCP 工具。
-
-### 沙箱
-
-| 方法 | 路径 | operationId | 说明 |
-| --- | --- | --- | --- |
-| `GET` | `/api/v1/sandboxes` | `listSandboxes` | 当前用户的沙箱。`tag` 可重复，需同时包含；`q` 为标签关键词 |
-| `POST` | `/api/v1/sandboxes` | `createSandbox` | 按模板创建。必填 `templateId` |
-| `GET` | `/api/v1/sandboxes/{id}` | `getSandbox` | 状态、规格、端口和公网地址 |
-| `PATCH` | `/api/v1/sandboxes/{id}` | — | 更新标签、空闲关机，或同时更新 CPU、内存、磁盘 |
-| `DELETE` | `/api/v1/sandboxes/{id}` | `deleteSandbox` | 删除沙箱 |
-| `POST` | `/api/v1/sandboxes/{id}/stop` | `stopSandbox` | 关机 |
-| `POST` | `/api/v1/sandboxes/{id}/resume` | `resumeSandbox` | 开机 |
-| `POST` | `/api/v1/sandboxes/{id}/commands` | `runSandboxCommand` | 在容器内执行 `/bin/sh -c` |
-| `GET` | `/api/v1/sandboxes/{id}/artifacts?path=` | `getSandboxArtifact` | 读取沙箱内绝对路径 |
-| `GET` | `/api/v1/sandboxes/{id}/logs` | — | Pod 日志。`pod`、`tailLines`（默认 500）、`previous=true` |
-
-沙箱状态为 `starting`、`running`、`stopped`、`error`。
-
-创建请求示例：
-
-```json
-{
-  "templateId": "tpl-xxxxxxxxxx",
-  "name": "demo",
-  "cpu": 0.5,
-  "memoryGi": 0.5,
-  "diskGi": 3,
-  "env": [{ "name": "FOO", "value": "bar" }],
-  "tags": ["demo"],
-  "autoShutdown": true,
-  "idleMinutes": 30
-}
-```
-
-`name` 省略时由服务端生成。规格、环境变量、空闲关机省略时沿用模板；同名环境变量覆盖模板。`name` 只能是小写字母、数字和连字符。更新规格时，`cpu`、`memoryGi`、`diskGi` 必须一起提交。
-
-命令接口返回 `{ "ok", "exitCode", "stdout", "stderr" }`。退出码非 0 仍是 HTTP 200，此时 `ok` 为 `false`。沙箱已停止时会先开机，最多等待 3 分钟。REST 单次执行约 60 秒超时，stdout / stderr 各 1MB。
-
-读取文件时，HTML、JavaScript、CSS、JSON、Markdown、源代码等文本按对应类型流式返回；图片返回 `{ path, mediaType, encoding: "base64", data }`；其他文件以附件流下载。单文件不超过 32MB。沙箱未在运行时返回 409。
-
-### 模板、令牌与调用日志
-
-这些接口都要求登录。模板也接受 API Key。
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| `GET` `POST` | `/api/v1/templates` | 列表、创建 |
-| `GET` `PATCH` `DELETE` | `/api/v1/templates/{id}` | 读取、更新、删除 |
-| `GET` `POST` | `/api/v1/apikeys` | 列表（打码）、创建。创建响应里带完整密钥 |
-| `PATCH` `DELETE` | `/api/v1/apikeys/{id}` | 改名称或授权沙箱、删除 |
-| `GET` | `/api/v1/apikeys/{id}/secret` | 取回明文，供复制或填写 MCP 配置 |
-| `GET` | `/api/v1/mcp-logs` | 命令调用记录，支持分页和筛选 |
-| `GET` | `/api/v1/mcp-logs/{id}` | 单条记录及对象存储中的结果 |
-
-登录与当前用户：
-
-- `POST /api/auth/login`，请求体 `{ "username", "password" }`
-- `POST /api/auth/logout`
-- `GET /api/auth/me`
-
-### 示例
-
-```bash
-export BOAT_API_BASE=http://localhost:3000
-
-curl -sS -c /tmp/boat.ck -X POST "$BOAT_API_BASE/api/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"changeme"}'
-
-# 先在控制台或此接口创建模板，再用返回的 id
-curl -sS -b /tmp/boat.ck "$BOAT_API_BASE/api/v1/templates"
-
-curl -sS -b /tmp/boat.ck -X POST "$BOAT_API_BASE/api/v1/sandboxes" \
-  -H "Content-Type: application/json" \
-  -d '{"templateId":"tpl-xxxxxxxxxx"}'
-
-curl -sS -b /tmp/boat.ck "$BOAT_API_BASE/api/v1/sandboxes"
-
-curl -sS -b /tmp/boat.ck -X POST "$BOAT_API_BASE/api/v1/sandboxes/SANDBOX_ID/commands" \
-  -H "Content-Type: application/json" \
-  -d '{"command":"echo hello"}'
-
-curl -sS -H "Authorization: Bearer boat_..." \
-  "$BOAT_API_BASE/api/v1/sandboxes"
-```
-
-详情里的 `publicUrl` 是容器自己的公网入口，可直接访问该地址。
 
 ## MCP
 

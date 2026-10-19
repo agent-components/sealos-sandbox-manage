@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { AntdProvider } from "@/components/AntdProvider";
+import { PRODUCT_NAME } from "@/lib/product";
 import "../../node_modules/listpage-components/dist/AppProvider/index.css";
 import "../../node_modules/listpage-components/dist/components/Layout/index.css";
 import "../../node_modules/listpage-components/dist/components/ProTable/index.css";
@@ -11,7 +12,7 @@ import "../../node_modules/listpage-components/dist/components/ListPage/index.cs
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "boat — 沙箱控制台",
+  title: PRODUCT_NAME,
   description: "为 Agent 与开发者打造的云端沙箱平台",
   icons: { icon: "/logo.png" },
 };

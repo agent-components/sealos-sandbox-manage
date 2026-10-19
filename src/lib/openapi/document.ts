@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "@/lib/product";
 import { CPU_OPTIONS, MEMORY_OPTIONS } from "@/lib/sealos/resources";
 
 const cpuSchema = {
@@ -177,7 +178,7 @@ export function openApiDocument() {
   return {
     openapi: "3.1.0",
     info: {
-      title: "Boat",
+      title: PRODUCT_NAME,
       version: "0.1.0",
       description:
         "查看、创建、删除沙箱，关机、开机，以及在运行中的沙箱内执行命令。认证为登录会话，或 `Authorization: Bearer boat_...`。会话可操作该用户的全部沙箱。API Key 只能访问其授权列表中的沙箱；用该 Key 创建的沙箱会自动加入授权列表。删除后会从各 Key 的授权列表中移除。同一套操作也可通过 MCP Streamable HTTP 调用：POST /api/mcp，工具名即 operationId。",

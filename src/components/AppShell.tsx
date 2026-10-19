@@ -11,6 +11,7 @@ import {
 import { Layout, useLayoutTabs } from "listpage-components/Layout";
 import { useBoatTheme } from "@/components/AntdProvider";
 import { boatClient, type BoatUser } from "@/lib/client";
+import { PRODUCT_NAME } from "@/lib/product";
 
 const ROUTES = [
   {
@@ -102,7 +103,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <Layout
-      title="boat"
+      title={PRODUCT_NAME}
       logo={<img src="/logo.png" alt="" className="boat-logo" />}
       height="fill"
       contentPadding={24}

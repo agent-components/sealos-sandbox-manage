@@ -74,6 +74,20 @@
     color: inherit;
     text-decoration: none;
   }
+
+  .pro-sider.ant-layout-sider {
+    flex: 0 0 248px !important;
+    width: 248px !important;
+    max-width: 248px !important;
+    min-width: 248px !important;
+  }
+
+  .pro-sider.ant-layout-sider-collapsed {
+    flex: 0 0 56px !important;
+    width: 56px !important;
+    max-width: 56px !important;
+    min-width: 56px !important;
+  }
 }
 
 /* 列表表格：固定列 + 横向滚动（压掉快速滚动时 sticky 弹跳） */

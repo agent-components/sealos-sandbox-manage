@@ -99,7 +99,7 @@ async function handleRequest(request: Request, message: JsonRpcRequest): Promise
       body: rpcResult(id, {
         protocolVersion,
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: "boat", version: info.version },
+        serverInfo: { name: info.title, version: info.version },
         instructions: [
           info.description,
           "这些工具与 GET /api/openapi.json 中的沙箱接口一致，工具名即 operationId。",
