@@ -25,7 +25,7 @@ export function mcpConnectJson(key: string) {
   return JSON.stringify(
     {
       mcpServers: {
-        boat: {
+        sandbox: {
           url: `${origin}/api/mcp`,
           headers: {
             Authorization: `Bearer ${key}`,

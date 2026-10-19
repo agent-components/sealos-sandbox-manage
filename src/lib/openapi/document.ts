@@ -181,7 +181,7 @@ export function openApiDocument() {
       title: PRODUCT_NAME,
       version: "0.1.0",
       description:
-        "查看、创建、删除沙箱，关机、开机，以及在运行中的沙箱内执行命令。认证为登录会话，或 `Authorization: Bearer sandbox_...`。已发出的 `boat_` 密钥仍然有效。会话可操作该用户的全部沙箱。API Key 只能访问其授权列表中的沙箱；用该 Key 创建的沙箱会自动加入授权列表。删除后会从各 Key 的授权列表中移除。同一套操作也可通过 MCP Streamable HTTP 调用：POST /api/mcp，工具名即 operationId。",
+        "查看、创建、删除沙箱，关机、开机，以及在运行中的沙箱内执行命令。认证为登录会话，或 `Authorization: Bearer sandbox_...`。会话可操作该用户的全部沙箱。API Key 只能访问其授权列表中的沙箱；用该 Key 创建的沙箱会自动加入授权列表。删除后会从各 Key 的授权列表中移除。同一套操作也可通过 MCP Streamable HTTP 调用：POST /api/mcp，工具名即 operationId。",
     },
     servers: [{ url: "/api/v1" }],
     paths: {
@@ -428,7 +428,7 @@ export function openApiDocument() {
         bearerAuth: {
           type: "http",
           scheme: "bearer",
-          description: "控制台创建的 API Key，形如 sandbox_...。已发出的 boat_ 密钥仍然有效。也可以传 public.users.token。",
+          description: "控制台创建的 API Key，形如 sandbox_...。也可以传 public.users.token。",
         },
         sessionCookie: {
           type: "apiKey",

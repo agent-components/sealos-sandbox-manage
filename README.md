@@ -89,7 +89,7 @@ npm run start
 两种身份，沙箱数据按用户名隔离：
 
 - **登录会话**：密码校验通过后，把 64 位十六进制 token 写入 `public.users.token`，过期时间写入 `tokenExpiredAt`（30 天）。Cookie 名 `sandbox_user_session`，值就是这枚 token。同一账号只保留一枚。未过期时重新登录会复用原来的 token，过期后才签发新的。可以操作该用户的全部沙箱。`Authorization: Bearer <token>` 同样有效。
-- **API Key**：`Authorization: Bearer sandbox_...`。只能访问这把 Key 授权列表里的沙箱；用它创建的沙箱会自动加入列表。每个用户最多 20 把 Key，每把最多授权 200 个沙箱。删除沙箱时会从该用户所有 Key 里移除。已经发出的 `boat_` 密钥仍然有效。
+- **API Key**：`Authorization: Bearer sandbox_...`。只能访问这把 Key 授权列表里的沙箱；用它创建的沙箱会自动加入列表。每个用户最多 20 把 Key，每把最多授权 200 个沙箱。删除沙箱时会从该用户所有 Key 里移除。
 
 令牌、令牌明文和调用日志只接受登录会话，不接受 API Key 调用自身。模板接口两种身份都可以访问，模板在整个实例内共享，不按用户拆分。
 
@@ -112,7 +112,7 @@ npm run start
 ```json
 {
   "mcpServers": {
-    "boat": {
+    "sandbox": {
       "url": "http://localhost:3000/api/mcp",
       "headers": {
         "Authorization": "Bearer sandbox_..."

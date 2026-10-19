@@ -114,7 +114,7 @@ export async function callMcpTool(
   for (const [key, value] of Object.entries(split.pathParams)) {
     pathname = pathname.replaceAll(`{${key}}`, encodeURIComponent(value));
   }
-  const url = new URL(`/api/v1${pathname}`, "http://boat.internal");
+  const url = new URL(`/api/v1${pathname}`, "http://sandbox.internal");
   for (const [key, value] of Object.entries(split.query)) {
     appendQuery(url, key, value);
   }

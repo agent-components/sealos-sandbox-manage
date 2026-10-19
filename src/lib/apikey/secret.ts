@@ -1,8 +1,6 @@
 import { randomBytes } from "crypto";
 
 const PREFIX = "sandbox_";
-/** 已发出的密钥仍使用这个前缀，认证时继续接受。 */
-const LEGACY_PREFIX = "boat_";
 /** 列表接口只返回这段前缀，更长的部分用 *** 代替。 */
 const VISIBLE_KEY_LENGTH = 12;
 
@@ -17,6 +15,6 @@ export function maskApiKeySecret(key: string): string {
 }
 
 export function isApiKeySecret(value: string): boolean {
-  const prefixed = value.startsWith(PREFIX) || value.startsWith(LEGACY_PREFIX);
+  const prefixed = value.startsWith(PREFIX);
   return prefixed && value.length >= 20;
 }

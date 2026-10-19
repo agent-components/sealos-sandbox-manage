@@ -9,7 +9,7 @@ import {
   AppstoreOutlined,
 } from "@ant-design/icons";
 import { Layout, useLayoutTabs } from "listpage-components/Layout";
-import { useBoatTheme } from "@/components/AntdProvider";
+import { useSandboxTheme } from "@/components/AntdProvider";
 import { sandboxClient, type SandboxUser } from "@/lib/client";
 import { PRODUCT_NAME } from "@/lib/product";
 
@@ -48,7 +48,7 @@ function tabPathOf(pathname: string) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const theme = useBoatTheme();
+  const theme = useSandboxTheme();
   const [user, setUser] = useState<SandboxUser | null>(null);
   const tabPath = tabPathOf(pathname);
 

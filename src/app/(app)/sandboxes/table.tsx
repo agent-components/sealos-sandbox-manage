@@ -29,8 +29,8 @@ export function SandboxTable({
       loading={ctx.loading && ctx.dataSource.length === 0}
       rowKey="id"
       density="compact"
-      columnResize={{ persistenceKey: "boat-sandboxes-width" }}
-      columnSetting={{ persistenceKey: "boat-sandboxes-columns" }}
+      columnResize={{ persistenceKey: "sandbox-sandboxes-width" }}
+      columnSetting={{ persistenceKey: "sandbox-sandboxes-columns" }}
       extra={(columnSetting) => columnSetting?.trigger ?? null}
       scroll={{ x: 1450 }}
       sort={{ ...ctx.sort, onChange: ctx.updateSort }}

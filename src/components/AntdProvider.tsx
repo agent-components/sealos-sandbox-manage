@@ -6,14 +6,14 @@ import { AppProvider, useProTheme } from "listpage-components";
 
 const THEME_STORAGE_KEY = "sandbox-pro-theme";
 
-type BoatTheme = ReturnType<typeof useProTheme>;
+type SandboxTheme = ReturnType<typeof useProTheme>;
 
-const BoatThemeContext = createContext<BoatTheme | null>(null);
+const SandboxThemeContext = createContext<SandboxTheme | null>(null);
 
-export function useBoatTheme() {
-  const theme = useContext(BoatThemeContext);
+export function useSandboxTheme() {
+  const theme = useContext(SandboxThemeContext);
   if (!theme) {
-    throw new Error("useBoatTheme 必须在 AntdProvider 内使用");
+    throw new Error("useSandboxTheme 必须在 AntdProvider 内使用");
   }
   return theme;
 }
@@ -35,11 +35,11 @@ export function AntdProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AntdRegistry>
-      <BoatThemeContext.Provider value={theme}>
+      <SandboxThemeContext.Provider value={theme}>
         <div className="sandbox-root">
           <AppProvider {...theme.appProviderProps}>{children}</AppProvider>
         </div>
-      </BoatThemeContext.Provider>
+      </SandboxThemeContext.Provider>
     </AntdRegistry>
   );
 }
