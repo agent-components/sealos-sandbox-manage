@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     const { id } = await ctx.params;
     const key = await getApiKeySecret(id, user.username);
     if (!key) {
-      return jsonOk({ error: "API Key 不存在" }, { status: 404 });
+      return jsonOk({ error: "令牌不存在" }, { status: 404 });
     }
     return jsonOk({ key });
   } catch (error) {

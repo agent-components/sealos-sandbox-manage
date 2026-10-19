@@ -5,7 +5,7 @@ import { AuthError } from "@/lib/sealos/errors";
 export function assertSandboxAllowed(user: RequestUser, sandboxId: string) {
   if (!user.apiKeyId) return;
   if ((user.sandboxIds ?? []).includes(sandboxId)) return;
-  throw new AuthError("该 API Key 无权访问此沙箱", 403);
+  throw new AuthError("该令牌无权访问此沙箱", 403);
 }
 
 export function filterAppsByApiKey<T extends { name: string }>(

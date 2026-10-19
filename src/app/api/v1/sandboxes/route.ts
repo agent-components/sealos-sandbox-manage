@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
           if (user.apiKeyId) {
             const granted = await grantApiKeySandbox(user.apiKeyId, user.username, id);
             if (!granted) {
-              throw new Error("API Key 不存在，无法授予沙箱权限");
+              throw new Error("令牌不存在，无法授予沙箱权限");
             }
           }
         } catch (error) {

@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     const count = await countApiKeys(user.username);
     if (count >= MAX_API_KEYS_PER_USER) {
       return jsonOk(
-        { error: `每个用户最多创建 ${MAX_API_KEYS_PER_USER} 个 API Key` },
+        { error: `每个用户最多创建 ${MAX_API_KEYS_PER_USER} 个令牌` },
         { status: 400 },
       );
     }
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       id = createApiKeyId();
     }
     if (await apiKeyIdExists(id)) {
-      return jsonOk({ error: "无法生成唯一 API Key ID，请重试" }, { status: 500 });
+      return jsonOk({ error: "无法生成唯一令牌 ID，请重试" }, { status: 500 });
     }
 
     const missing = await findUnownedSandboxIds(user.username, input.sandboxIds);

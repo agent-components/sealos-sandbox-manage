@@ -12,7 +12,6 @@ export type PublicUser = {
 };
 
 let indexesReady = false;
-let seedPromise: Promise<void> | null = null;
 
 async function users() {
   const db = await getDb();
@@ -24,37 +23,10 @@ async function users() {
   return col;
 }
 
-/** Ensure boat.users exists and seed default admin if empty. */
-export async function ensureUsersReady() {
-  if (!seedPromise) {
-    seedPromise = (async () => {
-      const col = await users();
-      const count = await col.countDocuments();
-      if (count > 0) return;
-
-      const username = process.env.BOAT_ADMIN_USERNAME || "admin";
-      const password = process.env.BOAT_ADMIN_PASSWORD || "changeme";
-      const now = new Date();
-      await col.insertOne({
-        username,
-        password,
-        createdAt: now,
-        updatedAt: now,
-      });
-      console.info(`[boat] 已在 MongoDB 库 boat 中创建用户「${username}」`);
-    })().catch((err) => {
-      seedPromise = null;
-      throw err;
-    });
-  }
-  await seedPromise;
-}
-
 export async function authenticateUser(
   username: string,
   password: string,
 ): Promise<PublicUser | null> {
-  await ensureUsersReady();
   const col = await users();
   const user = await col.findOne({ username, password });
   if (!user) return null;
@@ -65,7 +37,6 @@ export async function createUser(
   username: string,
   password: string,
 ): Promise<PublicUser> {
-  await ensureUsersReady();
   const col = await users();
   const now = new Date();
   await col.insertOne({
@@ -78,7 +49,6 @@ export async function createUser(
 }
 
 export async function findUser(username: string): Promise<PublicUser | null> {
-  await ensureUsersReady();
   const col = await users();
   const user = await col.findOne(
     { username },

@@ -103,7 +103,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <Layout
       title="boat"
-      logo={<span className="boat-logo">b</span>}
+      logo={<img src="/logo.png" alt="" className="boat-logo" />}
       height="fill"
       contentPadding={24}
       menuVariant="inline"

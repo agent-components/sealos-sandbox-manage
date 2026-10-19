@@ -13,6 +13,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "boat — 沙箱控制台",
   description: "为 Agent 与开发者打造的云端沙箱平台",
+  icons: { icon: "/logo.png" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

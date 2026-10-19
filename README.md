@@ -1,82 +1,205 @@
-# boat — Sealos 沙箱
+# boat
 
-Boat 风格的沙箱控制台与 REST API。每台「虚拟机」对应一个 **Sealos 应用管理** 实例；本项目负责生命周期（增删改查、启停）、公网地址，以及在运行中的沙箱内执行命令。
+为 Agent 和开发者准备的云端沙箱控制台。每台沙箱是一个 [Sealos](https://sealos.io) 应用：本项目负责登录、模板、生命周期、公网地址，以及在容器里执行命令、读取文件。
+
+控制台、REST 和 MCP 使用同一套沙箱能力。机器规格由 Sealos App Launchpad 提供，kubeconfig 只放在服务端。
+
+## 功能
+
+- 按模板创建沙箱，查看状态、公网地址、启停和删除
+- 调整 CPU、内存、磁盘，给沙箱打标签
+- 空闲超时后自动关机；进行中的请求会计入活动时间
+- 在容器内执行命令，读取文件，查看 Pod 日志
+- 登录会话与 API Key。Key 按沙箱授权，数据按用户隔离
+- MCP Streamable HTTP，工具与 OpenAPI 的沙箱接口一一对应
+- 记录 `runSandboxCommand` 的调用；结果可存到对象存储
+
+## 架构
+
+```text
+控制台 / curl / MCP 客户端
+            │
+            ▼
+      Next.js（boat）
+       │    │    │
+       │    │    └── Kubernetes API（Pod exec、日志、读文件）
+       │    └─────── Sealos App Launchpad（应用的增删改查、启停、公网域名）
+       └──────────── MongoDB（用户、模板、令牌、标签、空闲状态、调用日志）
+                     对象存储（可选，命令结果 JSON）
+```
+
+Launchpad 请求使用 `Authorization: encodeURIComponent(kubeconfig)`。应用本身的增删改查、暂停和启动走 Launchpad；进容器执行命令、拉日志、读文件走集群 API。
+
+## 环境要求
+
+- Node.js 20 或更高版本
+- MongoDB
+- 可访问的 Sealos App Launchpad，以及对应集群的 kubeconfig
+- 对象存储（MinIO 兼容，可选）。不配置时调用日志仍会写入，只是没有结果正文
 
 ## 快速开始
 
 ```bash
 cp .env.example .env.local
-# 配置 MONGODB_URI、SEALOS_LAUNCHPAD_BASE、SEALOS_KUBECONFIG_PATH
+# 填写下面「配置」一节里的必填项，并把 kubeconfig 放到 SEALOS_KUBECONFIG_PATH
 npm install
-npm run db:init   # 创建 boat 库、users 集合，并写入管理员
+npm run db:init
 npm run dev
 ```
 
-打开 [http://localhost:3000/login](http://localhost:3000/login)，使用 **平台用户**（MongoDB `boat.users`）登录。Sealos kubeconfig 仅在服务端配置，与登录账号无关。
+打开 [http://localhost:3000/login](http://localhost:3000/login)。`db:init` 只初始化用户：不存在时写入 `admin` / `changeme`，已存在则跳过。登录后请立刻更换密码。模板、令牌和其他集合在首次使用时创建，启动后到「模板管理」里新建模板，再创建沙箱。
 
-### 环境变量
+生产构建：
+
+```bash
+npm run build
+npm run start
+```
+
+## 配置
+
+复制 `.env.example` 为 `.env.local`。带 `*` 的是启动和初始化数据库所必需的。
 
 | 变量 | 说明 |
 | --- | --- |
-| `MONGODB_URI` | MongoDB 连接串 |
-| `MONGODB_DB` | 数据库名，默认 `boat` |
-| `BOAT_ADMIN_USERNAME` / `BOAT_ADMIN_PASSWORD` | 空库时创建的管理员账号 |
-| `BOAT_SESSION_SECRET` | 登录会话加密密钥 |
-| `SEALOS_LAUNCHPAD_BASE` | App Launchpad 根地址 |
-| `SEALOS_DEFAULT_IMAGE` | 新建沙箱默认镜像 |
-| `SEALOS_DEFAULT_PORT` | 公网 HTTP 端口（默认 80） |
-| `SEALOS_KUBECONFIG_PATH` | kubeconfig 文件路径 |
+| `MONGODB_URI` * | MongoDB 连接串。路径就是数据库名，例如 `mongodb://user:pass@host:27017/boat?authSource=admin` |
+| `BOAT_SESSION_SECRET` * | 登录 Cookie 的加密密钥，建议不少于 32 个随机字符。会话有效期 7 天 |
+| `SEALOS_LAUNCHPAD_BASE` * | App Launchpad 根地址，不要末尾斜杠 |
+| `SEALOS_KUBECONFIG_PATH` * | kubeconfig 文件路径，仅服务端读取。`.sealos/` 已被 git 忽略 |
+| `MINIO_ENDPOINT` | 对象存储地址，例如 `https://objectstorageapi.example.com` |
+| `MINIO_ACCESS_KEY` | 对象存储访问密钥 |
+| `MINIO_SECRET_KEY` | 对象存储私钥 |
+| `MINIO_BUCKET` | 存放命令结果的桶名 |
+| `MINIO_REGION` | 可选，默认 `us-east-1` |
+
+四项 MinIO 配置要同时填写才会上传结果。缺任意一项时跳过上传，调用记录里会留下失败原因。
+
+## 控制台
+
+登录后有四个页面：
+
+| 路径 | 作用 |
+| --- | --- |
+| `/sandboxes` | 沙箱列表、创建、详情、日志、启停和删除 |
+| `/templates` | 镜像、端口、环境变量、存储、启动命令和默认规格 |
+| `/mcp-logs` | `runSandboxCommand` 的调用记录 |
+| `/apikeys` | 令牌名称、授权沙箱，以及复制明文和 MCP 配置 |
+
+## 认证与权限
+
+两种身份，沙箱数据按用户名隔离：
+
+- **登录会话**：Cookie 名 `boat_user_session`。可以操作该用户的全部沙箱。
+- **API Key**：`Authorization: Bearer boat_...`。只能访问这把 Key 授权列表里的沙箱；用它创建的沙箱会自动加入列表。每个用户最多 20 把 Key，每把最多授权 200 个沙箱。删除沙箱时会从该用户所有 Key 里移除。
+
+令牌、令牌明文和调用日志只接受登录会话，不接受 API Key 调用自身。模板接口两种身份都可以访问，模板在整个实例内共享，不按用户拆分。
+
+列表里的 Key 会打码（保留前缀 `boat_` 和一小段字符）。明文只在创建响应，以及 `GET /api/v1/apikeys/{id}/secret` 中返回。数据库里保存的是完整明文。
 
 ## REST API
 
-基路径 `/api/v1`。Agent 可以读 `GET /api/openapi.json`（OpenAPI 3.1），也可以走 MCP（见下文）。当前可调用：
+沙箱接口的基路径是 `/api/v1`。完整契约在 `GET /api/openapi.json`（OpenAPI 3.1），其中只包含下面带 `operationId` 的沙箱操作。模板、令牌、日志和更新规格走 REST，没有进 OpenAPI，也没有对应的 MCP 工具。
 
-- `GET /api/v1/sandboxes` 查看沙箱列表
-- `GET /api/v1/sandboxes/{id}` 查看沙箱状态
-- `POST /api/v1/sandboxes` 创建沙箱
-- `POST /api/v1/sandboxes/{id}/stop` 关机
-- `POST /api/v1/sandboxes/{id}/resume` 开机
-- `POST /api/v1/sandboxes/{id}/commands` 在运行中的沙箱内执行命令，请求体 `{ "command": "..." }`，返回 `{ "ok", "exitCode", "stdout", "stderr" }`
-- `GET /api/v1/sandboxes/{id}/artifacts?path=` 读取沙箱内文件。HTML、JavaScript、CSS、JSON 等文本流式返回原文；图片返回 base64；其他文件以附件流下载
-- `DELETE /api/v1/sandboxes/{id}` 删除沙箱
+### 沙箱
 
-需先登录获取 session cookie，或使用控制台创建的 API Key（`Authorization: Bearer boat_...`）。沙箱与 API Key 按当前用户隔离。服务端另用环境中的 kubeconfig 调用 Sealos。
+| 方法 | 路径 | operationId | 说明 |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/sandboxes` | `listSandboxes` | 当前用户的沙箱。`tag` 可重复，需同时包含；`q` 为标签关键词 |
+| `POST` | `/api/v1/sandboxes` | `createSandbox` | 按模板创建。必填 `templateId` |
+| `GET` | `/api/v1/sandboxes/{id}` | `getSandbox` | 状态、规格、端口和公网地址 |
+| `PATCH` | `/api/v1/sandboxes/{id}` | — | 更新标签、空闲关机，或同时更新 CPU、内存、磁盘 |
+| `DELETE` | `/api/v1/sandboxes/{id}` | `deleteSandbox` | 删除沙箱 |
+| `POST` | `/api/v1/sandboxes/{id}/stop` | `stopSandbox` | 关机 |
+| `POST` | `/api/v1/sandboxes/{id}/resume` | `resumeSandbox` | 开机 |
+| `POST` | `/api/v1/sandboxes/{id}/commands` | `runSandboxCommand` | 在容器内执行 `/bin/sh -c` |
+| `GET` | `/api/v1/sandboxes/{id}/artifacts?path=` | `getSandboxArtifact` | 读取沙箱内绝对路径 |
+| `GET` | `/api/v1/sandboxes/{id}/logs` | — | Pod 日志。`pod`、`tailLines`（默认 500）、`previous=true` |
 
-API Key 以明文保存在数据库中，列表接口会返回完整密钥。密钥管理接口（`/api/v1/apikeys`）仅接受登录会话，不接受 API Key 自身调用。每把 Key 有独立的沙箱授权列表，只能访问列表中的沙箱；用该 Key 创建的沙箱会自动加入列表。可在控制台编辑名称和授权沙箱。
+沙箱状态为 `starting`、`running`、`stopped`、`error`。
+
+创建请求示例：
+
+```json
+{
+  "templateId": "tpl-xxxxxxxxxx",
+  "name": "demo",
+  "cpu": 0.5,
+  "memoryGi": 0.5,
+  "diskGi": 3,
+  "env": [{ "name": "FOO", "value": "bar" }],
+  "tags": ["demo"],
+  "autoShutdown": true,
+  "idleMinutes": 30
+}
+```
+
+`name` 省略时由服务端生成。规格、环境变量、空闲关机省略时沿用模板；同名环境变量覆盖模板。`name` 只能是小写字母、数字和连字符。更新规格时，`cpu`、`memoryGi`、`diskGi` 必须一起提交。
+
+命令接口返回 `{ "ok", "exitCode", "stdout", "stderr" }`。退出码非 0 仍是 HTTP 200，此时 `ok` 为 `false`。沙箱已停止时会先开机，最多等待 3 分钟。REST 单次执行约 60 秒超时，stdout / stderr 各 1MB。
+
+读取文件时，HTML、JavaScript、CSS、JSON、Markdown、源代码等文本按对应类型流式返回；图片返回 `{ path, mediaType, encoding: "base64", data }`；其他文件以附件流下载。单文件不超过 32MB。沙箱未在运行时返回 409。
+
+### 模板、令牌与调用日志
+
+这些接口都要求登录。模板也接受 API Key。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` `POST` | `/api/v1/templates` | 列表、创建 |
+| `GET` `PATCH` `DELETE` | `/api/v1/templates/{id}` | 读取、更新、删除 |
+| `GET` `POST` | `/api/v1/apikeys` | 列表（打码）、创建。创建响应里带完整密钥 |
+| `PATCH` `DELETE` | `/api/v1/apikeys/{id}` | 改名称或授权沙箱、删除 |
+| `GET` | `/api/v1/apikeys/{id}/secret` | 取回明文，供复制或填写 MCP 配置 |
+| `GET` | `/api/v1/mcp-logs` | 命令调用记录，支持分页和筛选 |
+| `GET` | `/api/v1/mcp-logs/{id}` | 单条记录及对象存储中的结果 |
+
+登录与当前用户：
+
+- `POST /api/auth/login`，请求体 `{ "username", "password" }`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
 
 ### 示例
 
 ```bash
 export BOAT_API_BASE=http://localhost:3000
-# 登录（保存 cookie）
+
 curl -sS -c /tmp/boat.ck -X POST "$BOAT_API_BASE/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"changeme"}'
 
-# 创建
+# 先在控制台或此接口创建模板，再用返回的 id
+curl -sS -b /tmp/boat.ck "$BOAT_API_BASE/api/v1/templates"
+
 curl -sS -b /tmp/boat.ck -X POST "$BOAT_API_BASE/api/v1/sandboxes" \
   -H "Content-Type: application/json" \
-  -d '{"type":"default"}'
+  -d '{"templateId":"tpl-xxxxxxxxxx"}'
 
-# 列表
 curl -sS -b /tmp/boat.ck "$BOAT_API_BASE/api/v1/sandboxes"
 
-# 使用 API Key（在控制台「API Key」页创建）
+curl -sS -b /tmp/boat.ck -X POST "$BOAT_API_BASE/api/v1/sandboxes/SANDBOX_ID/commands" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"echo hello"}'
+
 curl -sS -H "Authorization: Bearer boat_..." \
   "$BOAT_API_BASE/api/v1/sandboxes"
 ```
 
-拿到详情中的 `publicUrl` 后，可以直接对该地址调用容器自己的 API。在沙箱内执行命令也可以走 `POST /api/v1/sandboxes/{id}/commands`。
+详情里的 `publicUrl` 是容器自己的公网入口，可直接访问该地址。
 
 ## MCP
 
-与上面的沙箱接口同一套能力，协议为 MCP Streamable HTTP（无状态，不建会话）。端点是 `POST /api/mcp`。
+端点为 `POST /api/mcp`，协议是无状态的 MCP Streamable HTTP，不建立会话。支持的协议版本：`2025-06-18`、`2025-03-26`、`2024-11-05`。
 
-认证与 REST 相同：`Authorization: Bearer boat_...`，或登录会话 cookie。`initialize` 和 `tools/list` 不需要登录；`tools/call` 会按当前用户鉴权。
+`initialize`、`tools/list` 和 `ping` 不需要登录。`tools/call` 与 REST 使用同一套认证：`Authorization: Bearer boat_...`，或登录 Cookie。
 
-工具名就是 OpenAPI 的 `operationId`：`listSandboxes`、`getSandbox`、`createSandbox`、`stopSandbox`、`resumeSandbox`、`runSandboxCommand`、`getSandboxArtifact`、`deleteSandbox`。路径参数、查询参数和 JSON 请求体都摊平在工具参数里。
+工具名就是 OpenAPI 的 `operationId`：
 
-`runSandboxCommand` 在 MCP 里不限执行时间。客户端 `Accept` 含 `text/event-stream` 时，输出会在同一次 POST 的 SSE 里随到随推（`notifications/message`，若带了 `progressToken` 还会发 `notifications/progress`），命令结束再给最终的 `ok` / `exitCode` / `stdout` / `stderr`。客户端断开连接会取消命令。REST 的同一接口仍是 60 秒超时。单路输出上限仍是 1MB。
+`listSandboxes`、`getSandbox`、`createSandbox`、`stopSandbox`、`resumeSandbox`、`runSandboxCommand`、`getSandboxArtifact`、`deleteSandbox`
+
+路径参数、查询参数和 JSON 请求体都摊平在工具参数里。
+
+`runSandboxCommand` 在 MCP 中不限制执行时间。客户端 `Accept` 含 `text/event-stream` 时，输出在同一次 POST 的 SSE 里推送（`notifications/message`；带了 `progressToken` 时还有 `notifications/progress`），结束后再返回 `ok`、`exitCode`、`stdout`、`stderr`。客户端断开会取消命令。单路输出上限仍是 1MB。
 
 ```json
 {
@@ -91,36 +214,49 @@ curl -sS -H "Authorization: Bearer boat_..." \
 }
 ```
 
-## 资源配置
+## 模板、规格与空闲关机
 
-创建 / 更新沙箱时通过滑块与数值配置：
+模板决定镜像、端口、环境变量、存储、配置文件挂载、启动命令、副本数，以及默认的 CPU、内存和空闲策略。创建沙箱时可以覆盖规格、追加环境变量，并单独指定标签和空闲关机。
 
-- CPU：`0.5 / 1 / 2 / 3 / 4 / 5 / 6 / 7 / 8` 核
-- 内存：`512Mi / 1G / 2G / 4G / 6G / 8G / 12G / 16G / 32G`
-- 磁盘：整数 Gi（默认 3）
+CPU 档位：`0.5 / 1 / 2 / 3 / 4 / 5 / 6 / 7 / 8` 核。
+
+内存档位：`512Mi / 1G / 2G / 4G / 6G / 8G / 12G / 16G / 32G`（接口里用 Gi 数值，`0.5` 表示 512Mi）。
+
+磁盘：整数 Gi，范围 1–1000，默认 3。
+
+空闲关机默认关闭。打开后，等待时间至少 5 分钟、最长 7 天（10080 分钟）。REST 与 MCP 对沙箱的访问都会计入活动；有请求进行时不会关机。进程内每分钟扫描一次，只暂停仍在运行的实例。
+
+## 开发
 
 ```bash
-curl -sS -b /tmp/boat.ck -X POST "$BOAT_API_BASE/api/v1/sandboxes" \
-  -H "Content-Type: application/json" \
-  -d '{"cpu":0.5,"memoryGi":0.5,"diskGi":3}'
+npm run dev       # 开发服务器
+npm run lint      # ESLint
+npm run build     # 生产构建
+npm run db:init   # 初始化管理员用户
 ```
 
-## 与 Boat 对照
+```text
+src/app/(app)/     控制台页面
+src/app/api/       REST、登录和 MCP
+src/components/    控制台组件
+src/lib/auth/      会话与用户
+src/lib/apikey/    令牌
+src/lib/sandbox/   沙箱模型、命令、文件、空闲关机
+src/lib/template/  模板
+src/lib/mcp/       MCP 协议与调用日志
+src/lib/sealos/    Launchpad 与 Kubernetes
+src/lib/openapi/   OpenAPI 文档
+scripts/init-db.mjs
+```
 
-| Boat | 本项目 | 说明 |
-| --- | --- | --- |
-| 沙箱 CRUD | Sealos Launchpad API | 本项目代理 |
-| stop / resume | pause / start | 本项目代理 |
-| 公网地址 | Launchpad 公网域名 | 详情返回 |
-| exec | `POST /sandboxes/{id}/commands` | 一次性命令，返回退出码与输出 |
-| 桌面 / fork / 快照 | — | 不做 |
-| 自定义镜像 | — | 下一版 |
+## 安全
 
-## 后端映射
+对外发布前请处理下面几项：
 
-所有应用操作走 Sealos Launchpad（`Authorization: encodeURIComponent(kubeconfig)`）：
+- 默认账号是 `admin` / `changeme`，密码以明文存在 `users` 集合
+- API Key 以明文存在 `apikeys` 集合。列表接口打码，但知道会话的人可以再次取回明文
+- kubeconfig 等同于集群凭证，不要提交到仓库。使用 `.sealos/` 或环境变量指向的路径
+- 模板在实例内共享，任一登录用户都可以修改或删除
+- 更换 `BOAT_SESSION_SECRET` 会使已有登录失效
 
-- `POST/GET /api/v2alpha/apps`
-- `GET/PATCH/DELETE /api/v2alpha/apps/:name`
-- `GET /api/pauseApp?appName=`
-- `GET /api/startApp?appName=`
+本仓库尚未包含 `LICENSE`。公开仓库前请自行补充许可证文件。

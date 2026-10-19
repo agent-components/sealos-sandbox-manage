@@ -9,8 +9,6 @@ function required(name: string): string {
 export function getSealosConfig() {
   return {
     launchpadBase: required("SEALOS_LAUNCHPAD_BASE").replace(/\/$/, ""),
-    defaultImage: process.env.SEALOS_DEFAULT_IMAGE ?? "nginx:alpine",
-    defaultPort: Number(process.env.SEALOS_DEFAULT_PORT ?? "80") || 80,
     kubeconfigPath: required("SEALOS_KUBECONFIG_PATH"),
   };
 }

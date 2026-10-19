@@ -1,161 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { App, Button, DatePicker, Select, Tag, Typography } from "antd";
-import type { Dayjs } from "dayjs";
-import dayjs from "dayjs";
+import { App, Button, Typography } from "antd";
 import {
   ListPage,
-  type FilterItem,
-  type ListPageColumnType,
+  type FloatComponentProps,
 } from "listpage-components/ListPage";
-import { ProDrawer } from "listpage-components/ProDrawer";
 import { listPagination } from "@/components/list-page";
 import { boatClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
-
-type McpLogRow = Awaited<
-  ReturnType<typeof boatClient.listMcpLogs>
->["logs"][number];
-
-type McpLogFilters = {
-  apiKeyId?: string;
-  range?: [Dayjs, Dayjs] | null;
-};
-
-function formatTime(value?: string | null) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("zh-CN", { hour12: false });
-}
-
-function formatDuration(ms?: number | null) {
-  if (ms == null || !Number.isFinite(ms) || ms < 0) return "—";
-  if (ms < 1000) return `${Math.round(ms)} ms`;
-  const seconds = ms / 1000;
-  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)} s`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = Math.round(seconds % 60);
-  return `${minutes} m ${rest} s`;
-}
-
-function sandboxIdOf(args: Record<string, unknown> | undefined) {
-  const id = args?.id;
-  return typeof id === "string" && id.trim() ? id : "";
-}
-
-function commandOf(args: Record<string, unknown> | undefined) {
-  const command = args?.command;
-  return typeof command === "string" ? command : "";
-}
-
-function commandResultOf(value: unknown) {
-  let data = value;
-  if (typeof data === "string") {
-    try {
-      data = JSON.parse(data) as unknown;
-    } catch {
-      return null;
-    }
-  }
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-  const record = data as Record<string, unknown>;
-  const nested = record.structuredContent;
-  const body =
-    nested && typeof nested === "object" && !Array.isArray(nested)
-      ? (nested as Record<string, unknown>)
-      : record;
-  if (
-    !("stdout" in body) &&
-    !("stderr" in body) &&
-    !("ok" in body) &&
-    !("exitCode" in body)
-  ) {
-    return null;
-  }
-  const exitCode = typeof body.exitCode === "number" ? body.exitCode : undefined;
-  const ok = typeof body.ok === "boolean" ? body.ok : exitCode === 0;
-  return {
-    ok,
-    exitCode,
-    stdout: typeof body.stdout === "string" ? body.stdout : "",
-    stderr: typeof body.stderr === "string" ? body.stderr : "",
-  };
-}
-
-function errorTextOf(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
-  const error = (value as Record<string, unknown>).error;
-  return typeof error === "string" ? error : "";
-}
-
-type McpLogDetail = NonNullable<
-  Awaited<ReturnType<typeof boatClient.getMcpLog>>
->;
-
-function resultView(detail: McpLogDetail) {
-  if (detail.resultLoadError) {
-    return { failed: true, text: detail.resultLoadError };
-  }
-  const command = commandResultOf(detail.result);
-  if (command) {
-    if (command.ok) return { failed: false, text: command.stdout };
-    const errorText = command.stderr.trim() ? command.stderr : command.stdout;
-    if (errorText.trim()) return { failed: true, text: errorText };
-    const code =
-      command.exitCode == null ? "" : `，退出码 ${command.exitCode}`;
-    return { failed: true, text: `命令失败${code}` };
-  }
-  const errorText = errorTextOf(detail.result);
-  if (errorText) return { failed: true, text: errorText };
-  if (detail.log.resultError) return { failed: true, text: detail.log.resultError };
-  if (!detail.log.ok) return { failed: true, text: "调用失败" };
-  return { failed: false, text: "" };
-}
-
-function LogDetail({ detail }: { detail: McpLogDetail }) {
-  const command = commandOf(detail.log.arguments);
-  const result = resultView(detail);
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, padding: "16px 20px 24px" }}>
-      <div>
-        <Typography.Text type="secondary">参数</Typography.Text>
-        {command ? (
-          <pre className="boat-shell-block">
-            <span className="boat-shell-prompt">$ </span>
-            {command}
-          </pre>
-        ) : (
-          <Typography.Paragraph type="secondary" style={{ margin: "8px 0 0" }}>
-            无命令
-          </Typography.Paragraph>
-        )}
-      </div>
-      <div>
-        <Typography.Text type="secondary">结果</Typography.Text>
-        {result.text ? (
-          <pre className={result.failed ? "boat-shell-block is-error" : "boat-shell-block"}>
-            {result.text}
-          </pre>
-        ) : (
-          <Typography.Paragraph type="secondary" style={{ margin: "8px 0 0" }}>
-            {result.failed ? "调用失败" : "（无输出）"}
-          </Typography.Paragraph>
-        )}
-      </div>
-    </div>
-  );
-}
+import { mcpLogColumns } from "./columns";
+import { McpLogDetailDrawer } from "./detail";
+import { mcpLogFilters } from "./filters";
+import type { McpLogFilters, McpLogRow } from "./types";
 
 export default function McpLogsPage() {
   const { message } = App.useApp();
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
-  const [viewId, setViewId] = useState<string | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detail, setDetail] = useState<Awaited<
-    ReturnType<typeof boatClient.getMcpLog>
-  > | null>(null);
 
   useEffect(() => {
     void boatClient
@@ -187,182 +48,22 @@ export default function McpLogsPage() {
     [message],
   );
 
-  useEffect(() => {
-    if (!viewId) {
-      setDetail(null);
-      return;
-    }
-    let cancelled = false;
-    setDetailLoading(true);
-    setDetail(null);
-    void boatClient
-      .getMcpLog(viewId)
-      .then((res) => {
-        if (!cancelled) setDetail(res);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          message.error(err instanceof Error ? err.message : "加载详情失败");
-          setViewId(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setDetailLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [message, viewId]);
-
-  const columns: ListPageColumnType<McpLogRow, McpLogFilters>[] = useMemo(
+  const columns = useMemo(() => mcpLogColumns(), []);
+  const filterItems = useMemo(() => mcpLogFilters(apiKeys), [apiKeys]);
+  const floats = useMemo(
     () => [
       {
-        title: "开始时间",
-        dataIndex: "startedAt",
-        key: "startedAt",
-        width: 170,
-        render: (value: string, row) =>
-          formatTime(value || row.completedAt || row.createdAt),
-      },
-      {
-        title: "耗时",
-        dataIndex: "durationMs",
-        key: "durationMs",
-        width: 88,
-        render: (value: number) => formatDuration(value),
-      },
-      {
-        title: "API Key",
-        key: "apiKey",
-        width: 140,
-        ellipsis: true,
-        render: (_, row) =>
-          row.apiKeyId ? (
-            <Typography.Text style={{ fontSize: 13 }}>
-              {row.apiKeyName || row.apiKeyId}
-            </Typography.Text>
-          ) : (
-            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              会话
-            </Typography.Text>
-          ),
-      },
-      {
-        title: "来源",
-        dataIndex: "channel",
-        key: "channel",
-        width: 72,
-        render: (value: string | undefined) => (
-          <Tag style={{ marginInlineEnd: 0 }}>
-            {(value ?? "mcp") === "rest" ? "REST" : "MCP"}
-          </Tag>
-        ),
-      },
-      {
-        title: "沙箱",
-        key: "sandbox",
-        ellipsis: true,
-        render: (_, row) => {
-          const id = sandboxIdOf(row.arguments);
-          if (!id) return <Typography.Text type="secondary">—</Typography.Text>;
-          return (
-            <Typography.Text
-              style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}
-              ellipsis={{ tooltip: id }}
-            >
-              {id}
-            </Typography.Text>
-          );
-        },
-      },
-      {
-        title: "工具",
-        dataIndex: "tool",
-        key: "tool",
-        width: 150,
-        render: (value: string) => (
-          <Typography.Text code style={{ fontSize: 12 }}>
-            {value}
-          </Typography.Text>
-        ),
-      },
-      {
-        title: "状态",
-        dataIndex: "status",
-        key: "status",
-        width: 88,
-        render: (status: number, row) => (
-          <Tag color={row.ok ? "success" : "error"}>{status}</Tag>
-        ),
-      },
-      {
-        title: "操作",
-        key: "actions",
-        width: 72,
-        fixed: "right",
-        render: (_, row) => (
-          <Button type="link" style={{ padding: 0 }} onClick={() => setViewId(row.id)}>
-            详情
-          </Button>
+        key: "detail",
+        render: ({ record, onClose }: FloatComponentProps<McpLogRow>) => (
+          <McpLogDetailDrawer logId={record?.id ?? null} onClose={() => onClose()} />
         ),
       },
     ],
     [],
   );
 
-  const filterItems = useMemo<FilterItem<McpLogFilters>[]>(
-    () => [
-      {
-        name: "apiKeyId",
-        label: "API Key",
-        colSpan: 3,
-        component: (
-          <Select
-            allowClear
-            placeholder="全部 API Key"
-            options={[
-              { value: "session", label: "会话登录" },
-              ...apiKeys.map((key) => ({
-                value: key.id,
-                label: key.name,
-              })),
-            ]}
-          />
-        ),
-      },
-      {
-        name: "range",
-        label: "开始时间",
-        colSpan: 4 as const,
-        component: (
-          <DatePicker.RangePicker
-            showTime
-            style={{ width: "100%" }}
-            placeholder={["开始时间起", "开始时间止"]}
-            presets={[
-              {
-                label: "近 1 小时",
-                value: [dayjs().subtract(1, "hour"), dayjs()],
-              },
-              {
-                label: "近 24 小时",
-                value: [dayjs().subtract(24, "hour"), dayjs()],
-              },
-              {
-                label: "近 7 天",
-                value: [dayjs().subtract(7, "day"), dayjs()],
-              },
-            ]}
-          />
-        ),
-      },
-    ],
-    [apiKeys],
-  );
-
   return (
-    <>
-      <ListPage<McpLogRow, McpLogFilters>
+    <ListPage<McpLogRow, McpLogFilters>
         title={
           <div>
             <Typography.Title level={3} style={{ margin: 0 }}>
@@ -389,44 +90,8 @@ export default function McpLogsPage() {
           pagination: listPagination,
         }}
         request={request}
+        float={{ floats }}
         initialValues={{ pageSize: 20 }}
       />
-
-      <ProDrawer
-        open={!!viewId}
-        size="medium"
-        title={
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 16, lineHeight: 1.4 }}>
-              {sandboxIdOf(detail?.log.arguments) || "调用详情"}
-            </div>
-            {detail ? (
-              <div
-                style={{
-                  marginTop: 2,
-                  fontSize: 12,
-                  fontWeight: 400,
-                  lineHeight: 1.4,
-                  color: "var(--ant-color-text-secondary)",
-                }}
-              >
-                {formatTime(
-                  detail.log.startedAt ||
-                    detail.log.completedAt ||
-                    detail.log.createdAt,
-                )}
-              </div>
-            ) : null}
-          </div>
-        }
-        onClose={() => setViewId(null)}
-      >
-        {detailLoading || !detail ? (
-          <Typography.Text type="secondary">加载中…</Typography.Text>
-        ) : (
-          <LogDetail detail={detail} />
-        )}
-      </ProDrawer>
-    </>
   );
 }

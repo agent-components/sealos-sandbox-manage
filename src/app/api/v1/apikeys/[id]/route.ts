@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     }
     const apiKey = await updateApiKey(id, user.username, input);
     if (!apiKey) {
-      return jsonOk({ error: "API Key 不存在" }, { status: 404 });
+      return jsonOk({ error: "令牌不存在" }, { status: 404 });
     }
     return jsonOk({ apiKey });
   } catch (error) {
@@ -37,7 +37,7 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
     const { id } = await ctx.params;
     const ok = await deleteApiKey(id, user.username);
     if (!ok) {
-      return jsonOk({ error: "API Key 不存在" }, { status: 404 });
+      return jsonOk({ error: "令牌不存在" }, { status: 404 });
     }
     return jsonOk({ ok: true });
   } catch (error) {

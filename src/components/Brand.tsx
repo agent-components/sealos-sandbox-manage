@@ -4,7 +4,8 @@ export function Brand({ large = false }: { large?: boolean }) {
   if (large) {
     return (
       <div>
-        <Typography.Title level={2} style={{ marginBottom: 8 }}>
+        <img src="/logo.png" alt="" className="boat-logo boat-logo-lg" />
+        <Typography.Title level={2} style={{ marginTop: 12, marginBottom: 8 }}>
           boat
         </Typography.Title>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
