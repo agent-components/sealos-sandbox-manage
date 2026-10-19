@@ -49,17 +49,47 @@ function formatDuration(ms?: number | null) {
   return `${minutes} m ${rest} s`;
 }
 
-function prettyJson(value: unknown) {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
 function sandboxIdOf(args: Record<string, unknown> | undefined) {
   const id = args?.id;
   return typeof id === "string" && id.trim() ? id : "";
+}
+
+function commandOf(args: Record<string, unknown> | undefined) {
+  const command = args?.command;
+  return typeof command === "string" ? command : "";
+}
+
+function commandResultOf(value: unknown) {
+  let data = value;
+  if (typeof data === "string") {
+    try {
+      data = JSON.parse(data) as unknown;
+    } catch {
+      return null;
+    }
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const record = data as Record<string, unknown>;
+  const nested = record.structuredContent;
+  const body =
+    nested && typeof nested === "object" && !Array.isArray(nested)
+      ? (nested as Record<string, unknown>)
+      : record;
+  if (
+    !("stdout" in body) &&
+    !("stderr" in body) &&
+    !("ok" in body) &&
+    !("exitCode" in body)
+  ) {
+    return null;
+  }
+  const exitCode = typeof body.exitCode === "number" ? body.exitCode : undefined;
+  const ok = typeof body.ok === "boolean" ? body.ok : exitCode === 0;
+  return {
+    ok,
+    stdout: typeof body.stdout === "string" ? body.stdout : "",
+    stderr: typeof body.stderr === "string" ? body.stderr : "",
+  };
 }
 
 export default function McpLogsPage() {
@@ -309,35 +339,34 @@ export default function McpLogsPage() {
       <ProDrawer
         open={!!viewId}
         size="medium"
-        title={detail?.log.tool ?? "调用详情"}
+        title={
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 16, lineHeight: 1.4 }}>
+              {sandboxIdOf(detail?.log.arguments) || "调用详情"}
+            </div>
+            <div
+              style={{
+                marginTop: 2,
+                fontSize: 12,
+                fontWeight: 400,
+                lineHeight: 1.4,
+                color: "var(--ant-color-text-secondary)",
+              }}
+            >
+              {formatTime(
+                detail?.log.startedAt ||
+                  detail?.log.completedAt ||
+                  detail?.log.createdAt,
+              )}
+            </div>
+          </div>
+        }
         onClose={() => setViewId(null)}
       >
         {detailLoading || !detail ? (
           <Typography.Text type="secondary">加载中…</Typography.Text>
         ) : (
-          <Space direction="vertical" size={20} style={{ width: "100%" }}>
-            <div>
-              <Typography.Text type="secondary">参数</Typography.Text>
-              <pre className="boat-json-block">{prettyJson(detail.log.arguments)}</pre>
-            </div>
-            <div>
-              <Typography.Text type="secondary">结果</Typography.Text>
-              {detail.resultLoadError ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  style={{ marginTop: 8 }}
-                  message={detail.resultLoadError}
-                />
-              ) : !detail.log.resultKey ? (
-                <Typography.Paragraph type="secondary" style={{ margin: "8px 0 0" }}>
-                  无结果
-                </Typography.Paragraph>
-              ) : (
-                <pre className="boat-json-block">{prettyJson(detail.result)}</pre>
-              )}
-            </div>
-          </Space>
+          <LogDetail detail={detail} />
         )}
       </ProDrawer>
     </>
