@@ -60,6 +60,16 @@
     overflow: auto;
   }
 
+  .boat-shell-prompt {
+    color: #6a9955;
+    user-select: none;
+  }
+
+  .boat-shell-block.is-error {
+    background: #2a1d1d;
+    color: #f2c1c1;
+  }
+
   a {
     color: inherit;
     text-decoration: none;

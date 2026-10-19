@@ -1,16 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  App,
-  Button,
-  DatePicker,
-  Select,
-  Space,
-  Tag,
-  Typography,
-} from "antd";
+import { App, Button, DatePicker, Select, Tag, Typography } from "antd";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import {
@@ -87,9 +78,74 @@ function commandResultOf(value: unknown) {
   const ok = typeof body.ok === "boolean" ? body.ok : exitCode === 0;
   return {
     ok,
+    exitCode,
     stdout: typeof body.stdout === "string" ? body.stdout : "",
     stderr: typeof body.stderr === "string" ? body.stderr : "",
   };
+}
+
+function errorTextOf(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const error = (value as Record<string, unknown>).error;
+  return typeof error === "string" ? error : "";
+}
+
+type McpLogDetail = NonNullable<
+  Awaited<ReturnType<typeof boatClient.getMcpLog>>
+>;
+
+function resultView(detail: McpLogDetail) {
+  if (detail.resultLoadError) {
+    return { failed: true, text: detail.resultLoadError };
+  }
+  const command = commandResultOf(detail.result);
+  if (command) {
+    if (command.ok) return { failed: false, text: command.stdout };
+    const errorText = command.stderr.trim() ? command.stderr : command.stdout;
+    if (errorText.trim()) return { failed: true, text: errorText };
+    const code =
+      command.exitCode == null ? "" : `，退出码 ${command.exitCode}`;
+    return { failed: true, text: `命令失败${code}` };
+  }
+  const errorText = errorTextOf(detail.result);
+  if (errorText) return { failed: true, text: errorText };
+  if (detail.log.resultError) return { failed: true, text: detail.log.resultError };
+  if (!detail.log.ok) return { failed: true, text: "调用失败" };
+  return { failed: false, text: "" };
+}
+
+function LogDetail({ detail }: { detail: McpLogDetail }) {
+  const command = commandOf(detail.log.arguments);
+  const result = resultView(detail);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, padding: "16px 20px 24px" }}>
+      <div>
+        <Typography.Text type="secondary">参数</Typography.Text>
+        {command ? (
+          <pre className="boat-shell-block">
+            <span className="boat-shell-prompt">$ </span>
+            {command}
+          </pre>
+        ) : (
+          <Typography.Paragraph type="secondary" style={{ margin: "8px 0 0" }}>
+            无命令
+          </Typography.Paragraph>
+        )}
+      </div>
+      <div>
+        <Typography.Text type="secondary">结果</Typography.Text>
+        {result.text ? (
+          <pre className={result.failed ? "boat-shell-block is-error" : "boat-shell-block"}>
+            {result.text}
+          </pre>
+        ) : (
+          <Typography.Paragraph type="secondary" style={{ margin: "8px 0 0" }}>
+            {result.failed ? "调用失败" : "（无输出）"}
+          </Typography.Paragraph>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function McpLogsPage() {
