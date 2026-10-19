@@ -23,7 +23,6 @@ import {
   saveSandboxRecord,
 } from "@/lib/sandbox/record";
 import {
-  deleteSandboxTags,
   findSandboxIdsByTagQuery,
   findSandboxIdsByTags,
   setSandboxTags,
@@ -196,7 +195,6 @@ export async function POST(req: NextRequest) {
         } catch (error) {
           await client.deleteApp(id).catch(() => undefined);
           await deleteSandboxRecord(id).catch(() => undefined);
-          await deleteSandboxTags(user.username, id).catch(() => undefined);
           await deleteSandboxIdle(user.username, id).catch(() => undefined);
           throw error;
         }

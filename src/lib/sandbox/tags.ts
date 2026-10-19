@@ -10,31 +10,11 @@ export async function setSandboxTags(
   sandboxId: string,
   tags: string[],
 ): Promise<void> {
-  if (tags.length === 0) {
-    await query(
-      `DELETE FROM sandbox.tags WHERE owner = $1 AND sandbox_id = $2`,
-      [owner, sandboxId],
-    );
-    return;
-  }
   await query(
-    `INSERT INTO sandbox.tags (owner, sandbox_id, tags, tags_key)
-     VALUES ($1, $2, $3::text[], $4::text[])
-     ON CONFLICT (owner, sandbox_id) DO UPDATE
-     SET tags = EXCLUDED.tags,
-         tags_key = EXCLUDED.tags_key,
-         updated_at = now()`,
+    `UPDATE sandbox.records
+     SET tags = $3::text[], tags_key = $4::text[]
+     WHERE owner = $1 AND sandbox_id = $2`,
     [owner, sandboxId, tags, tags.map(tagKey)],
-  );
-}
-
-export async function deleteSandboxTags(
-  owner: string,
-  sandboxId: string,
-): Promise<void> {
-  await query(
-    `DELETE FROM sandbox.tags WHERE owner = $1 AND sandbox_id = $2`,
-    [owner, sandboxId],
   );
 }
 
@@ -45,7 +25,7 @@ export async function withSandboxTags(
   if (sandboxes.length === 0) return sandboxes;
   const result = await query<{ sandbox_id: string; tags: string[] | null }>(
     `SELECT sandbox_id, tags
-     FROM sandbox.tags
+     FROM sandbox.records
      WHERE owner = $1 AND sandbox_id = ANY($2::text[])`,
     [owner, sandboxes.map((sandbox) => sandbox.id)],
   );
@@ -64,7 +44,7 @@ export async function findSandboxIdsByTags(
   if (tags.length === 0) return [];
   const result = await query<{ sandbox_id: string }>(
     `SELECT sandbox_id
-     FROM sandbox.tags
+     FROM sandbox.records
      WHERE owner = $1 AND tags_key @> $2::text[]`,
     [owner, tags.map(tagKey)],
   );
@@ -79,7 +59,7 @@ export async function findSandboxIdsByTagQuery(
   if (terms.length === 0) return [];
   const result = await query<{ sandbox_id: string }>(
     `SELECT sandbox_id
-     FROM sandbox.tags
+     FROM sandbox.records
      WHERE owner = $1
        AND NOT EXISTS (
          SELECT 1

@@ -34,17 +34,6 @@ CREATE TABLE IF NOT EXISTS sandbox.templates (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS sandbox.tags (
-  owner text NOT NULL,
-  sandbox_id text NOT NULL,
-  tags text[] NOT NULL,
-  tags_key text[] NOT NULL,
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (owner, sandbox_id)
-);
-
-CREATE INDEX IF NOT EXISTS tags_key_idx ON sandbox.tags USING gin (tags_key);
-
 CREATE TABLE IF NOT EXISTS sandbox.idle (
   owner text NOT NULL,
   sandbox_id text NOT NULL,
@@ -63,10 +52,30 @@ CREATE TABLE IF NOT EXISTS sandbox.records (
   sandbox_id text PRIMARY KEY,
   owner text NOT NULL,
   template_id text NOT NULL,
+  tags text[] NOT NULL DEFAULT '{}',
+  tags_key text[] NOT NULL DEFAULT '{}',
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE sandbox.records
+  ADD COLUMN IF NOT EXISTS tags text[] NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS tags_key text[] NOT NULL DEFAULT '{}';
+
 CREATE INDEX IF NOT EXISTS records_owner_idx ON sandbox.records (owner);
+CREATE INDEX IF NOT EXISTS records_tags_key_idx ON sandbox.records USING gin (tags_key);
+
+DO $$
+BEGIN
+  IF to_regclass('sandbox.tags') IS NOT NULL THEN
+    UPDATE sandbox.records AS record
+    SET tags = legacy.tags,
+        tags_key = legacy.tags_key
+    FROM sandbox.tags AS legacy
+    WHERE record.sandbox_id = legacy.sandbox_id
+      AND record.owner = legacy.owner;
+    DROP TABLE sandbox.tags;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS sandbox.mcp_logs (
   id text PRIMARY KEY,

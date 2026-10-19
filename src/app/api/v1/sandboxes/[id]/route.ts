@@ -12,11 +12,7 @@ import {
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
 import { deleteSandboxRecord } from "@/lib/sandbox/record";
 import { DEFAULT_IDLE_CONFIG, UpdateSandboxSchema } from "@/lib/sandbox/schema";
-import {
-  deleteSandboxTags,
-  setSandboxTags,
-  withSandboxTags,
-} from "@/lib/sandbox/tags";
+import { setSandboxTags, withSandboxTags } from "@/lib/sandbox/tags";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { toSandbox } from "@/lib/sealos/map";
 
@@ -120,7 +116,6 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
         assertSandboxAllowed(user, id);
         await client.deleteApp(id);
         await deleteSandboxRecord(id);
-        await deleteSandboxTags(user.username, id);
         await deleteSandboxIdle(user.username, id);
         await revokeSandboxFromApiKeys(user.username, id);
         const body = { ok: true as const };
