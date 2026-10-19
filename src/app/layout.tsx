@@ -3,7 +3,11 @@ import { Suspense } from "react";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { AntdProvider } from "@/components/AntdProvider";
-import "../../node_modules/listpage-components/dist/index.css";
+import "../../node_modules/listpage-components/dist/AppProvider/index.css";
+import "../../node_modules/listpage-components/dist/components/Layout/index.css";
+import "../../node_modules/listpage-components/dist/components/ProTable/index.css";
+import "../../node_modules/listpage-components/dist/components/ProDrawer/index.css";
+import "../../node_modules/listpage-components/dist/components/ListPage/index.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
