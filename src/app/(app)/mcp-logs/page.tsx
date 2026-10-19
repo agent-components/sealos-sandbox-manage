@@ -400,21 +400,23 @@ export default function McpLogsPage() {
             <div style={{ fontSize: 16, lineHeight: 1.4 }}>
               {sandboxIdOf(detail?.log.arguments) || "调用详情"}
             </div>
-            <div
-              style={{
-                marginTop: 2,
-                fontSize: 12,
-                fontWeight: 400,
-                lineHeight: 1.4,
-                color: "var(--ant-color-text-secondary)",
-              }}
-            >
-              {formatTime(
-                detail?.log.startedAt ||
-                  detail?.log.completedAt ||
-                  detail?.log.createdAt,
-              )}
-            </div>
+            {detail ? (
+              <div
+                style={{
+                  marginTop: 2,
+                  fontSize: 12,
+                  fontWeight: 400,
+                  lineHeight: 1.4,
+                  color: "var(--ant-color-text-secondary)",
+                }}
+              >
+                {formatTime(
+                  detail.log.startedAt ||
+                    detail.log.completedAt ||
+                    detail.log.createdAt,
+                )}
+              </div>
+            ) : null}
           </div>
         }
         onClose={() => setViewId(null)}
