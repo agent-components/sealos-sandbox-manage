@@ -8,6 +8,7 @@ import {
   Skeleton,
   Space,
   Table,
+  Tag,
   Typography,
 } from "antd";
 import { ProDrawer } from "listpage-components/ProDrawer";
@@ -70,6 +71,19 @@ function AddressCell({
   );
 }
 
+function MonoText({ children }: { children: ReactNode }) {
+  return (
+    <Typography.Text
+      style={{
+        fontFamily: "var(--font-mono)",
+        wordBreak: "break-all",
+      }}
+    >
+      {children}
+    </Typography.Text>
+  );
+}
+
 function InfoField({
   label,
   children,
@@ -107,13 +121,17 @@ function DetailPane({
         <Alert
           type="error"
           showIcon
-          message={error}
+          title={error}
           style={{ marginBottom: 16 }}
         />
       ) : null}
       {children}
     </div>
   );
+}
+
+function EmptyHint({ children }: { children: ReactNode }) {
+  return <Typography.Text type="secondary">{children}</Typography.Text>;
 }
 
 type Props = {
@@ -250,6 +268,10 @@ export function SandboxDetailModal({
       idle.idleMinutes !== (sandbox.idleMinutes ?? 5));
   const dirty = resourceDirty || tagsDirty || idleDirty;
 
+  const launchCommand = sandbox?.launchCommand?.command?.trim() || "";
+  const launchArgs = (sandbox?.launchCommand?.args ?? []).join(" ");
+  const registry = sandbox?.imageRegistry;
+
   return (
     <ProDrawer
       title={sandboxId}
@@ -307,6 +329,9 @@ export function SandboxDetailModal({
                     </InfoField>
                     <InfoField label="当前规格">
                       {sandbox.cpu} 核 · {memoryLabel(sandbox.memoryGi)}
+                      {sandbox.replicas > 1
+                        ? ` · ${sandbox.replicas} 实例`
+                        : null}
                     </InfoField>
                     <InfoField label="模板">
                       {sandbox.templateId ? (
@@ -332,14 +357,57 @@ export function SandboxDetailModal({
                     </InfoField>
                     <InfoField label="镜像">
                       {sandbox.image ? (
-                        <Typography.Text
-                          style={{
-                            fontFamily: "var(--font-mono)",
-                            wordBreak: "break-all",
-                          }}
-                        >
-                          {sandbox.image}
-                        </Typography.Text>
+                        <MonoText>{sandbox.image}</MonoText>
+                      ) : (
+                        "—"
+                      )}
+                    </InfoField>
+                    <InfoField label="私有镜像仓库">
+                      {registry ? (
+                        <div>
+                          <div>
+                            {registry.serverAddress || "已配置"}
+                            {registry.hasPassword ? (
+                              <Tag style={{ marginLeft: 8 }}>已设密码</Tag>
+                            ) : null}
+                          </div>
+                          {registry.username ? (
+                            <Typography.Text
+                              type="secondary"
+                              style={{ fontSize: 12 }}
+                            >
+                              用户 {registry.username}
+                            </Typography.Text>
+                          ) : null}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
+                    </InfoField>
+                    <InfoField label="运行命令">
+                      {launchCommand || launchArgs ? (
+                        <div>
+                          {launchCommand ? (
+                            <div>
+                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                Command
+                              </Typography.Text>
+                              <div>
+                                <MonoText>{launchCommand}</MonoText>
+                              </div>
+                            </div>
+                          ) : null}
+                          {launchArgs ? (
+                            <div style={{ marginTop: launchCommand ? 8 : 0 }}>
+                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                Args
+                              </Typography.Text>
+                              <div>
+                                <MonoText>{launchArgs}</MonoText>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
                       ) : (
                         "—"
                       )}
@@ -370,13 +438,13 @@ export function SandboxDetailModal({
             },
             {
               key: "ports",
-              label: "端口与地址",
+              label: "网络配置",
               children: (
                 <DetailPane error={error}>
                   <Table
                     size="small"
                     pagination={false}
-                    rowKey="number"
+                    rowKey={(row, index) => `${row.number}-${index}`}
                     dataSource={sandbox.ports ?? []}
                     locale={{ emptyText: "暂无端口信息" }}
                     columns={[
@@ -387,7 +455,23 @@ export function SandboxDetailModal({
                         onCell: () => ({ style: { verticalAlign: "top" } }),
                       },
                       {
+                        title: "协议",
+                        dataIndex: "protocol",
+                        width: 80,
+                        onCell: () => ({ style: { verticalAlign: "top" } }),
+                        render: (value?: string) =>
+                          value ? value.toUpperCase() : "—",
+                      },
+                      {
                         title: "公网",
+                        dataIndex: "isPublic",
+                        width: 72,
+                        onCell: () => ({ style: { verticalAlign: "top" } }),
+                        render: (value?: boolean) =>
+                          value === undefined ? "—" : value ? "是" : "否",
+                      },
+                      {
+                        title: "公网地址",
                         dataIndex: "publicAddress",
                         onCell: () => ({ style: { verticalAlign: "top" } }),
                         render: (value: string | null) => (
@@ -395,7 +479,7 @@ export function SandboxDetailModal({
                         ),
                       },
                       {
-                        title: "内网",
+                        title: "内网地址",
                         dataIndex: "privateAddress",
                         onCell: () => ({ style: { verticalAlign: "top" } }),
                         render: (value: string | null) => (
@@ -404,6 +488,139 @@ export function SandboxDetailModal({
                       },
                     ]}
                   />
+                </DetailPane>
+              ),
+            },
+            {
+              key: "env",
+              label: "环境变量",
+              children: (
+                <DetailPane error={error}>
+                  <Table
+                    size="small"
+                    pagination={false}
+                    rowKey={(row, index) => `${row.name}-${index}`}
+                    dataSource={sandbox.env ?? []}
+                    locale={{ emptyText: "暂无环境变量" }}
+                    columns={[
+                      {
+                        title: "变量名",
+                        dataIndex: "name",
+                        width: "36%",
+                        render: (value: string) => <MonoText>{value}</MonoText>,
+                      },
+                      {
+                        title: "值",
+                        dataIndex: "value",
+                        render: (value: string) =>
+                          value ? (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "flex-start",
+                                gap: 4,
+                                maxWidth: "100%",
+                              }}
+                            >
+                              <MonoText>{value}</MonoText>
+                              <Typography.Text
+                                copyable={{
+                                  text: value,
+                                  tooltips: ["复制", "已复制"],
+                                }}
+                              />
+                            </span>
+                          ) : (
+                            <EmptyHint>（空）</EmptyHint>
+                          ),
+                      },
+                    ]}
+                  />
+                </DetailPane>
+              ),
+            },
+            {
+              key: "storage",
+              label: "目录映射",
+              children: (
+                <DetailPane error={error}>
+                  <Table
+                    size="small"
+                    pagination={false}
+                    rowKey={(row, index) => `${row.path}-${index}`}
+                    dataSource={sandbox.storage ?? []}
+                    locale={{ emptyText: "暂无目录映射" }}
+                    columns={[
+                      {
+                        title: "名称",
+                        dataIndex: "name",
+                        width: 140,
+                        render: (value?: string) => value || "—",
+                      },
+                      {
+                        title: "挂载路径",
+                        dataIndex: "path",
+                        render: (value: string) => <MonoText>{value}</MonoText>,
+                      },
+                      {
+                        title: "容量",
+                        dataIndex: "size",
+                        width: 100,
+                        render: (value?: string) => value || "—",
+                      },
+                    ]}
+                  />
+                </DetailPane>
+              ),
+            },
+            {
+              key: "configMap",
+              label: "文件映射",
+              children: (
+                <DetailPane error={error}>
+                  {(sandbox.configMap ?? []).length === 0 ? (
+                    <EmptyHint>暂无文件映射</EmptyHint>
+                  ) : (
+                    <Space
+                      direction="vertical"
+                      size={12}
+                      style={{ width: "100%" }}
+                    >
+                      {(sandbox.configMap ?? []).map((item, index) => (
+                        <div
+                          key={`${item.path}-${index}`}
+                          style={{
+                            border: "1px solid var(--ant-color-border-secondary, #f0f0f0)",
+                            borderRadius: 8,
+                            padding: 12,
+                          }}
+                        >
+                          <div
+                            style={{
+                              marginBottom: 8,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 8,
+                            }}
+                          >
+                            <MonoText>{item.path}</MonoText>
+                            {item.value ? (
+                              <Typography.Text
+                                copyable={{
+                                  text: item.value,
+                                  tooltips: ["复制内容", "已复制"],
+                                }}
+                              />
+                            ) : null}
+                          </div>
+                          <pre className="sandbox-shell-block" style={{ margin: 0, maxHeight: 240 }}>
+                            {item.value || "（空）"}
+                          </pre>
+                        </div>
+                      ))}
+                    </Space>
+                  )}
                 </DetailPane>
               ),
             },
@@ -438,7 +655,7 @@ export function SandboxDetailModal({
     >
       <div style={{ padding: 20 }}>
         {error ? (
-          <Alert type="error" showIcon message={error} />
+          <Alert type="error" showIcon title={error} />
         ) : (
           <Skeleton active paragraph={{ rows: 8 }} />
         )}

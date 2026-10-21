@@ -68,7 +68,7 @@ export default function LoginPage() {
               <Alert
                 type="error"
                 showIcon
-                message={error}
+                title={error}
                 style={{ marginBottom: 16 }}
               />
             ) : null}

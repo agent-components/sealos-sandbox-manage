@@ -3,6 +3,8 @@ import { query } from "@/lib/db/postgres";
 
 export type PublicUser = {
   username: string;
+  /** 展示名称；为空时回退为 username */
+  displayName: string;
 };
 
 /** 与现有登录一致：token 为 32 字节十六进制，30 天后过期。 */
@@ -12,28 +14,37 @@ function isUserToken(value: string): boolean {
   return /^[a-f0-9]{64}$/i.test(value);
 }
 
+type UserRow = { account: string; displayName: string | null };
+
+function toPublicUser(row: UserRow | undefined): PublicUser | null {
+  if (!row?.account) return null;
+  const displayName = row.displayName?.trim();
+  return {
+    username: row.account,
+    displayName: displayName || row.account,
+  };
+}
+
 /** 登录名是 public.users.account。停用账号不能登录。 */
 export async function authenticateUser(
   username: string,
   password: string,
 ): Promise<PublicUser | null> {
-  const result = await query<{ account: string }>(
-    `SELECT account
+  const result = await query<UserRow>(
+    `SELECT account, "displayName"
      FROM public.users
      WHERE account = $1 AND password = $2 AND status = 'ACTIVE'`,
     [username, password],
   );
-  const account = result.rows[0]?.account;
-  return account ? { username: account } : null;
+  return toPublicUser(result.rows[0]);
 }
 
 export async function findUser(username: string): Promise<PublicUser | null> {
-  const result = await query<{ account: string }>(
-    `SELECT account FROM public.users WHERE account = $1`,
+  const result = await query<UserRow>(
+    `SELECT account, "displayName" FROM public.users WHERE account = $1`,
     [username],
   );
-  const account = result.rows[0]?.account;
-  return account ? { username: account } : null;
+  return toPublicUser(result.rows[0]);
 }
 
 /** 未过期则复用 public.users.token，否则签发一枚新的。 */
@@ -66,16 +77,15 @@ export async function issueUserToken(username: string): Promise<string> {
 
 export async function findUserByToken(token: string): Promise<PublicUser | null> {
   if (!isUserToken(token)) return null;
-  const result = await query<{ account: string }>(
-    `SELECT account
+  const result = await query<UserRow>(
+    `SELECT account, "displayName"
      FROM public.users
      WHERE token = $1
        AND status = 'ACTIVE'
        AND "tokenExpiredAt" > now()`,
     [token],
   );
-  const account = result.rows[0]?.account;
-  return account ? { username: account } : null;
+  return toPublicUser(result.rows[0]);
 }
 
 export async function clearUserToken(token: string): Promise<void> {

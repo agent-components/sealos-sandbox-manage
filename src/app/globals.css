@@ -90,6 +90,11 @@
   }
 }
 
+/* 侧栏 logo 与标题间距（覆盖 listpage-components 的 gap: 0） */
+.pro-sidebar-brand {
+  gap: 8px;
+}
+
 /* 列表表格：固定列 + 横向滚动（压掉快速滚动时 sticky 弹跳） */
 .sandbox-table-wrap {
   border: 1px solid #f0f0f0;
@@ -186,6 +191,25 @@
 
 .template-drawer-panel .resource-config .ant-slider {
   margin: 4px 6px 10px;
+}
+
+/* 资源配置：滑块与表单横排标签对齐，当前值放在 extra */
+.template-drawer-panel .resource-config-form-item .ant-slider {
+  margin: 6px 6px 0;
+}
+
+.template-drawer-panel .resource-config-form-item .ant-form-item-extra {
+  margin-top: 0;
+  margin-bottom: 2px;
+  text-align: right;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.template-drawer-panel
+  .resource-config-form-item
+  .ant-form-item-control-input
+  + .ant-form-item-extra {
+  margin-top: 2px;
 }
 
 .template-drawer-edit-table {

@@ -98,22 +98,17 @@ export function IdleShutdownConfig({
   }
 
   return (
-    <>
-      <Form.Item
-        label="自动关机"
-        extra="统计 MCP 与 OpenAPI/REST 请求；关闭后不会因空闲关机"
-      >
-        <Flex align="center" gap={16} wrap="wrap">
-          {switchControl}
-          {value.autoShutdown ? (
-            <MinutesField
-              value={value}
-              onChange={onChange}
-              disabled={disabled}
-            />
-          ) : null}
-        </Flex>
-      </Form.Item>
-    </>
+    <Form.Item label="自动关机">
+      <Flex align="center" gap={16} wrap="wrap">
+        {switchControl}
+        {value.autoShutdown ? (
+          <MinutesField
+            value={value}
+            onChange={onChange}
+            disabled={disabled}
+          />
+        ) : null}
+      </Flex>
+    </Form.Item>
   );
 }

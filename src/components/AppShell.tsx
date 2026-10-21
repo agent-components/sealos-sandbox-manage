@@ -118,7 +118,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       userProfile={
         user
           ? {
-            name: user.username,
+            name: user.displayName,
             items: [theme.themeUserProfileItem],
             logout: {
               key: "logout",

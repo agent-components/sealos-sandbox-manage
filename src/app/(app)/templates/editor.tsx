@@ -301,7 +301,7 @@ export function TemplateEditor({
           },
           {
             key: "image",
-            label: "镜像",
+            label: "镜像配置",
             children: (
               <TemplateForm saving={saving}>
                 <Form.Item label="镜像名" required>
@@ -394,7 +394,7 @@ export function TemplateEditor({
           },
           {
             key: "resources",
-            label: "资源配额",
+            label: "资源配置",
             children: (
               <TemplateForm saving={saving}>
                 <Form.Item label="实例数">
@@ -412,38 +412,35 @@ export function TemplateEditor({
                     }
                   />
                 </Form.Item>
-                <div style={{ marginTop: 8 }}>
-                  <ResourceConfig
-                    value={form.resources}
-                    onChange={(resources) =>
-                      setForm((f) => ({ ...f, resources }))
-                    }
-                    disabled={saving}
-                    showDisk={false}
-                  />
-                </div>
-                <div style={{ marginTop: 24 }}>
-                  <IdleShutdownConfig
-                    value={{
-                      autoShutdown: form.autoShutdown,
-                      idleMinutes: form.idleMinutes,
-                    }}
-                    onChange={(idle) =>
-                      setForm((f) => ({
-                        ...f,
-                        autoShutdown: idle.autoShutdown,
-                        idleMinutes: idle.idleMinutes,
-                      }))
-                    }
-                    disabled={saving}
-                  />
-                </div>
+                <ResourceConfig
+                  layout="form"
+                  value={form.resources}
+                  onChange={(resources) =>
+                    setForm((f) => ({ ...f, resources }))
+                  }
+                  disabled={saving}
+                  showDisk={false}
+                />
+                <IdleShutdownConfig
+                  value={{
+                    autoShutdown: form.autoShutdown,
+                    idleMinutes: form.idleMinutes,
+                  }}
+                  onChange={(idle) =>
+                    setForm((f) => ({
+                      ...f,
+                      autoShutdown: idle.autoShutdown,
+                      idleMinutes: idle.idleMinutes,
+                    }))
+                  }
+                  disabled={saving}
+                />
               </TemplateForm>
             ),
           },
           {
             key: "network",
-            label: "网络",
+            label: "网络配置",
             children: (
               <TemplateForm saving={saving} wide>
                 <Table
@@ -573,7 +570,7 @@ export function TemplateEditor({
           },
           {
             key: "storage",
-            label: "本地存储",
+            label: "目录映射",
             children: (
               <TemplateForm saving={saving} wide>
                 <Table
@@ -705,7 +702,7 @@ export function TemplateEditor({
           },
           {
             key: "configMap",
-            label: "ConfigMap",
+            label: "文件映射",
             children: (
               <TemplateForm saving={saving} wide>
                 <Space

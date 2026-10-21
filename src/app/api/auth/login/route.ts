@@ -18,7 +18,9 @@ export async function POST(req: NextRequest) {
       throw new AuthError("用户名或密码错误");
     }
     await setUserSession(user.username);
-    return jsonOk({ user: { username: user.username } });
+    return jsonOk({
+      user: { username: user.username, displayName: user.displayName },
+    });
   } catch (error) {
     return jsonError(error);
   }

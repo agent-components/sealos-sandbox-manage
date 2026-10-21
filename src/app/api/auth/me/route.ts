@@ -8,6 +8,9 @@ export async function GET() {
   }
   return jsonOk({
     authenticated: true as const,
-    user: { username: session.username },
+    user: {
+      username: session.username,
+      displayName: session.displayName,
+    },
   });
 }

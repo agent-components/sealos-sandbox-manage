@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import { PlusOutlined } from "@ant-design/icons";
 import { App, Button, Typography } from "antd";
 import {
   ListPage,
@@ -77,7 +78,11 @@ export default function TemplatesPage() {
         </div>
       }
       extra={(ctx) => (
-        <Button type="primary" onClick={() => ctx.showFloat("editor")}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => ctx.showFloat("editor")}
+        >
           新建模板
         </Button>
       )}

@@ -5,7 +5,7 @@ import type { Template } from "@/lib/template/schema";
 
 export type ApiError = { error: string; details?: unknown };
 
-export type SandboxUser = { username: string };
+export type SandboxUser = { username: string; displayName: string };
 
 export type CreateSandboxBody = {
   templateId: string;

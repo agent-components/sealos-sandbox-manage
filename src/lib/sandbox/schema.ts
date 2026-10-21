@@ -72,11 +72,47 @@ export const DEFAULT_IDLE_CONFIG: IdleConfig = {
 
 export const SandboxPortSchema = z.object({
   number: z.number().int(),
+  protocol: z
+    .enum(["http", "grpc", "ws", "tcp", "udp", "sctp"])
+    .optional(),
+  isPublic: z.boolean().optional(),
   publicAddress: z.string().nullable(),
   privateAddress: z.string().nullable(),
 });
 
 export type SandboxPort = z.infer<typeof SandboxPortSchema>;
+
+export const SandboxEnvSchema = z.object({
+  name: z.string(),
+  value: z.string().default(""),
+});
+
+export const SandboxStorageSchema = z.object({
+  name: z.string().optional(),
+  path: z.string(),
+  size: z.string().optional(),
+});
+
+export const SandboxConfigMapSchema = z.object({
+  path: z.string(),
+  value: z.string().default(""),
+});
+
+export const SandboxLaunchCommandSchema = z.object({
+  command: z.string().optional(),
+  args: z.array(z.string()).optional(),
+});
+
+export const SandboxImageRegistrySchema = z.object({
+  username: z.string().optional(),
+  serverAddress: z.string().optional(),
+  /** 仅表示是否配置了密码，不回传明文 */
+  hasPassword: z.boolean().optional(),
+});
+
+export type SandboxEnv = z.infer<typeof SandboxEnvSchema>;
+export type SandboxStorage = z.infer<typeof SandboxStorageSchema>;
+export type SandboxConfigMap = z.infer<typeof SandboxConfigMapSchema>;
 
 export const SandboxSchema = z.object({
   id: z.string(),
@@ -85,9 +121,15 @@ export const SandboxSchema = z.object({
   cpu: z.number(),
   memoryGi: z.number(),
   diskGi: z.number(),
+  replicas: z.number().int().min(1).default(1),
   publicUrl: z.string().nullable(),
   ports: z.array(SandboxPortSchema).default([]),
+  env: z.array(SandboxEnvSchema).default([]),
+  storage: z.array(SandboxStorageSchema).default([]),
+  configMap: z.array(SandboxConfigMapSchema).default([]),
+  launchCommand: SandboxLaunchCommandSchema.optional(),
   image: z.string().optional(),
+  imageRegistry: SandboxImageRegistrySchema.nullable().optional(),
   templateId: z.string().optional(),
   tags: z.array(z.string()).default([]),
   autoShutdown: z.boolean().default(false),

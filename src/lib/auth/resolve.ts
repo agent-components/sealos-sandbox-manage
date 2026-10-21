@@ -31,7 +31,7 @@ export type RequestUser = {
 };
 
 /** 要求已登录的平台用户（会话 cookie）。API Key 管理只走这条路径。 */
-export async function requireSessionUser(): Promise<{ username: string }> {
+export async function requireSessionUser() {
   const session = await readUserSession();
   if (!session) {
     throw new AuthError("请先登录");

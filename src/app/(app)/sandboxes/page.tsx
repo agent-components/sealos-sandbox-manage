@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { PlusOutlined } from "@ant-design/icons";
 import { App, Button, Typography } from "antd";
 import {
   ListPage,
@@ -180,7 +181,11 @@ export default function SandboxesPage() {
         </div>
       }
       extra={(ctx) => (
-        <Button type="primary" onClick={() => ctx.showFloat("create")}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => ctx.showFloat("create")}
+        >
           新建沙箱
         </Button>
       )}

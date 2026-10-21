@@ -27,7 +27,7 @@ export async function clearUserSession() {
   jar.delete(SESSION_COOKIE);
 }
 
-export async function readUserSession(): Promise<{ username: string } | null> {
+export async function readUserSession() {
   const jar = await cookies();
   const value = jar.get(SESSION_COOKIE)?.value;
   if (!value) return null;

@@ -45,6 +45,11 @@ const sandboxSchema = {
     memoryGi: { type: "number" },
     diskGi: { type: "number" },
     publicUrl: { type: ["string", "null"] },
+    replicas: {
+      type: "integer",
+      minimum: 1,
+      description: "实例数",
+    },
     ports: {
       type: "array",
       items: {
@@ -52,6 +57,11 @@ const sandboxSchema = {
         required: ["number", "publicAddress", "privateAddress"],
         properties: {
           number: { type: "integer", description: "容器端口" },
+          protocol: {
+            type: "string",
+            enum: ["http", "grpc", "ws", "tcp", "udp", "sctp"],
+          },
+          isPublic: { type: "boolean" },
           publicAddress: {
             type: ["string", "null"],
             description: "公网地址",
@@ -63,7 +73,59 @@ const sandboxSchema = {
         },
       },
     },
+    env: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string" },
+          value: { type: "string" },
+        },
+      },
+    },
+    storage: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["path"],
+        properties: {
+          name: { type: "string" },
+          path: { type: "string" },
+          size: { type: "string", description: "如 3Gi" },
+        },
+      },
+    },
+    configMap: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["path"],
+        properties: {
+          path: { type: "string" },
+          value: { type: "string" },
+        },
+      },
+    },
+    launchCommand: {
+      type: "object",
+      properties: {
+        command: { type: "string" },
+        args: { type: "array", items: { type: "string" } },
+      },
+    },
     image: { type: "string" },
+    imageRegistry: {
+      type: ["object", "null"],
+      properties: {
+        username: { type: "string" },
+        serverAddress: { type: "string" },
+        hasPassword: {
+          type: "boolean",
+          description: "是否配置了仓库密码（不回传明文）",
+        },
+      },
+    },
     templateId: { type: "string" },
     tags: { type: "array", items: { type: "string" } },
     autoShutdown: {
