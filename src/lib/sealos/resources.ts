@@ -1,20 +1,19 @@
 /** 与 Sealos 控制台一致的离散档位 */
 
-export const CPU_OPTIONS = [0.5, 1, 2, 3, 4, 5, 6, 7, 8] as const;
+export const CPU_OPTIONS = [0.1, 0.2, 0.5, 1, 2, 3, 4, 8] as const;
 
 export type CpuOption = (typeof CPU_OPTIONS)[number];
 
 /** 内存档位：展示文案 + Launchpad 使用的 Gi 数值 */
 export const MEMORY_OPTIONS = [
-  { label: "512Mi", gi: 0.5 },
-  { label: "1G", gi: 1 },
-  { label: "2G", gi: 2 },
-  { label: "4G", gi: 4 },
-  { label: "6G", gi: 6 },
-  { label: "8G", gi: 8 },
-  { label: "12G", gi: 12 },
-  { label: "16G", gi: 16 },
-  { label: "32G", gi: 32 },
+  { label: "128 M", gi: 0.125 },
+  { label: "256 M", gi: 0.25 },
+  { label: "512 M", gi: 0.5 },
+  { label: "1 G", gi: 1 },
+  { label: "2 G", gi: 2 },
+  { label: "4 G", gi: 4 },
+  { label: "8 G", gi: 8 },
+  { label: "16 G", gi: 16 },
 ] as const;
 
 export type MemoryOption = (typeof MEMORY_OPTIONS)[number];

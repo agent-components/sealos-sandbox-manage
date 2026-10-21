@@ -6,6 +6,7 @@ import {
   Alert,
   App,
   Button,
+  Form,
   Input,
   Select,
   Skeleton,
@@ -1115,15 +1116,23 @@ export function SandboxDetailModal({
               label: "资源配置",
               children: (
                 <DetailPane error={error}>
-                  <ResourceConfig
-                    value={resources}
-                    onChange={setResources}
+                  <Form
+                    className="template-drawer-panel is-wide sandbox-resource-form"
+                    layout="horizontal"
                     disabled={busy !== null}
-                    showDisk={false}
-                  />
-                  <div style={{ marginTop: 28 }}>
+                    labelCol={{ flex: "96px" }}
+                    wrapperCol={{ flex: 1 }}
+                    labelAlign="right"
+                    colon={false}
+                  >
+                    <ResourceConfig
+                      layout="form"
+                      value={resources}
+                      onChange={setResources}
+                      disabled={busy !== null}
+                      showDisk={false}
+                    />
                     <IdleShutdownConfig
-                      layout="stack"
                       value={idle}
                       disabled={busy !== null}
                       onChange={(next) => {
@@ -1131,7 +1140,7 @@ export function SandboxDetailModal({
                         setIdle(next);
                       }}
                     />
-                  </div>
+                  </Form>
                 </DetailPane>
               ),
             },

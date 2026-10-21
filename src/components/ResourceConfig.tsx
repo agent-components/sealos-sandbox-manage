@@ -1,9 +1,11 @@
 "use client";
 
-import { Flex, Form, InputNumber, Slider, Typography } from "antd";
+import { Form, InputNumber, Slider, Space } from "antd";
 import {
   CPU_OPTIONS,
   MEMORY_OPTIONS,
+  nearestCpu,
+  nearestMemoryGi,
   type ResourceSpec,
 } from "@/lib/sealos/resources";
 
@@ -17,21 +19,8 @@ type Props = {
   layout?: "form" | "stack";
 };
 
-function FieldLabel({
-  title,
-  value,
-}: {
-  title: string;
-  value: string;
-}) {
-  return (
-    <Flex align="baseline" justify="space-between" style={{ marginBottom: 8 }}>
-      <Typography.Text style={{ color: "rgba(0,0,0,0.88)" }}>{title}</Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-        {value}
-      </Typography.Text>
-    </Flex>
-  );
+function sliderMarks(labels: readonly string[]) {
+  return Object.fromEntries(labels.map((label, index) => [index, label]));
 }
 
 export function ResourceConfig({
@@ -41,30 +30,24 @@ export function ResourceConfig({
   showDisk = true,
   layout = "stack",
 }: Props) {
-  const cpuIndex = Math.max(
-    0,
-    CPU_OPTIONS.findIndex((c) => c === value.cpu),
-  );
+  const cpuIndex = Math.max(0, CPU_OPTIONS.indexOf(nearestCpu(value.cpu)));
   const memoryIndex = Math.max(
     0,
-    MEMORY_OPTIONS.findIndex((m) => m.gi === value.memoryGi),
+    MEMORY_OPTIONS.findIndex((m) => m.gi === nearestMemoryGi(value.memoryGi)),
   );
-  const memoryLast = MEMORY_OPTIONS.length - 1;
+  const cpuLabels = CPU_OPTIONS.map(String);
+  const memoryLabels = MEMORY_OPTIONS.map((item) => item.label);
 
   const cpuSlider = (
     <Slider
+      className="resource-slider"
       min={0}
       max={CPU_OPTIONS.length - 1}
       step={1}
       value={cpuIndex}
       disabled={disabled}
-      tooltip={{ formatter: (i) => `${CPU_OPTIONS[i ?? 0]} 核` }}
-      marks={{
-        0: String(CPU_OPTIONS[0]),
-        [CPU_OPTIONS.length - 1]: String(
-          CPU_OPTIONS[CPU_OPTIONS.length - 1],
-        ),
-      }}
+      tooltip={{ formatter: (i) => cpuLabels[i ?? 0] }}
+      marks={sliderMarks(cpuLabels)}
       onChange={(i) =>
         onChange({
           ...value,
@@ -76,16 +59,14 @@ export function ResourceConfig({
 
   const memorySlider = (
     <Slider
+      className="resource-slider"
       min={0}
-      max={memoryLast}
+      max={MEMORY_OPTIONS.length - 1}
       step={1}
       value={memoryIndex}
       disabled={disabled}
-      tooltip={{ formatter: (i) => MEMORY_OPTIONS[i ?? 0]?.label }}
-      marks={{
-        0: MEMORY_OPTIONS[0]!.label,
-        [memoryLast]: MEMORY_OPTIONS[memoryLast]!.label,
-      }}
+      tooltip={{ formatter: (i) => memoryLabels[i ?? 0] }}
+      marks={sliderMarks(memoryLabels)}
       onChange={(i) =>
         onChange({
           ...value,
@@ -96,39 +77,33 @@ export function ResourceConfig({
   );
 
   const diskControl = (
-    <InputNumber
-      min={1}
-      max={1000}
-      step={1}
-      value={value.diskGi}
-      disabled={disabled}
-      addonAfter="Gi"
-      style={{ width: 160 }}
-      onChange={(v) =>
-        onChange({
-          ...value,
-          diskGi: Math.min(1000, Math.max(1, Number(v) || 1)),
-        })
-      }
-    />
+    <Space.Compact>
+      <InputNumber
+        min={1}
+        max={1000}
+        step={1}
+        value={value.diskGi}
+        disabled={disabled}
+        style={{ width: 160 }}
+        onChange={(v) =>
+          onChange({
+            ...value,
+            diskGi: Math.min(1000, Math.max(1, Number(v) || 1)),
+          })
+        }
+      />
+      <Space.Addon disabled={disabled}>Gi</Space.Addon>
+    </Space.Compact>
   );
 
   if (layout === "form") {
     return (
       <>
         <Form.Item label="CPU" className="resource-config-form-item">
-          <div>
-            <div className="resource-config-form-value">{value.cpu} 核</div>
-            {cpuSlider}
-          </div>
+          {cpuSlider}
         </Form.Item>
         <Form.Item label="内存" className="resource-config-form-item">
-          <div>
-            <div className="resource-config-form-value">
-              {MEMORY_OPTIONS[memoryIndex]?.label ?? `${value.memoryGi}G`}
-            </div>
-            {memorySlider}
-          </div>
+          {memorySlider}
         </Form.Item>
         {showDisk ? (
           <Form.Item label="本地存储">{diskControl}</Form.Item>
@@ -143,28 +118,25 @@ export function ResourceConfig({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 28,
+        gap: 4,
         pointerEvents: disabled ? "none" : undefined,
         opacity: disabled ? 0.55 : 1,
       }}
     >
-      <div>
-        <FieldLabel title="CPU" value={`${value.cpu} 核`} />
-        {cpuSlider}
+      <div className="resource-slider-row">
+        <div className="resource-slider-label">CPU</div>
+        <div className="resource-slider-control">{cpuSlider}</div>
       </div>
 
-      <div>
-        <FieldLabel
-          title="内存"
-          value={MEMORY_OPTIONS[memoryIndex]?.label ?? `${value.memoryGi}G`}
-        />
-        {memorySlider}
+      <div className="resource-slider-row">
+        <div className="resource-slider-label">内存</div>
+        <div className="resource-slider-control">{memorySlider}</div>
       </div>
 
       {showDisk ? (
-        <div>
-          <FieldLabel title="本地存储" value={`${value.diskGi} Gi`} />
-          {diskControl}
+        <div className="resource-slider-row">
+          <div className="resource-slider-label">本地存储</div>
+          <div className="resource-slider-control">{diskControl}</div>
         </div>
       ) : null}
     </div>

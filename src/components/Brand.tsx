@@ -1,24 +1,19 @@
-import { Typography } from "antd";
 import { PRODUCT_NAME } from "@/lib/product";
 
 export function Brand({ large = false }: { large?: boolean }) {
   if (large) {
     return (
-      <div>
+      <div className="login-brand-mark">
         <img src="/logo.png" alt="" className="sandbox-logo sandbox-logo-lg" />
-        <Typography.Title level={2} style={{ marginTop: 12, marginBottom: 8 }}>
-          {PRODUCT_NAME}
-        </Typography.Title>
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+        <h2 className="login-brand-title">{PRODUCT_NAME}</h2>
+        <p className="login-brand-tagline">
           云端沙箱控制台。配置算力，一键创建，公网直连。
-        </Typography.Paragraph>
+        </p>
       </div>
     );
   }
 
   return (
-    <Typography.Text strong style={{ fontSize: 16 }}>
-      {PRODUCT_NAME}
-    </Typography.Text>
+    <span className="login-brand-inline">{PRODUCT_NAME}</span>
   );
 }

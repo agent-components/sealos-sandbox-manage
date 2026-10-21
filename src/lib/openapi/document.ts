@@ -10,7 +10,7 @@ const cpuSchema = {
 const memorySchema = {
   type: "number",
   enum: MEMORY_OPTIONS.map((item) => item.gi),
-  description: "内存 Gi。0.5 表示 512Mi",
+  description: "内存 Gi。0.125 表示 128M，0.5 表示 512M",
 } as const;
 
 const idleMinutesSchema = {

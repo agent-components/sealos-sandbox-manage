@@ -19,7 +19,12 @@ import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { sandboxClient } from "@/lib/client";
 import { TagsSchema } from "@/lib/sandbox/schema";
-import { DEFAULT_RESOURCES, type ResourceSpec } from "@/lib/sealos/resources";
+import {
+  DEFAULT_RESOURCES,
+  nearestCpu,
+  nearestMemoryGi,
+  type ResourceSpec,
+} from "@/lib/sealos/resources";
 import type { Template } from "@/lib/template/schema";
 import { primaryDiskGi } from "@/lib/template/schema";
 
@@ -52,8 +57,8 @@ export function CreateSandboxModal({
   function applyTemplate(tpl: Template) {
     setTemplateId(tpl.id);
     setResources({
-      cpu: tpl.cpu,
-      memoryGi: tpl.memoryGi,
+      cpu: nearestCpu(tpl.cpu),
+      memoryGi: nearestMemoryGi(tpl.memoryGi),
       diskGi: primaryDiskGi(tpl.storage),
     });
     setCreateEnv(

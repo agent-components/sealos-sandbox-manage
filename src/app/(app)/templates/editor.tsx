@@ -14,12 +14,17 @@ import {
   Table,
   Typography,
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { MinusOutlined, PlusOutlined } from "@ant-design/icons";
 import { ProDrawer } from "listpage-components/ProDrawer";
 import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { sandboxClient } from "@/lib/client";
-import { DEFAULT_RESOURCES, type ResourceSpec } from "@/lib/sealos/resources";
+import {
+  DEFAULT_RESOURCES,
+  nearestCpu,
+  nearestMemoryGi,
+  type ResourceSpec,
+} from "@/lib/sealos/resources";
 import type { Template } from "@/lib/template/schema";
 import {
   defaultTemplatePorts,
@@ -80,8 +85,8 @@ function fromTemplate(tpl: Template): FormState {
     command: tpl.launchCommand?.command ?? "",
     argsText: (tpl.launchCommand?.args ?? []).join(" "),
     resources: {
-      cpu: tpl.cpu,
-      memoryGi: tpl.memoryGi,
+      cpu: nearestCpu(tpl.cpu),
+      memoryGi: nearestMemoryGi(tpl.memoryGi),
       diskGi: primaryDiskGi(tpl.storage),
     },
     replicas: tpl.replicas ?? 1,
@@ -396,21 +401,42 @@ export function TemplateEditor({
           key: "resources",
           label: "资源配置",
           children: (
-            <TemplateForm saving={saving}>
+            <TemplateForm saving={saving} wide>
               <Form.Item label="实例数">
-                <InputNumber
-                  min={1}
-                  max={20}
-                  value={form.replicas}
-                  addonAfter="个"
-                  style={{ width: 140 }}
-                  onChange={(v) =>
-                    setForm((f) => ({
-                      ...f,
-                      replicas: Number(v) || 1,
-                    }))
-                  }
-                />
+                <Space.Compact className="replica-stepper">
+                  <Button
+                    icon={<MinusOutlined />}
+                    disabled={saving || form.replicas <= 1}
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        replicas: Math.max(1, f.replicas - 1),
+                      }))
+                    }
+                  />
+                  <InputNumber
+                    min={1}
+                    max={20}
+                    controls={false}
+                    value={form.replicas}
+                    onChange={(v) =>
+                      setForm((f) => ({
+                        ...f,
+                        replicas: Math.min(20, Math.max(1, Number(v) || 1)),
+                      }))
+                    }
+                  />
+                  <Button
+                    icon={<PlusOutlined />}
+                    disabled={saving || form.replicas >= 20}
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        replicas: Math.min(20, f.replicas + 1),
+                      }))
+                    }
+                  />
+                </Space.Compact>
               </Form.Item>
               <ResourceConfig
                 layout="form"
@@ -625,24 +651,26 @@ export function TemplateEditor({
                     dataIndex: "size",
                     width: 140,
                     render: (value, _, index) => (
-                      <InputNumber
-                        min={1}
-                        max={1000}
-                        step={1}
-                        value={parseSizeToGi(value)}
-                        addonAfter="Gi"
-                        style={{ width: "100%" }}
-                        onChange={(v) =>
-                          setForm((f) => {
-                            const storage = [...f.storage];
-                            storage[index] = {
-                              ...storage[index]!,
-                              size: formatSizeGi(Number(v) || 1),
-                            };
-                            return { ...f, storage };
-                          })
-                        }
-                      />
+                      <Space.Compact block>
+                        <InputNumber
+                          min={1}
+                          max={1000}
+                          step={1}
+                          value={parseSizeToGi(value)}
+                          style={{ flex: 1, minWidth: 0 }}
+                          onChange={(v) =>
+                            setForm((f) => {
+                              const storage = [...f.storage];
+                              storage[index] = {
+                                ...storage[index]!,
+                                size: formatSizeGi(Number(v) || 1),
+                              };
+                              return { ...f, storage };
+                            })
+                          }
+                        />
+                        <Space.Addon>Gi</Space.Addon>
+                      </Space.Compact>
                     ),
                   },
                   {
