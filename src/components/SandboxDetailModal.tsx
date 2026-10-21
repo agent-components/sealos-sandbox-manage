@@ -39,6 +39,12 @@ type TemplateDraft = {
   configMap: Sandbox["configMap"];
 };
 
+type TemplateDiffItem = {
+  label: string;
+  before: string;
+  after: string;
+};
+
 function draftFromTemplate(
   template: Template,
   diskGi: number,
@@ -72,6 +78,211 @@ function draftFromTemplate(
       value: item.value ?? "",
     })),
   };
+}
+
+function formatEmpty(value: string) {
+  return value.trim() ? value : "（空）";
+}
+
+function formatLaunchCommand(value?: Sandbox["launchCommand"]) {
+  const command = value?.command?.trim() || "";
+  const args = (value?.args ?? []).join(" ").trim();
+  if (!command && !args) return "（未设置）";
+  if (command && args) return `${command} ${args}`;
+  return command || args;
+}
+
+function formatRegistry(value: Sandbox["imageRegistry"]) {
+  if (!value) return "（未配置）";
+  const parts = [
+    value.serverAddress?.trim() || "",
+    value.username ? `用户 ${value.username}` : "",
+    value.hasPassword ? "已设密码" : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "已配置";
+}
+
+function formatPorts(ports: Sandbox["ports"]) {
+  if (!ports.length) return "（无）";
+  // Sealos 回读时常缺 isPublic；与模板默认 true 对齐，避免假 diff
+  return ports
+    .map((port) => {
+      const protocol = (port.protocol || "http").toUpperCase();
+      const pub = port.isPublic === false ? "内网" : "公网";
+      return `${port.number}/${protocol}/${pub}`;
+    })
+    .join("，");
+}
+
+function formatStorage(storage: Sandbox["storage"]) {
+  if (!storage.length) return "（无）";
+  return storage
+    .map((item) => {
+      const name = item.name?.trim() || "unnamed";
+      return `${name}:${item.path}${item.size ? `(${item.size})` : ""}`;
+    })
+    .join("，");
+}
+
+function formatConfigMap(configMap: Sandbox["configMap"]) {
+  if (!configMap.length) return "（无）";
+  return configMap
+    .map((item) => {
+      const value = item.value ?? "";
+      const preview =
+        value.length > 40 ? `${value.slice(0, 40)}…` : value || "（空）";
+      return `${item.path} → ${preview}`;
+    })
+    .join("；");
+}
+
+function formatEnv(list: SandboxEnv[]) {
+  const normalized = normalizeEnv(list);
+  if (!normalized.length) return "（无）";
+  return normalized.map((item) => `${item.name}=${item.value || "（空）"}`).join("，");
+}
+
+function formatIdle(value: { autoShutdown: boolean; idleMinutes: number }) {
+  if (!value.autoShutdown) return "关闭";
+  return `空闲 ${value.idleMinutes} 分钟后关机`;
+}
+
+function pushDiff(
+  items: TemplateDiffItem[],
+  label: string,
+  before: string,
+  after: string,
+) {
+  if (before === after) return;
+  items.push({ label, before, after });
+}
+
+function buildTemplateApplyDiff(input: {
+  current: {
+    image?: string;
+    imageRegistry: Sandbox["imageRegistry"];
+    launchCommand?: Sandbox["launchCommand"];
+    ports: Sandbox["ports"];
+    storage: Sandbox["storage"];
+    configMap: Sandbox["configMap"];
+    env: SandboxEnv[];
+    idle: { autoShutdown: boolean; idleMinutes: number };
+  };
+  nextDraft: TemplateDraft;
+  nextEnv: SandboxEnv[];
+  nextIdle: { autoShutdown: boolean; idleMinutes: number };
+}): TemplateDiffItem[] {
+  const items: TemplateDiffItem[] = [];
+  pushDiff(
+    items,
+    "镜像",
+    formatEmpty(input.current.image ?? ""),
+    formatEmpty(input.nextDraft.image ?? ""),
+  );
+  pushDiff(
+    items,
+    "私有镜像仓库",
+    formatRegistry(input.current.imageRegistry),
+    formatRegistry(input.nextDraft.imageRegistry),
+  );
+  pushDiff(
+    items,
+    "运行命令",
+    formatLaunchCommand(input.current.launchCommand),
+    formatLaunchCommand(input.nextDraft.launchCommand),
+  );
+  pushDiff(
+    items,
+    "网络配置",
+    formatPorts(input.current.ports),
+    formatPorts(input.nextDraft.ports),
+  );
+  pushDiff(
+    items,
+    "目录映射",
+    formatStorage(input.current.storage),
+    formatStorage(input.nextDraft.storage),
+  );
+  pushDiff(
+    items,
+    "文件映射",
+    formatConfigMap(input.current.configMap),
+    formatConfigMap(input.nextDraft.configMap),
+  );
+
+  const currentEnv = new Map(
+    normalizeEnv(input.current.env).map((item) => [item.name, item.value]),
+  );
+  const nextEnv = new Map(
+    normalizeEnv(input.nextEnv).map((item) => [item.name, item.value]),
+  );
+  const envNames = new Set([...currentEnv.keys(), ...nextEnv.keys()]);
+  for (const name of [...envNames].sort()) {
+    const before = currentEnv.get(name);
+    const after = nextEnv.get(name);
+    if (before === after) continue;
+    if (before === undefined) {
+      items.push({
+        label: `环境变量 ${name}（新增）`,
+        before: "—",
+        after: formatEmpty(after ?? ""),
+      });
+    } else if (after === undefined) {
+      items.push({
+        label: `环境变量 ${name}（移除）`,
+        before: formatEmpty(before),
+        after: "—",
+      });
+    } else {
+      items.push({
+        label: `环境变量 ${name}`,
+        before: formatEmpty(before),
+        after: formatEmpty(after),
+      });
+    }
+  }
+
+  pushDiff(
+    items,
+    "自动关机",
+    formatIdle(input.current.idle),
+    formatIdle(input.nextIdle),
+  );
+
+  // 汇总兜底：若结构化对比漏了，仍可用整段 env 文案兜底（通常不会走到）
+  if (
+    items.length === 0 &&
+    formatEnv(input.current.env) !== formatEnv(input.nextEnv)
+  ) {
+    pushDiff(
+      items,
+      "环境变量",
+      formatEnv(input.current.env),
+      formatEnv(input.nextEnv),
+    );
+  }
+
+  return items;
+}
+
+function TemplateDiffList({ items }: { items: TemplateDiffItem[] }) {
+  return (
+    <div className="sandbox-template-diff">
+      {items.map((item) => (
+        <div key={item.label} className="sandbox-template-diff-item">
+          <div className="sandbox-template-diff-label">{item.label}</div>
+          <div className="sandbox-template-diff-row">
+            <span className="sandbox-template-diff-tag is-before">当前</span>
+            <span className="sandbox-template-diff-value">{item.before}</span>
+          </div>
+          <div className="sandbox-template-diff-row">
+            <span className="sandbox-template-diff-tag is-after">模板</span>
+            <span className="sandbox-template-diff-value">{item.after}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function sameTags(left: string[], right: string[]) {
@@ -409,56 +620,77 @@ export function SandboxDetailModal({
   const launchArgs = (view?.launchCommand?.args ?? []).join(" ");
   const registry = view?.imageRegistry;
 
-  function syncFromTemplate() {
-    if (!sandbox?.templateId || !resources) {
+  async function syncFromTemplate() {
+    if (!sandbox?.templateId || !resources || !view) {
       message.warning("该沙箱未关联模板");
       return;
     }
-    const templateLabel =
-      templateNames.get(sandbox.templateId) || sandbox.templateId;
-    modal.confirm({
-      title: "从模板更新到表单？",
-      content: (
-        <div>
-          <p style={{ marginBottom: 8 }}>
-            将用模板「{templateLabel}」的最新配置填写到表单。点击「保存配置」后才会同步到
-            Sealos。
-          </p>
-          <ul style={{ margin: 0, paddingLeft: 18, color: "rgba(0,0,0,0.65)" }}>
-            <li>CPU / 内存 / 磁盘 / 实例数保持不变</li>
-            <li>环境变量合并，同名以模板为准</li>
-            <li>镜像、命令、网络、目录/文件映射等以模板为准</li>
-          </ul>
-        </div>
-      ),
-      okText: "应用到表单",
-      cancelText: "取消",
-      onOk: async () => {
-        setBusy("sync");
-        setError(null);
-        try {
-          const res = await sandboxClient.getTemplate(sandbox.templateId!);
-          const template = res.template;
+    const templateId = sandbox.templateId;
+    const templateLabel = templateNames.get(templateId) || templateId;
+
+    setBusy("sync");
+    setError(null);
+    try {
+      const res = await sandboxClient.getTemplate(templateId);
+      const template = res.template;
+      const nextDraft = draftFromTemplate(template, resources.diskGi);
+      const nextEnv = mergeEnvWithTemplate(env, template.env);
+      const nextIdle = {
+        autoShutdown: template.autoShutdown ?? false,
+        idleMinutes: template.idleMinutes ?? 5,
+      };
+      const diffs = buildTemplateApplyDiff({
+        current: {
+          image: view.image,
+          imageRegistry: view.imageRegistry,
+          launchCommand: view.launchCommand,
+          ports: view.ports,
+          storage: view.storage,
+          configMap: view.configMap,
+          env,
+          idle,
+        },
+        nextDraft,
+        nextEnv,
+        nextIdle,
+      });
+
+      if (diffs.length === 0) {
+        message.info("与最新模板一致，无需应用");
+        return;
+      }
+
+      modal.confirm({
+        title: "应用最新模板？",
+        width: 560,
+        content: (
+          <div>
+            <p style={{ marginBottom: 8 }}>
+              模板「{templateLabel}」与当前表单有 {diffs.length} 处差异。确认后写入表单，点击「保存配置」才会同步到
+              Sealos。资源配置（CPU / 内存 / 磁盘 / 实例数）保持不变。
+            </p>
+            <TemplateDiffList items={diffs} />
+          </div>
+        ),
+        okText: "应用到表单",
+        cancelText: "取消",
+        onOk: () => {
           envDirtyRef.current = true;
           idleDirtyRef.current = true;
           applyTemplatePendingRef.current = true;
-          setEnv(mergeEnvWithTemplate(env, template.env));
-          setIdle({
-            autoShutdown: template.autoShutdown ?? false,
-            idleMinutes: template.idleMinutes ?? 5,
-          });
-          setTemplateDraft(draftFromTemplate(template, resources.diskGi));
+          setEnv(nextEnv);
+          setIdle(nextIdle);
+          setTemplateDraft(nextDraft);
           message.success("已应用到表单，请点击保存配置以同步到 Sealos");
-        } catch (err) {
-          const text = err instanceof Error ? err.message : "加载模板失败";
-          setError(text);
-          message.error(text);
-          throw err;
-        } finally {
-          setBusy(null);
-        }
-      },
-    });
+        },
+      });
+    } catch (err) {
+      const text = err instanceof Error ? err.message : "加载模板失败";
+      setError(text);
+      message.error(text);
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
@@ -480,9 +712,9 @@ export function SandboxDetailModal({
           <Button
             loading={busy === "sync"}
             disabled={busy !== null || !sandbox?.templateId}
-            onClick={() => syncFromTemplate()}
+            onClick={() => void syncFromTemplate()}
           >
-            从模板更新
+            应用最新模板
           </Button>
           <Button
             type="primary"
@@ -562,7 +794,7 @@ export function SandboxDetailModal({
                           type="warning"
                           style={{ display: "block", fontSize: 12, marginTop: 4 }}
                         >
-                          来自模板（未保存）
+                          已应用最新模板（未保存）
                         </Typography.Text>
                       ) : null}
                     </InfoField>

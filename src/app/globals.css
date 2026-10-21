@@ -146,6 +146,59 @@
   z-index: 4;
 }
 
+/* 应用最新模板：差异列表 */
+.sandbox-template-diff {
+  max-height: 360px;
+  overflow: auto;
+  margin-top: 12px;
+  padding: 4px 2px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sandbox-template-diff-item {
+  padding: 10px 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.sandbox-template-diff-label {
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.sandbox-template-diff-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.sandbox-template-diff-tag {
+  flex: 0 0 auto;
+  min-width: 36px;
+  font-size: 12px;
+  line-height: 20px;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.sandbox-template-diff-tag.is-after {
+  color: #1677ff;
+}
+
+.sandbox-template-diff-value {
+  min-width: 0;
+  word-break: break-all;
+  color: rgba(0, 0, 0, 0.88);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+}
+
 /* 模板抽屉右侧表单 */
 .template-drawer-panel {
   max-width: 560px;
