@@ -4,6 +4,7 @@ import { GET as getSandboxArtifact } from "@/app/api/v1/sandboxes/[id]/artifacts
 import { POST as runSandboxCommand } from "@/app/api/v1/sandboxes/[id]/commands/route";
 import { POST as resumeSandbox } from "@/app/api/v1/sandboxes/[id]/resume/route";
 import { POST as stopSandbox } from "@/app/api/v1/sandboxes/[id]/stop/route";
+import { POST as syncSandboxFromTemplate } from "@/app/api/v1/sandboxes/[id]/sync-template/route";
 import { GET as listSandboxes, POST as createSandbox } from "@/app/api/v1/sandboxes/route";
 import { SANDBOX_CHANNEL_HEADER } from "@/lib/api/call-context";
 import { mcpRoutesFromOpenApi, type McpRoute } from "@/lib/mcp/tools";
@@ -16,6 +17,8 @@ const handlers: Record<string, RouteHandler> = {
   "POST /sandboxes": (req) => createSandbox(req),
   "GET /sandboxes/{id}": (req, ctx) => getSandbox(req, ctx),
   "DELETE /sandboxes/{id}": (req, ctx) => deleteSandbox(req, ctx),
+  "POST /sandboxes/{id}/sync-template": (req, ctx) =>
+    syncSandboxFromTemplate(req, ctx),
   "POST /sandboxes/{id}/stop": (req, ctx) => stopSandbox(req, ctx),
   "POST /sandboxes/{id}/resume": (req, ctx) => resumeSandbox(req, ctx),
   "POST /sandboxes/{id}/commands": (req, ctx) => runSandboxCommand(req, ctx),

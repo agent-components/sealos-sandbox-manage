@@ -187,6 +187,8 @@ export const UpdateSandboxSchema = z
     tags: TagsSchema.optional(),
     autoShutdown: z.boolean().optional(),
     idleMinutes: IdleMinutesSchema.optional(),
+    /** 为 true 时按关联模板最新配置同步到 Sealos（保存时触发） */
+    applyTemplate: z.boolean().optional(),
   })
   .refine(
     (value) =>
@@ -196,7 +198,8 @@ export const UpdateSandboxSchema = z
       value.env !== undefined ||
       value.tags !== undefined ||
       value.autoShutdown !== undefined ||
-      value.idleMinutes !== undefined,
+      value.idleMinutes !== undefined ||
+      value.applyTemplate === true,
     { message: "没有可更新的字段" },
   )
   .refine(

@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { PlusOutlined } from "@ant-design/icons";
 import {
   Alert,
+  App,
   Button,
+  Input,
   Select,
   Skeleton,
   Space,
@@ -16,14 +19,85 @@ import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { StateBadge } from "@/components/StateBadge";
 import { sandboxClient } from "@/lib/client";
-import { TagsSchema, type Sandbox } from "@/lib/sandbox/schema";
+import {
+  CreateSandboxEnvSchema,
+  TagsSchema,
+  type Sandbox,
+  type SandboxEnv,
+} from "@/lib/sandbox/schema";
+import { mergeEnvWithTemplate } from "@/lib/sandbox/sync-from-template";
 import { memoryLabel, type ResourceSpec } from "@/lib/sealos/resources";
+import type { Template } from "@/lib/template/schema";
+import { z } from "zod";
+
+type TemplateDraft = {
+  image?: string;
+  imageRegistry: Sandbox["imageRegistry"];
+  launchCommand?: Sandbox["launchCommand"];
+  ports: Sandbox["ports"];
+  storage: Sandbox["storage"];
+  configMap: Sandbox["configMap"];
+};
+
+function draftFromTemplate(
+  template: Template,
+  diskGi: number,
+): TemplateDraft {
+  const storage =
+    (template.storage ?? []).length > 0
+      ? template.storage.map((item, index) =>
+        index === 0 ? { ...item, size: `${diskGi}Gi` } : item,
+      )
+      : [];
+  return {
+    image: template.image,
+    imageRegistry: template.imageRegistry
+      ? {
+        username: template.imageRegistry.username,
+        serverAddress: template.imageRegistry.serverAddress,
+        hasPassword: Boolean(template.imageRegistry.password),
+      }
+      : null,
+    launchCommand: template.launchCommand,
+    ports: (template.ports ?? []).map((port) => ({
+      number: port.number,
+      protocol: port.protocol,
+      isPublic: port.isPublic,
+      publicAddress: null,
+      privateAddress: null,
+    })),
+    storage,
+    configMap: (template.configMap ?? []).map((item) => ({
+      path: item.path,
+      value: item.value ?? "",
+    })),
+  };
+}
 
 function sameTags(left: string[], right: string[]) {
   if (left.length !== right.length) return false;
   return left.every(
     (tag, index) =>
       tag.toLocaleLowerCase() === right[index]?.toLocaleLowerCase(),
+  );
+}
+
+function normalizeEnv(list: SandboxEnv[]) {
+  return list
+    .map((item) => ({
+      name: item.name.trim(),
+      value: item.value ?? "",
+    }))
+    .filter((item) => item.name);
+}
+
+function sameEnv(left: SandboxEnv[], right: SandboxEnv[]) {
+  const a = normalizeEnv(left);
+  const b = normalizeEnv(right);
+  if (a.length !== b.length) return false;
+  return a.every(
+    (item, index) =>
+      item.name === b[index]?.name && item.value === b[index]?.value,
   );
 }
 
@@ -147,12 +221,17 @@ export function SandboxDetailModal({
   onClose,
   onChanged,
 }: Props) {
+  const { modal, message } = App.useApp();
   const [sandbox, setSandbox] = useState<Sandbox | null>(null);
   const [resources, setResources] = useState<ResourceSpec | null>(null);
   const [tags, setTags] = useState<string[]>([]);
+  const [env, setEnv] = useState<SandboxEnv[]>([]);
   const [idle, setIdle] = useState({ autoShutdown: false, idleMinutes: 5 });
+  const [templateDraft, setTemplateDraft] = useState<TemplateDraft | null>(null);
   const tagsDirtyRef = useRef(false);
+  const envDirtyRef = useRef(false);
   const idleDirtyRef = useRef(false);
+  const applyTemplatePendingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [templateNames, setTemplateNames] = useState<Map<string, string>>(
@@ -169,6 +248,14 @@ export function SandboxDetailModal({
         diskGi: res.sandbox.diskGi,
       });
       if (!tagsDirtyRef.current) setTags(res.sandbox.tags);
+      if (!envDirtyRef.current) {
+        setEnv(
+          (res.sandbox.env ?? []).map((item) => ({
+            name: item.name,
+            value: item.value ?? "",
+          })),
+        );
+      }
       if (!idleDirtyRef.current) {
         setIdle({
           autoShutdown: res.sandbox.autoShutdown ?? false,
@@ -201,10 +288,14 @@ export function SandboxDetailModal({
   useEffect(() => {
     if (!open) return;
     tagsDirtyRef.current = false;
+    envDirtyRef.current = false;
     idleDirtyRef.current = false;
+    applyTemplatePendingRef.current = false;
     setSandbox(null);
     setResources(null);
     setTags([]);
+    setEnv([]);
+    setTemplateDraft(null);
     setIdle({ autoShutdown: false, idleMinutes: 5 });
     void load();
     const timer = setInterval(() => {
@@ -221,21 +312,47 @@ export function SandboxDetailModal({
       setError(parsedTags.error.issues[0]?.message ?? "标签无效");
       return;
     }
+    const incompleteEnv = env.find(
+      (item) => !item.name.trim() && (item.value ?? "").length > 0,
+    );
+    if (incompleteEnv) {
+      focusDetailTab("env");
+      setError("环境变量名不能为空");
+      return;
+    }
+    const parsedEnv = z.array(CreateSandboxEnvSchema).safeParse(normalizeEnv(env));
+    if (!parsedEnv.success) {
+      focusDetailTab("env");
+      setError(parsedEnv.error.issues[0]?.message ?? "环境变量无效");
+      return;
+    }
+    const applyTemplate = applyTemplatePendingRef.current;
     const resourceDirty =
       resources.cpu !== sandbox.cpu ||
       resources.memoryGi !== sandbox.memoryGi ||
       resources.diskGi !== sandbox.diskGi;
     const tagsDirty = !sameTags(parsedTags.data, sandbox.tags);
+    const envDirty = !sameEnv(parsedEnv.data, sandbox.env ?? []);
     const idleDirty =
       idle.autoShutdown !== (sandbox.autoShutdown ?? false) ||
       idle.idleMinutes !== (sandbox.idleMinutes ?? 5);
-    if (!resourceDirty && !tagsDirty && !idleDirty) return;
+    if (
+      !applyTemplate &&
+      !resourceDirty &&
+      !tagsDirty &&
+      !envDirty &&
+      !idleDirty
+    ) {
+      return;
+    }
 
     setBusy("update");
     setError(null);
     try {
       await sandboxClient.updateSandbox(sandboxId, {
-        ...(resourceDirty ? resources : {}),
+        // 保存时把本地改动推到 Sealos（含环境变量 / 从模板合并后的配置）
+        ...(applyTemplate || resourceDirty ? resources : {}),
+        ...(applyTemplate || envDirty ? { env: parsedEnv.data } : {}),
         ...(tagsDirty ? { tags: parsedTags.data } : {}),
         ...(idleDirty
           ? {
@@ -243,11 +360,16 @@ export function SandboxDetailModal({
             idleMinutes: idle.idleMinutes,
           }
           : {}),
+        ...(applyTemplate ? { applyTemplate: true } : {}),
       });
       tagsDirtyRef.current = false;
+      envDirtyRef.current = false;
       idleDirtyRef.current = false;
+      applyTemplatePendingRef.current = false;
+      setTemplateDraft(null);
       await load();
       await onChanged();
+      message.success(applyTemplate ? "已保存并同步到 Sealos" : "已保存");
     } catch (err) {
       setError(err instanceof Error ? err.message : "操作失败");
     } finally {
@@ -262,15 +384,82 @@ export function SandboxDetailModal({
       resources.memoryGi !== sandbox.memoryGi ||
       resources.diskGi !== sandbox.diskGi);
   const tagsDirty = !!sandbox && !sameTags(tags, sandbox.tags);
+  const envDirty = !!sandbox && !sameEnv(env, sandbox.env ?? []);
   const idleDirty =
     !!sandbox &&
     (idle.autoShutdown !== (sandbox.autoShutdown ?? false) ||
       idle.idleMinutes !== (sandbox.idleMinutes ?? 5));
-  const dirty = resourceDirty || tagsDirty || idleDirty;
+  const applyTemplatePending = templateDraft !== null;
+  const dirty =
+    resourceDirty || tagsDirty || envDirty || idleDirty || applyTemplatePending;
 
-  const launchCommand = sandbox?.launchCommand?.command?.trim() || "";
-  const launchArgs = (sandbox?.launchCommand?.args ?? []).join(" ");
-  const registry = sandbox?.imageRegistry;
+  const view = sandbox
+    ? {
+      image: templateDraft?.image ?? sandbox.image,
+      imageRegistry: templateDraft
+        ? templateDraft.imageRegistry
+        : sandbox.imageRegistry,
+      launchCommand: templateDraft?.launchCommand ?? sandbox.launchCommand,
+      ports: templateDraft?.ports ?? sandbox.ports ?? [],
+      storage: templateDraft?.storage ?? sandbox.storage ?? [],
+      configMap: templateDraft?.configMap ?? sandbox.configMap ?? [],
+    }
+    : null;
+  const launchCommand = view?.launchCommand?.command?.trim() || "";
+  const launchArgs = (view?.launchCommand?.args ?? []).join(" ");
+  const registry = view?.imageRegistry;
+
+  function syncFromTemplate() {
+    if (!sandbox?.templateId || !resources) {
+      message.warning("该沙箱未关联模板");
+      return;
+    }
+    const templateLabel =
+      templateNames.get(sandbox.templateId) || sandbox.templateId;
+    modal.confirm({
+      title: "从模板更新到表单？",
+      content: (
+        <div>
+          <p style={{ marginBottom: 8 }}>
+            将用模板「{templateLabel}」的最新配置填写到表单。点击「保存配置」后才会同步到
+            Sealos。
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 18, color: "rgba(0,0,0,0.65)" }}>
+            <li>CPU / 内存 / 磁盘 / 实例数保持不变</li>
+            <li>环境变量合并，同名以模板为准</li>
+            <li>镜像、命令、网络、目录/文件映射等以模板为准</li>
+          </ul>
+        </div>
+      ),
+      okText: "应用到表单",
+      cancelText: "取消",
+      onOk: async () => {
+        setBusy("sync");
+        setError(null);
+        try {
+          const res = await sandboxClient.getTemplate(sandbox.templateId!);
+          const template = res.template;
+          envDirtyRef.current = true;
+          idleDirtyRef.current = true;
+          applyTemplatePendingRef.current = true;
+          setEnv(mergeEnvWithTemplate(env, template.env));
+          setIdle({
+            autoShutdown: template.autoShutdown ?? false,
+            idleMinutes: template.idleMinutes ?? 5,
+          });
+          setTemplateDraft(draftFromTemplate(template, resources.diskGi));
+          message.success("已应用到表单，请点击保存配置以同步到 Sealos");
+        } catch (err) {
+          const text = err instanceof Error ? err.message : "加载模板失败";
+          setError(text);
+          message.error(text);
+          throw err;
+        } finally {
+          setBusy(null);
+        }
+      },
+    });
+  }
 
   return (
     <ProDrawer
@@ -289,9 +478,16 @@ export function SandboxDetailModal({
             关闭
           </Button>
           <Button
+            loading={busy === "sync"}
+            disabled={busy !== null || !sandbox?.templateId}
+            onClick={() => syncFromTemplate()}
+          >
+            从模板更新
+          </Button>
+          <Button
             type="primary"
             loading={busy === "update"}
-            disabled={!dirty || !resources}
+            disabled={!dirty || !resources || busy !== null}
             onClick={() => void save()}
           >
             保存配置
@@ -356,11 +552,19 @@ export function SandboxDetailModal({
                       )}
                     </InfoField>
                     <InfoField label="镜像">
-                      {sandbox.image ? (
-                        <MonoText>{sandbox.image}</MonoText>
+                      {view?.image ? (
+                        <MonoText>{view.image}</MonoText>
                       ) : (
                         "—"
                       )}
+                      {applyTemplatePending ? (
+                        <Typography.Text
+                          type="warning"
+                          style={{ display: "block", fontSize: 12, marginTop: 4 }}
+                        >
+                          来自模板（未保存）
+                        </Typography.Text>
+                      ) : null}
                     </InfoField>
                     <InfoField label="私有镜像仓库">
                       {registry ? (
@@ -445,7 +649,7 @@ export function SandboxDetailModal({
                     size="small"
                     pagination={false}
                     rowKey={(row, index) => `${row.number}-${index}`}
-                    dataSource={sandbox.ports ?? []}
+                    dataSource={view?.ports ?? []}
                     locale={{ emptyText: "暂无端口信息" }}
                     columns={[
                       {
@@ -499,43 +703,93 @@ export function SandboxDetailModal({
                   <Table
                     size="small"
                     pagination={false}
-                    rowKey={(row, index) => `${row.name}-${index}`}
-                    dataSource={sandbox.env ?? []}
+                    rowKey={(_, index) => `env-${index}`}
+                    dataSource={env}
                     locale={{ emptyText: "暂无环境变量" }}
                     columns={[
                       {
                         title: "变量名",
                         dataIndex: "name",
                         width: "36%",
-                        render: (value: string) => <MonoText>{value}</MonoText>,
+                        render: (value: string, _, index) => (
+                          <Input
+                            value={value}
+                            placeholder="KEY"
+                            disabled={busy !== null}
+                            onChange={(e) => {
+                              envDirtyRef.current = true;
+                              setEnv((list) => {
+                                const next = [...list];
+                                next[index] = {
+                                  ...next[index]!,
+                                  name: e.target.value,
+                                };
+                                return next;
+                              });
+                            }}
+                          />
+                        ),
                       },
                       {
                         title: "值",
                         dataIndex: "value",
-                        render: (value: string) =>
-                          value ? (
-                            <span
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "flex-start",
-                                gap: 4,
-                                maxWidth: "100%",
-                              }}
-                            >
-                              <MonoText>{value}</MonoText>
-                              <Typography.Text
-                                copyable={{
-                                  text: value,
-                                  tooltips: ["复制", "已复制"],
-                                }}
-                              />
-                            </span>
-                          ) : (
-                            <EmptyHint>（空）</EmptyHint>
-                          ),
+                        render: (value: string, _, index) => (
+                          <Input
+                            value={value}
+                            placeholder="VALUE"
+                            disabled={busy !== null}
+                            onChange={(e) => {
+                              envDirtyRef.current = true;
+                              setEnv((list) => {
+                                const next = [...list];
+                                next[index] = {
+                                  ...next[index]!,
+                                  value: e.target.value,
+                                };
+                                return next;
+                              });
+                            }}
+                          />
+                        ),
+                      },
+                      {
+                        title: "",
+                        key: "action",
+                        width: 64,
+                        align: "right" as const,
+                        render: (_: unknown, __: SandboxEnv, index: number) => (
+                          <Button
+                            type="link"
+                            danger
+                            size="small"
+                            style={{ paddingInline: 0 }}
+                            disabled={busy !== null}
+                            onClick={() => {
+                              envDirtyRef.current = true;
+                              setEnv((list) =>
+                                list.filter((_, i) => i !== index),
+                              );
+                            }}
+                          >
+                            删除
+                          </Button>
+                        ),
                       },
                     ]}
                   />
+                  <Button
+                    type="dashed"
+                    block
+                    icon={<PlusOutlined />}
+                    disabled={busy !== null}
+                    style={{ marginTop: 12 }}
+                    onClick={() => {
+                      envDirtyRef.current = true;
+                      setEnv((list) => [...list, { name: "", value: "" }]);
+                    }}
+                  >
+                    添加环境变量
+                  </Button>
                 </DetailPane>
               ),
             },
@@ -548,7 +802,7 @@ export function SandboxDetailModal({
                     size="small"
                     pagination={false}
                     rowKey={(row, index) => `${row.path}-${index}`}
-                    dataSource={sandbox.storage ?? []}
+                    dataSource={view?.storage ?? []}
                     locale={{ emptyText: "暂无目录映射" }}
                     columns={[
                       {
@@ -578,7 +832,7 @@ export function SandboxDetailModal({
               label: "文件映射",
               children: (
                 <DetailPane error={error}>
-                  {(sandbox.configMap ?? []).length === 0 ? (
+                  {(view?.configMap ?? []).length === 0 ? (
                     <EmptyHint>暂无文件映射</EmptyHint>
                   ) : (
                     <Space
@@ -586,7 +840,7 @@ export function SandboxDetailModal({
                       size={12}
                       style={{ width: "100%" }}
                     >
-                      {(sandbox.configMap ?? []).map((item, index) => (
+                      {(view?.configMap ?? []).map((item, index) => (
                         <div
                           key={`${item.path}-${index}`}
                           style={{

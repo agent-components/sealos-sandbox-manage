@@ -1,3 +1,7 @@
+import {
+  buildSyncFromTemplateBody,
+  type SyncFromTemplateOptions,
+} from "@/lib/sandbox/sync-from-template";
 import { getSealosConfig } from "@/lib/sealos/config";
 import { SealosApiError } from "@/lib/sealos/errors";
 import type { LaunchpadApp } from "@/lib/sealos/map";
@@ -187,6 +191,25 @@ export function createLaunchpadClient(opts: LaunchpadClientOptions) {
         {
           method: "PATCH",
           body: JSON.stringify(body),
+        },
+        baseUrl,
+      );
+      return this.getApp(name);
+    },
+
+    /** 按模板最新配置更新远程应用（保留当前资源配置，环境变量合并） */
+    async syncAppFromTemplate(
+      name: string,
+      app: LaunchpadApp,
+      template: Template,
+      opts?: SyncFromTemplateOptions,
+    ): Promise<LaunchpadApp> {
+      await launchpadFetch(
+        kubeconfig,
+        `/api/v2alpha/apps/${encodeURIComponent(name)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(buildSyncFromTemplateBody(app, template, opts)),
         },
         baseUrl,
       );

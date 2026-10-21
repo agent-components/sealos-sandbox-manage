@@ -13,8 +13,10 @@ import { assertOwnedBy } from "@/lib/sandbox/ownership";
 import { deleteSandboxRecord } from "@/lib/sandbox/record";
 import { DEFAULT_IDLE_CONFIG, UpdateSandboxSchema } from "@/lib/sandbox/schema";
 import { setSandboxTags, withSandboxTags } from "@/lib/sandbox/tags";
+import { AuthError } from "@/lib/sealos/errors";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { toSandbox } from "@/lib/sealos/map";
+import { getTemplate } from "@/lib/template/store";
 
 async function withSandboxExtras(owner: string, sandbox: ReturnType<typeof toSandbox>) {
   const [enriched] = await withSandboxIdle(
@@ -75,13 +77,42 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
             diskGi: body.diskGi,
           }
         : undefined;
-    const app =
-      resourcePatch || body.env !== undefined
-        ? await client.updateApp(id, {
-            ...(resourcePatch ? { resources: resourcePatch } : {}),
-            ...(body.env !== undefined ? { env: body.env } : {}),
-          })
-        : existing;
+
+    let app = existing;
+    if (body.applyTemplate) {
+      if (!templateId) {
+        throw new AuthError("该沙箱未关联模板，无法从模板更新", 400);
+      }
+      const template = await getTemplate(templateId);
+      if (!template) {
+        throw new AuthError(`模板「${templateId}」不存在或已删除`, 404);
+      }
+      app = await client.syncAppFromTemplate(id, existing, template, {
+        ...(body.env !== undefined ? { env: body.env } : {}),
+        ...(resourcePatch
+          ? {
+              resources: {
+                ...resourcePatch,
+                replicas: Math.max(1, Math.round(existing.quota?.replicas ?? 1)),
+              },
+            }
+          : {}),
+      });
+      if (body.autoShutdown === undefined && body.idleMinutes === undefined) {
+        await setSandboxIdleConfig(user.username, id, {
+          autoShutdown:
+            template.autoShutdown ?? DEFAULT_IDLE_CONFIG.autoShutdown,
+          idleMinutes:
+            template.idleMinutes ?? DEFAULT_IDLE_CONFIG.idleMinutes,
+        });
+      }
+    } else if (resourcePatch || body.env !== undefined) {
+      app = await client.updateApp(id, {
+        ...(resourcePatch ? { resources: resourcePatch } : {}),
+        ...(body.env !== undefined ? { env: body.env } : {}),
+      });
+    }
+
     if (body.tags !== undefined) {
       await setSandboxTags(user.username, id, body.tags);
     }

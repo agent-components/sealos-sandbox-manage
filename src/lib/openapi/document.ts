@@ -378,6 +378,23 @@ export function openApiDocument() {
           },
         },
       },
+      "/sandboxes/{id}/sync-template": {
+        post: {
+          operationId: "syncSandboxFromTemplate",
+          summary: "从关联模板更新沙箱",
+          description:
+            "立即按模板最新配置更新该沙箱对应的 Sealos 应用（控制台详情页则是先应用到表单，点保存配置时通过 PATCH applyTemplate 触发）。CPU/内存/磁盘/实例数保持不变；环境变量与模板合并，同名以模板为准；镜像、运行命令、端口、目录映射、文件映射、空闲关机等以模板为准。",
+          security: userAuth,
+          parameters: [sandboxId],
+          responses: {
+            "200": {
+              description: "更新后的沙箱",
+              content: { "application/json": { schema: sandboxResponse } },
+            },
+            ...errors(400, 401, 403, 404, 500),
+          },
+        },
+      },
       "/sandboxes/{id}/stop": {
         post: {
           operationId: "stopSandbox",

@@ -24,6 +24,8 @@ export type UpdateSandboxBody = Partial<ResourceSpec> & {
   tags?: string[];
   autoShutdown?: boolean;
   idleMinutes?: number;
+  /** 保存时按关联模板最新配置同步到 Sealos */
+  applyTemplate?: boolean;
 };
 
 export type PageResult<T> = {
@@ -114,6 +116,11 @@ export const sandboxClient = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  syncSandboxFromTemplate: (id: string) =>
+    request<{ sandbox: Sandbox }>(
+      `/api/v1/sandboxes/${encodeURIComponent(id)}/sync-template`,
+      { method: "POST" },
+    ),
   deleteSandbox: (id: string) =>
     request<{ ok: true }>(`/api/v1/sandboxes/${encodeURIComponent(id)}`, {
       method: "DELETE",
@@ -162,6 +169,10 @@ export const sandboxClient = {
       `/api/v1/templates${qs ? `?${qs}` : ""}`,
     );
   },
+  getTemplate: (id: string) =>
+    request<{ template: Template }>(
+      `/api/v1/templates/${encodeURIComponent(id)}`,
+    ),
   createTemplate: (body: CreateTemplateBody) =>
     request<{ template: Template }>("/api/v1/templates", {
       method: "POST",
