@@ -65,14 +65,21 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     const existing = await client.getApp(id);
     const templateId = await assertOwnedBy(existing, user.username);
     assertSandboxAllowed(user, id);
-    const app =
+    const resourcePatch =
       body.cpu !== undefined &&
       body.memoryGi !== undefined &&
       body.diskGi !== undefined
-        ? await client.updateApp(id, {
+        ? {
             cpu: body.cpu,
             memoryGi: body.memoryGi,
             diskGi: body.diskGi,
+          }
+        : undefined;
+    const app =
+      resourcePatch || body.env !== undefined
+        ? await client.updateApp(id, {
+            ...(resourcePatch ? { resources: resourcePatch } : {}),
+            ...(body.env !== undefined ? { env: body.env } : {}),
           })
         : existing;
     if (body.tags !== undefined) {

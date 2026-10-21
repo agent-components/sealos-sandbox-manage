@@ -183,6 +183,7 @@ export const UpdateSandboxSchema = z
     cpu: ResourceSpecSchema.shape.cpu.optional(),
     memoryGi: ResourceSpecSchema.shape.memoryGi.optional(),
     diskGi: ResourceSpecSchema.shape.diskGi.optional(),
+    env: z.array(CreateSandboxEnvSchema).optional(),
     tags: TagsSchema.optional(),
     autoShutdown: z.boolean().optional(),
     idleMinutes: IdleMinutesSchema.optional(),
@@ -192,6 +193,7 @@ export const UpdateSandboxSchema = z
       value.cpu !== undefined ||
       value.memoryGi !== undefined ||
       value.diskGi !== undefined ||
+      value.env !== undefined ||
       value.tags !== undefined ||
       value.autoShutdown !== undefined ||
       value.idleMinutes !== undefined,

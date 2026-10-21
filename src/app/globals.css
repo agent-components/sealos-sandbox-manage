@@ -193,23 +193,25 @@
   margin: 4px 6px 10px;
 }
 
-/* 资源配置：滑块与表单横排标签对齐，当前值放在 extra */
-.template-drawer-panel .resource-config-form-item .ant-slider {
-  margin: 6px 6px 0;
+/* 资源配置：滑块与表单横排标签对齐 */
+.template-drawer-panel .resource-config-form-item.ant-row {
+  align-items: flex-start;
 }
 
-.template-drawer-panel .resource-config-form-item .ant-form-item-extra {
-  margin-top: 0;
-  margin-bottom: 2px;
+.template-drawer-panel .resource-config-form-item .resource-config-form-value {
+  margin-bottom: 4px;
   text-align: right;
+  font-size: 13px;
+  line-height: 22px;
   color: rgba(0, 0, 0, 0.45);
 }
 
-.template-drawer-panel
-  .resource-config-form-item
-  .ant-form-item-control-input
-  + .ant-form-item-extra {
-  margin-top: 2px;
+.template-drawer-panel .resource-config-form-item .ant-slider {
+  margin: 2px 6px 8px;
+}
+
+.template-drawer-panel .resource-config-form-item .ant-form-item-control-input {
+  min-height: auto;
 }
 
 .template-drawer-edit-table {

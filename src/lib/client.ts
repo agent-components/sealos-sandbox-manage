@@ -20,6 +20,7 @@ export type CreateSandboxBody = {
 };
 
 export type UpdateSandboxBody = Partial<ResourceSpec> & {
+  env?: { name: string; value: string }[];
   tags?: string[];
   autoShutdown?: boolean;
   idleMinutes?: number;

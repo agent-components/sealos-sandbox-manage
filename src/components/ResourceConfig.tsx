@@ -116,19 +116,19 @@ export function ResourceConfig({
   if (layout === "form") {
     return (
       <>
-        <Form.Item
-          label="CPU"
-          extra={`${value.cpu} 核`}
-          className="resource-config-form-item"
-        >
-          {cpuSlider}
+        <Form.Item label="CPU" className="resource-config-form-item">
+          <div>
+            <div className="resource-config-form-value">{value.cpu} 核</div>
+            {cpuSlider}
+          </div>
         </Form.Item>
-        <Form.Item
-          label="内存"
-          extra={MEMORY_OPTIONS[memoryIndex]?.label ?? `${value.memoryGi}G`}
-          className="resource-config-form-item"
-        >
-          {memorySlider}
+        <Form.Item label="内存" className="resource-config-form-item">
+          <div>
+            <div className="resource-config-form-value">
+              {MEMORY_OPTIONS[memoryIndex]?.label ?? `${value.memoryGi}G`}
+            </div>
+            {memorySlider}
+          </div>
         </Form.Item>
         {showDisk ? (
           <Form.Item label="本地存储">{diskControl}</Form.Item>

@@ -153,26 +153,40 @@ export function createLaunchpadClient(opts: LaunchpadClientOptions) {
 
     async updateApp(
       name: string,
-      resources: ResourceSpec,
+      patch: {
+        resources?: ResourceSpec;
+        env?: { name: string; value: string }[];
+      },
     ): Promise<LaunchpadApp> {
+      const body: Record<string, unknown> = {};
+      if (patch.resources) {
+        body.quota = {
+          cpu: patch.resources.cpu,
+          memory: patch.resources.memoryGi,
+          replicas: 1,
+        };
+        body.storage = [
+          {
+            path: "/data",
+            size: `${patch.resources.diskGi}Gi`,
+          },
+        ];
+      }
+      if (patch.env !== undefined) {
+        body.env = patch.env.map((item) => ({
+          name: item.name,
+          value: item.value ?? "",
+        }));
+      }
+      if (Object.keys(body).length === 0) {
+        return this.getApp(name);
+      }
       await launchpadFetch(
         kubeconfig,
         `/api/v2alpha/apps/${encodeURIComponent(name)}`,
         {
           method: "PATCH",
-          body: JSON.stringify({
-            quota: {
-              cpu: resources.cpu,
-              memory: resources.memoryGi,
-              replicas: 1,
-            },
-            storage: [
-              {
-                path: "/data",
-                size: `${resources.diskGi}Gi`,
-              },
-            ],
-          }),
+          body: JSON.stringify(body),
         },
         baseUrl,
       );
