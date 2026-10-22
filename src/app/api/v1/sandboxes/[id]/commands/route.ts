@@ -18,8 +18,6 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       method: "POST",
       path: "/sandboxes/{id}/commands",
       arguments: { id, command: body.command },
-      sandboxId: id,
-      trackActivity: true,
       run: async () => {
         const target = await resolveSandboxForCommand(id, req.signal);
         const result = await execInPod(target.kubeconfig, {

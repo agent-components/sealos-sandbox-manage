@@ -24,8 +24,6 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       method: "POST",
       path: "/sandboxes/{id}/sync-template",
       arguments: { id },
-      sandboxId: id,
-      trackActivity: true,
       run: async () => {
         const user = await requireUser();
         const kubeconfig = await resolveKubeconfig();

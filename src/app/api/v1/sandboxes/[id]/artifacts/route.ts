@@ -18,8 +18,6 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       method: "GET",
       path: "/sandboxes/{id}/artifacts",
       arguments: { id, path },
-      sandboxId: id,
-      trackActivity: true,
       run: async () => {
         const artifact = await openSandboxArtifact(id, path, req.signal);
         if (artifact.kind === "image") {

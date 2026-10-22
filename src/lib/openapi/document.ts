@@ -142,7 +142,7 @@ const sandboxSchema = {
     },
     lastActivityAt: {
       type: "string",
-      description: "上次活跃时间（ISO 8601）",
+      description: "上次活跃时间（ISO 8601）；仅 MCP 工具调用成功时更新",
     },
     createdAt: { type: "string" },
     upTime: { type: "string" },

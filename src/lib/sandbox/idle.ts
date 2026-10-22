@@ -66,7 +66,7 @@ export async function withSandboxIdle(
   });
 }
 
-/** 沙箱 API 请求开始：有记录的沙箱才增加 inflight。 */
+/** MCP 工具调用开始：有记录的沙箱才增加 inflight。 */
 export async function beginMcpActivity(sandboxId: string): Promise<void> {
   try {
     await query(
@@ -81,8 +81,9 @@ export async function beginMcpActivity(sandboxId: string): Promise<void> {
 }
 
 /**
- * 沙箱 API 请求结束。鉴权失败传 touch: false。
+ * MCP 工具调用结束。失败/中止传 touch: false。
  * 成功时刷新 last_activity_at，并减少 inflight（下限 0）。
+ * last_activity_at 仅由此路径更新（不含 REST）。
  */
 export async function endMcpActivity(
   sandboxId: string,
@@ -100,20 +101,6 @@ export async function endMcpActivity(
     );
   } catch (error) {
     console.error("空闲活动结束失败", error);
-  }
-}
-
-/** 创建成功后写入活动时间（不经 inflight）。 */
-export async function touchMcpActivity(sandboxId: string): Promise<void> {
-  try {
-    await query(
-      `UPDATE sandbox.records
-       SET last_activity_at = now(), updated_at = now()
-       WHERE sandbox_id = $1`,
-      [sandboxId]
-    );
-  } catch (error) {
-    console.error("空闲活动刷新失败", error);
   }
 }
 

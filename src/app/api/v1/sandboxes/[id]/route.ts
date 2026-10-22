@@ -36,8 +36,6 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       method: "GET",
       path: "/sandboxes/{id}",
       arguments: { id },
-      sandboxId: id,
-      trackActivity: true,
       run: async () => {
         const user = await requireUser();
         const kubeconfig = await resolveKubeconfig();
@@ -158,8 +156,6 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
       method: "DELETE",
       path: "/sandboxes/{id}",
       arguments: { id },
-      sandboxId: id,
-      trackActivity: true,
       run: async () => {
         const user = await requireUser();
         const kubeconfig = await resolveKubeconfig();

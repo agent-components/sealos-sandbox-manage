@@ -1,10 +1,5 @@
 import { jsonError } from "@/lib/api/response";
 import { recordMcpCall, type CallChannel } from "@/lib/mcp/audit";
-import {
-  beginMcpActivity,
-  endMcpActivity,
-  touchMcpActivity,
-} from "@/lib/sandbox/idle";
 
 export type { CallChannel };
 
@@ -22,29 +17,23 @@ export function sandboxIdFromRequest(req: Request): string | null {
   return value ? value : null;
 }
 
-/** 包裹一次沙箱相关请求：可选空闲计时；写入调用日志。 */
+/**
+ * 包裹一次沙箱相关 REST 请求：写入调用日志。
+ * 空闲活动（last_activity_at / inflight）仅由 MCP 工具调用维护，此处不触碰。
+ */
 export async function runSandboxApiCall<T>(opts: {
   req: Request;
   tool: string;
   method: string;
   path: string;
   arguments: Record<string, unknown>;
-  sandboxId?: string | null;
-  /** 是否计入空闲活动；list 等传 false */
-  trackActivity?: boolean;
   run: () => Promise<{ status: number; result: unknown; value: T }>;
 }): Promise<T> {
   const startedAt = Date.now();
   const channel = callChannel(opts.req);
-  const sandboxId = opts.sandboxId?.trim() || "";
-  const track = !!opts.trackActivity && !!sandboxId;
 
-  if (track) await beginMcpActivity(sandboxId);
-
-  let touch = false;
   try {
     const outcome = await opts.run();
-    touch = outcome.status !== 401 && outcome.status !== 403;
     await recordMcpCall({
       tool: opts.tool,
       method: opts.method,
@@ -75,11 +64,5 @@ export async function runSandboxApiCall<T>(opts: {
       channel,
     });
     throw error;
-  } finally {
-    if (track) await endMcpActivity(sandboxId, { touch });
   }
-}
-
-export async function touchSandboxActivity(sandboxId: string) {
-  await touchMcpActivity(sandboxId);
 }

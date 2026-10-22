@@ -1,10 +1,7 @@
 import { NextRequest } from "next/server";
 import { requireUser, resolveKubeconfig } from "@/lib/auth/resolve";
 import { grantApiKeySandbox } from "@/lib/apikey/store";
-import {
-  runSandboxApiCall,
-  touchSandboxActivity,
-} from "@/lib/api/call-context";
+import { runSandboxApiCall } from "@/lib/api/call-context";
 import { parsePageQuery, slicePage } from "@/lib/api/page";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { createSandboxId } from "@/lib/sandbox/id";
@@ -162,7 +159,6 @@ export async function POST(req: NextRequest) {
           user.username,
           await withSandboxTags(user.username, [toSandbox(app, template.id)])
         );
-        await touchSandboxActivity(id);
         const body = { sandbox };
         return {
           status: 201,
