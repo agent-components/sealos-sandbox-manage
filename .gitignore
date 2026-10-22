@@ -37,6 +37,9 @@ yarn-error.log*
 # local Sealos credentials
 .sealos/
 
+# DB dump of templates / api_keys (dev preserve)
+.data/
+
 # vercel
 .vercel
 
