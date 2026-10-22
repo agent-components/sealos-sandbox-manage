@@ -36,20 +36,21 @@ async function apiFailure(error: unknown) {
   return { status: response.status, body: (await response.json()) as unknown };
 }
 
-function requireSandboxId(args: Record<string, unknown>): string | null {
-  return typeof args.id === "string" && args.id.length > 0 ? args.id : null;
+function loggedArgs(sandboxId: string, args: Record<string, unknown>) {
+  return { id: sandboxId, ...args };
 }
 
 async function withSandboxActivity(
   tool: string,
   path: string,
-  args: Record<string, unknown>,
   sandboxId: string,
+  args: Record<string, unknown>,
   request: Request,
   id: JsonRpcId,
   run: () => Promise<unknown>,
 ): Promise<ToolDispatch> {
   const startedAt = Date.now();
+  const auditArgs = loggedArgs(sandboxId, args);
   await beginMcpActivity(sandboxId);
   try {
     const body = await run();
@@ -57,7 +58,7 @@ async function withSandboxActivity(
       tool,
       method: "tools/call",
       path,
-      arguments: args,
+      arguments: auditArgs,
       status: 200,
       result: body,
       startedAt,
@@ -74,7 +75,7 @@ async function withSandboxActivity(
       tool,
       method: "tools/call",
       path,
-      arguments: args,
+      arguments: auditArgs,
       status: failure.status,
       result: failure.body,
       startedAt,
@@ -92,36 +93,13 @@ async function withSandboxActivity(
   }
 }
 
-async function missingId(
-  tool: string,
-  path: string,
-  args: Record<string, unknown>,
-  id: JsonRpcId,
-): Promise<ToolDispatch> {
-  await recordMcpCall({
-    tool,
-    method: "tools/call",
-    path,
-    arguments: args,
-    status: 400,
-    result: { error: "缺少参数 id" },
-    channel: "mcp",
-  });
-  return {
-    kind: "response",
-    status: 200,
-    body: rpcResult(id, toolText("缺少参数 id", true)),
-  };
-}
-
 export async function callWrite(
   request: Request,
   id: JsonRpcId,
+  sandboxId: string,
   args: Record<string, unknown>,
 ): Promise<ToolDispatch> {
-  const sandboxId = requireSandboxId(args);
-  if (!sandboxId) return missingId("write", "/mcp/write", args, id);
-  return withSandboxActivity("write", "/mcp/write", args, sandboxId, request, id, () =>
+  return withSandboxActivity("write", "/mcp/write", sandboxId, args, request, id, () =>
     writeSandboxFile(
       sandboxId,
       String(args.path ?? ""),
@@ -134,11 +112,10 @@ export async function callWrite(
 export async function callEdit(
   request: Request,
   id: JsonRpcId,
+  sandboxId: string,
   args: Record<string, unknown>,
 ): Promise<ToolDispatch> {
-  const sandboxId = requireSandboxId(args);
-  if (!sandboxId) return missingId("edit", "/mcp/edit", args, id);
-  return withSandboxActivity("edit", "/mcp/edit", args, sandboxId, request, id, () =>
+  return withSandboxActivity("edit", "/mcp/edit", sandboxId, args, request, id, () =>
     editSandboxFile(
       sandboxId,
       String(args.path ?? ""),
@@ -153,11 +130,10 @@ export async function callEdit(
 export async function callDelete(
   request: Request,
   id: JsonRpcId,
+  sandboxId: string,
   args: Record<string, unknown>,
 ): Promise<ToolDispatch> {
-  const sandboxId = requireSandboxId(args);
-  if (!sandboxId) return missingId("delete", "/mcp/delete", args, id);
-  return withSandboxActivity("delete", "/mcp/delete", args, sandboxId, request, id, () =>
+  return withSandboxActivity("delete", "/mcp/delete", sandboxId, args, request, id, () =>
     deleteSandboxFile(sandboxId, String(args.path ?? ""), request.signal),
   );
 }
@@ -165,16 +141,15 @@ export async function callDelete(
 export async function callGrep(
   request: Request,
   id: JsonRpcId,
+  sandboxId: string,
   args: Record<string, unknown>,
 ): Promise<ToolDispatch> {
-  const sandboxId = requireSandboxId(args);
-  if (!sandboxId) return missingId("grep", "/mcp/grep", args, id);
   const mode = args.output_mode;
   const outputMode: GrepMode | undefined =
     mode === "content" || mode === "files_with_matches" || mode === "count"
       ? mode
       : undefined;
-  return withSandboxActivity("grep", "/mcp/grep", args, sandboxId, request, id, async () => {
+  return withSandboxActivity("grep", "/mcp/grep", sandboxId, args, request, id, async () => {
     const result = await grepSandbox(sandboxId, {
       pattern: String(args.pattern ?? ""),
       path: typeof args.path === "string" ? args.path : undefined,
@@ -193,11 +168,10 @@ export async function callGrep(
 export async function callGlob(
   request: Request,
   id: JsonRpcId,
+  sandboxId: string,
   args: Record<string, unknown>,
 ): Promise<ToolDispatch> {
-  const sandboxId = requireSandboxId(args);
-  if (!sandboxId) return missingId("glob", "/mcp/glob", args, id);
-  return withSandboxActivity("glob", "/mcp/glob", args, sandboxId, request, id, async () => {
+  return withSandboxActivity("glob", "/mcp/glob", sandboxId, args, request, id, async () => {
     const result = await globSandbox(
       sandboxId,
       String(args.glob_pattern ?? ""),

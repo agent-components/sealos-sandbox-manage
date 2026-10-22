@@ -15,7 +15,6 @@ import {
   IdleConfigSchema,
   SandboxStateSchema,
   TagsSchema,
-  type SandboxState,
 } from "@/lib/sandbox/schema";
 import {
   deleteSandboxRecord,
@@ -26,15 +25,6 @@ import { setSandboxTags, withSandboxTags } from "@/lib/sandbox/tags";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { mapLaunchpadStatus, toSandbox } from "@/lib/sealos/map";
 import { getTemplate, listTemplates } from "@/lib/template/store";
-
-/** 从 Sealos 拉取应用状态；列表中其余字段来自数据库。 */
-async function loadSealosStates(
-  kubeconfig: string
-): Promise<Map<string, SandboxState>> {
-  const client = createLaunchpadClient({ kubeconfig });
-  const apps = await client.listApps();
-  return new Map(apps.map((app) => [app.name, mapLaunchpadStatus(app.status)]));
-}
 
 export async function GET(req: NextRequest) {
   try {
@@ -80,25 +70,16 @@ export async function GET(req: NextRequest) {
           tags,
           tagTerms: keyword,
           templateId,
+          state,
           keyword: text || undefined,
         });
-
-        const kubeconfig = await resolveKubeconfig();
-        const states = await loadSealosStates(kubeconfig);
 
         const templates = await listTemplates();
         const templateById = new Map(templates.map((item) => [item.id, item]));
 
-        let sandboxes = records.map((record) =>
-          sandboxFromRecord(
-            record,
-            states.get(record.sandboxId) ?? "error",
-            templateById.get(record.templateId)
-          )
+        const sandboxes = records.map((record) =>
+          sandboxFromRecord(record, templateById.get(record.templateId))
         );
-        if (state) {
-          sandboxes = sandboxes.filter((item) => item.state === state);
-        }
 
         const paged = slicePage(sandboxes, page);
         const body = { list: paged.list, total: paged.total };
@@ -157,7 +138,10 @@ export async function POST(req: NextRequest) {
           env: input.env,
         });
         try {
-          await saveSandboxRecord(user.username, id, template.id, idleConfig);
+          await saveSandboxRecord(user.username, id, template.id, {
+            idle: idleConfig,
+            state: mapLaunchpadStatus(app.status),
+          });
           await setSandboxTags(user.username, id, input.tags);
           if (user.apiKeyId) {
             const granted = await grantApiKeySandbox(

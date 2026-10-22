@@ -4,7 +4,7 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, GET, DELETE, OPTIONS",
   "Access-Control-Allow-Headers":
-    "Authorization, Content-Type, Accept, Mcp-Session-Id, MCP-Protocol-Version",
+    "Authorization, Content-Type, Accept, Mcp-Session-Id, MCP-Protocol-Version, x-sandbox-id",
   "Access-Control-Expose-Headers": "Mcp-Session-Id, MCP-Protocol-Version",
   "Cache-Control": "no-store",
 };

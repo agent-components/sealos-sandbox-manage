@@ -1,11 +1,17 @@
 import { query } from "@/lib/db/postgres";
-import { DEFAULT_IDLE_CONFIG, type IdleConfig } from "@/lib/sandbox/schema";
+import {
+  DEFAULT_IDLE_CONFIG,
+  SandboxStateSchema,
+  type IdleConfig,
+  type SandboxState,
+} from "@/lib/sandbox/schema";
 
 export type SandboxRecordDoc = {
   sandboxId: string;
   owner: string;
   templateId: string;
   tags: string[];
+  state: SandboxState;
   autoShutdown: boolean;
   idleMinutes: number;
   createdAt: Date;
@@ -16,12 +22,13 @@ type RecordRow = {
   owner: string;
   template_id: string;
   tags: string[] | null;
+  state: string;
   auto_shutdown: boolean;
   idle_minutes: number;
   created_at: Date;
 };
 
-const RECORD_COLUMNS = `sandbox_id, owner, template_id, tags,
+const RECORD_COLUMNS = `sandbox_id, owner, template_id, tags, state,
   auto_shutdown, idle_minutes, created_at`;
 
 export type ListSandboxRecordsOptions = {
@@ -31,9 +38,15 @@ export type ListSandboxRecordsOptions = {
   tags?: string[];
   tagTerms?: string[];
   templateId?: string;
+  state?: SandboxState;
   /** 匹配沙箱 ID、模板名称或模板镜像（不区分大小写） */
   keyword?: string;
 };
+
+function asState(value: string | null | undefined): SandboxState {
+  const parsed = SandboxStateSchema.safeParse(value);
+  return parsed.success ? parsed.data : "error";
+}
 
 function toRecord(row: RecordRow): SandboxRecordDoc {
   return {
@@ -41,6 +54,7 @@ function toRecord(row: RecordRow): SandboxRecordDoc {
     owner: row.owner,
     templateId: row.template_id,
     tags: row.tags ?? [],
+    state: asState(row.state),
     autoShutdown: !!row.auto_shutdown,
     idleMinutes:
       typeof row.idle_minutes === "number" && row.idle_minutes >= 5
@@ -54,15 +68,64 @@ export async function saveSandboxRecord(
   owner: string,
   sandboxId: string,
   templateId: string,
-  idle?: IdleConfig
+  opts?: { idle?: IdleConfig; state?: SandboxState }
 ): Promise<void> {
-  const config = idle ?? DEFAULT_IDLE_CONFIG;
+  const config = opts?.idle ?? DEFAULT_IDLE_CONFIG;
+  const state = opts?.state ?? "starting";
   await query(
     `INSERT INTO sandbox.records (
-       sandbox_id, owner, template_id, auto_shutdown, idle_minutes
+       sandbox_id, owner, template_id, state, auto_shutdown, idle_minutes
      )
-     VALUES ($1, $2, $3, $4, $5)`,
-    [sandboxId, owner, templateId, config.autoShutdown, config.idleMinutes]
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [
+      sandboxId,
+      owner,
+      templateId,
+      state,
+      config.autoShutdown,
+      config.idleMinutes,
+    ]
+  );
+}
+
+export async function setSandboxState(
+  sandboxId: string,
+  state: SandboxState
+): Promise<void> {
+  await query(
+    `UPDATE sandbox.records
+     SET state = $2, updated_at = now()
+     WHERE sandbox_id = $1`,
+    [sandboxId, state]
+  );
+}
+
+/**
+ * 按 Sealos 返回的状态批量写回。
+ * 空列表不写（避免接口异常时把全部打成 error）；
+ * 非空时：对齐已有项，库里有而 Sealos 没有的标为 error。
+ */
+export async function syncSandboxStates(
+  states: Map<string, SandboxState>
+): Promise<void> {
+  if (states.size === 0) return;
+
+  const ids = [...states.keys()];
+  const values = ids.map((id) => states.get(id)!);
+  await query(
+    `UPDATE sandbox.records AS record
+     SET state = data.state, updated_at = now()
+     FROM unnest($1::text[], $2::text[]) AS data(sandbox_id, state)
+     WHERE record.sandbox_id = data.sandbox_id
+       AND record.state IS DISTINCT FROM data.state`,
+    [ids, values]
+  );
+  await query(
+    `UPDATE sandbox.records
+     SET state = 'error', updated_at = now()
+     WHERE NOT (sandbox_id = ANY($1::text[]))
+       AND state IS DISTINCT FROM 'error'`,
+    [ids]
   );
 }
 
@@ -106,6 +169,7 @@ export async function listSandboxRecords(
     tags = [],
     tagTerms = [],
     templateId,
+    state,
     keyword,
   } = options;
 
@@ -121,6 +185,11 @@ export async function listSandboxRecords(
   if (templateId) {
     conditions.push(`r.template_id = $${i}`);
     params.push(templateId);
+    i += 1;
+  }
+  if (state) {
+    conditions.push(`r.state = $${i}`);
+    params.push(state);
     i += 1;
   }
   if (tags.length > 0) {
@@ -152,7 +221,7 @@ export async function listSandboxRecords(
   }
 
   const result = await query<RecordRow>(
-    `SELECT r.sandbox_id, r.owner, r.template_id, r.tags,
+    `SELECT r.sandbox_id, r.owner, r.template_id, r.tags, r.state,
             r.auto_shutdown, r.idle_minutes, r.created_at
      FROM sandbox.records r
      LEFT JOIN sandbox.templates t ON t.id = r.template_id

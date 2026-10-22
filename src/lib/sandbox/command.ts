@@ -1,6 +1,7 @@
 import { requireUser, resolveKubeconfig } from "@/lib/auth/resolve";
 import { assertSandboxAllowed } from "@/lib/apikey/access";
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
+import { setSandboxState } from "@/lib/sandbox/record";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { SealosApiError } from "@/lib/sealos/errors";
 import { listAppPods } from "@/lib/sealos/kube";
@@ -9,9 +10,7 @@ import { mapLaunchpadStatus } from "@/lib/sealos/map";
 const AUTO_START_TIMEOUT_MS = 180_000;
 const AUTO_START_POLL_MS = 2_000;
 
-function pickReadyPod(
-  pods: Awaited<ReturnType<typeof listAppPods>>,
-) {
+function pickReadyPod(pods: Awaited<ReturnType<typeof listAppPods>>) {
   return pods.find((pod) => pod.phase === "Running" && pod.ready);
 }
 
@@ -41,6 +40,7 @@ export async function resolveRunningSandbox(id: string) {
   const app = await client.getApp(id);
   await assertOwnedBy(app, user.username);
   assertSandboxAllowed(user, id);
+  await setSandboxState(id, mapLaunchpadStatus(app.status));
 
   const pods = await listAppPods(kubeconfig, id);
   const selected =
@@ -57,7 +57,7 @@ export async function resolveRunningSandbox(id: string) {
  */
 export async function resolveSandboxForCommand(
   id: string,
-  signal?: AbortSignal,
+  signal?: AbortSignal
 ) {
   const user = await requireUser();
   const kubeconfig = await resolveKubeconfig();
@@ -67,6 +67,8 @@ export async function resolveSandboxForCommand(
   assertSandboxAllowed(user, id);
 
   let state = mapLaunchpadStatus(app.status);
+  let lastWritten = state;
+  await setSandboxState(id, state);
   let pods = await listAppPods(kubeconfig, id);
   let selected = state === "running" ? pickReadyPod(pods) : undefined;
   if (selected) {
@@ -79,6 +81,8 @@ export async function resolveSandboxForCommand(
 
   if (state === "stopped" || state === "error") {
     await client.startApp(id);
+    lastWritten = "starting";
+    await setSandboxState(id, "starting");
   }
 
   const deadline = Date.now() + AUTO_START_TIMEOUT_MS;
@@ -86,6 +90,10 @@ export async function resolveSandboxForCommand(
     await sleep(AUTO_START_POLL_MS, signal);
     app = await client.getApp(id);
     state = mapLaunchpadStatus(app.status);
+    if (state !== lastWritten) {
+      lastWritten = state;
+      await setSandboxState(id, state);
+    }
     pods = await listAppPods(kubeconfig, id);
     selected = pickReadyPod(pods);
     if (selected && (state === "running" || state === "starting")) {

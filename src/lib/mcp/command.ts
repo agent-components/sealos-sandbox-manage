@@ -82,28 +82,22 @@ function progressMessage(
  * MCP 的 exec（对标 Cursor Shell）。
  * 接受 SSE 时边执行边推送输出，并且不限制执行时间；客户端断开则取消命令。
  * 不接受 SSE 时仍等到命令结束再返回 JSON，同样不限时。
- * 沙箱已停止时会先开机再执行。
+ * 沙箱由请求头 x-sandbox-id 指定；已停止时会先开机再执行。
  */
 export async function callSandboxCommand(
   request: Request,
   id: JsonRpcId,
+  sandboxId: string,
   args: Record<string, unknown>,
   progressToken: string | number | undefined,
-  stream: boolean
+  stream: boolean,
 ): Promise<CommandDispatch> {
   const startedAt = Date.now();
-  if (typeof args.id !== "string" || args.id.length === 0) {
-    await auditCommand(args, 400, { error: "缺少参数 id" }, startedAt);
-    return {
-      kind: "response",
-      status: 200,
-      body: rpcResult(id, toolText("缺少参数 id", true)),
-    };
-  }
+  const auditArgs = { id: sandboxId, ...args };
   const parsed = RunSandboxCommandSchema.safeParse({ command: args.command });
   if (!parsed.success) {
     const failure = await apiFailure(parsed.error);
-    await auditCommand(args, failure.status, failure.body, startedAt);
+    await auditCommand(auditArgs, failure.status, failure.body, startedAt);
     return {
       kind: "response",
       status: 200,
@@ -116,7 +110,7 @@ export async function callSandboxCommand(
     const cwd = ArtifactPathSchema.safeParse(args.working_directory);
     if (!cwd.success) {
       const failure = await apiFailure(cwd.error);
-      await auditCommand(args, failure.status, failure.body, startedAt);
+      await auditCommand(auditArgs, failure.status, failure.body, startedAt);
       return {
         kind: "response",
         status: 200,
@@ -126,7 +120,6 @@ export async function callSandboxCommand(
     workingDirectory = cwd.data;
   }
 
-  const sandboxId = args.id;
   await beginMcpActivity(sandboxId);
 
   let target: Awaited<ReturnType<typeof resolveSandboxForCommand>>;
@@ -137,7 +130,7 @@ export async function callSandboxCommand(
     await endMcpActivity(sandboxId, {
       touch: failure.status !== 401 && failure.status !== 403,
     });
-    await auditCommand(args, failure.status, failure.body, startedAt);
+    await auditCommand(auditArgs, failure.status, failure.body, startedAt);
     return {
       kind: "response",
       status: 200,
@@ -165,7 +158,7 @@ export async function callSandboxCommand(
         signal: request.signal,
       });
       const body = commandBody(result);
-      await auditCommand(args, 200, body, startedAt);
+      await auditCommand(auditArgs, 200, body, startedAt);
       return {
         kind: "response",
         status: 200,
@@ -173,7 +166,7 @@ export async function callSandboxCommand(
       };
     } catch (error) {
       if (error instanceof ExecCancelledError || request.signal.aborted) {
-        await auditCommand(args, 499, { error: "命令已取消" }, startedAt);
+        await auditCommand(auditArgs, 499, { error: "命令已取消" }, startedAt);
         return {
           kind: "response",
           status: 499,
@@ -181,7 +174,7 @@ export async function callSandboxCommand(
         };
       }
       const failure = await apiFailure(error);
-      await auditCommand(args, failure.status, failure.body, startedAt);
+      await auditCommand(auditArgs, failure.status, failure.body, startedAt);
       return {
         kind: "response",
         status: 200,
@@ -237,7 +230,7 @@ export async function callSandboxCommand(
           },
         });
         const body = commandBody(result);
-        await auditCommand(args, 200, body, startedAt);
+        await auditCommand(auditArgs, 200, body, startedAt);
         send(rpcResult(id, toolText(body, false)));
       } catch (error) {
         if (
@@ -245,11 +238,11 @@ export async function callSandboxCommand(
           abort.signal.aborted ||
           request.signal.aborted
         ) {
-          await auditCommand(args, 499, { error: "命令已取消" }, startedAt);
+          await auditCommand(auditArgs, 499, { error: "命令已取消" }, startedAt);
           return;
         }
         const failure = await apiFailure(error);
-        await auditCommand(args, failure.status, failure.body, startedAt);
+        await auditCommand(auditArgs, failure.status, failure.body, startedAt);
         send(rpcResult(id, toolText(failure.body, true)));
       } finally {
         clearInterval(heartbeat);

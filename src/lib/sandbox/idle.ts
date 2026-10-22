@@ -119,7 +119,7 @@ export type IdleCandidate = {
   lastActivityAt: Date;
 };
 
-/** 扫描候选：已开自动关机、无进行中请求、空闲时间够长。 */
+/** 扫描候选：库内仍为 running、已开自动关机、无进行中请求、空闲时间够长。 */
 export async function listIdleShutdownCandidates(
   now = new Date()
 ): Promise<IdleCandidate[]> {
@@ -132,6 +132,7 @@ export async function listIdleShutdownCandidates(
     `SELECT sandbox_id, owner, GREATEST(idle_minutes, 5) AS idle_minutes, last_activity_at
      FROM sandbox.records
      WHERE auto_shutdown = true
+       AND state = 'running'
        AND inflight <= 0
        AND last_activity_at <= $1::timestamptz - (GREATEST(idle_minutes, 5) * interval '1 minute')`,
     [now]

@@ -101,7 +101,7 @@ npm run start
 
 `initialize`、`tools/list` 和 `ping` 不需要登录。`tools/call` 与 REST 使用同一套认证：`Authorization: Bearer sandbox_...`，或登录 Cookie。
 
-MCP 工具与 OpenAPI **相互独立**，对标 Cursor Agent 本地文件操作。每个工具需传沙箱 `id`，路径为沙箱内绝对路径：
+MCP 工具与 OpenAPI **相互独立**，对标 Cursor Agent 本地文件操作。沙箱由请求头 `x-sandbox-id` 指定，路径为沙箱内绝对路径：
 
 | 工具     | 对标       | 作用                                                      |
 | -------- | ---------- | --------------------------------------------------------- |
@@ -123,7 +123,8 @@ MCP 工具与 OpenAPI **相互独立**，对标 Cursor Agent 本地文件操作�
     "sandbox": {
       "url": "http://localhost:3000/api/mcp",
       "headers": {
-        "Authorization": "Bearer sandbox_..."
+        "Authorization": "Bearer sandbox_...",
+        "x-sandbox-id": "<sandbox-id>"
       }
     }
   }

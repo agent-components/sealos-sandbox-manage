@@ -6,12 +6,12 @@ import { runSandboxApiCall } from "@/lib/api/call-context";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { setSandboxIdleConfig, withSandboxIdle } from "@/lib/sandbox/idle";
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
-import { deleteSandboxRecord } from "@/lib/sandbox/record";
+import { deleteSandboxRecord, setSandboxState } from "@/lib/sandbox/record";
 import { DEFAULT_IDLE_CONFIG, UpdateSandboxSchema } from "@/lib/sandbox/schema";
 import { setSandboxTags, withSandboxTags } from "@/lib/sandbox/tags";
 import { AuthError } from "@/lib/sealos/errors";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
-import { toSandbox } from "@/lib/sealos/map";
+import { mapLaunchpadStatus, toSandbox } from "@/lib/sealos/map";
 import { getTemplate } from "@/lib/template/store";
 
 async function withSandboxExtras(
@@ -45,6 +45,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         const app = await client.getApp(id);
         const templateId = await assertOwnedBy(app, user.username);
         assertSandboxAllowed(user, id);
+        await setSandboxState(id, mapLaunchpadStatus(app.status));
         const body = {
           sandbox: await withSandboxExtras(
             user.username,
@@ -136,6 +137,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
           DEFAULT_IDLE_CONFIG.idleMinutes,
       });
     }
+    await setSandboxState(id, mapLaunchpadStatus(app.status));
     return jsonOk({
       sandbox: await withSandboxExtras(
         user.username,

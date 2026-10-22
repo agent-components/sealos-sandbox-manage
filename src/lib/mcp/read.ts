@@ -14,7 +14,12 @@ function rpcResult(id: JsonRpcId, result: unknown) {
   return { jsonrpc: "2.0" as const, id, result };
 }
 
+function loggedArgs(sandboxId: string, args: Record<string, unknown>) {
+  return { id: sandboxId, ...args };
+}
+
 async function auditRead(
+  sandboxId: string,
   args: Record<string, unknown>,
   status: number,
   result: unknown,
@@ -24,7 +29,7 @@ async function auditRead(
     tool: "read",
     method: "tools/call",
     path: "/mcp/read",
-    arguments: args,
+    arguments: loggedArgs(sandboxId, args),
     status,
     result,
     startedAt,
@@ -34,28 +39,17 @@ async function auditRead(
 
 /**
  * MCP read：图片/二进制委托 openSandboxArtifact；文本按 offset/limit 行读。
+ * 沙箱由请求头 x-sandbox-id 指定。
  */
 export async function callRead(
   request: Request,
   id: JsonRpcId,
+  sandboxId: string,
   args: Record<string, unknown>,
   progressToken: string | number | undefined,
   stream: boolean,
 ): Promise<ReadDispatch> {
   const startedAt = Date.now();
-  if (typeof args.id !== "string" || args.id.length === 0) {
-    await auditRead(args, 400, { error: "缺少参数 id" }, startedAt);
-    return {
-      kind: "response",
-      status: 200,
-      body: rpcResult(id, {
-        content: [{ type: "text", text: "缺少参数 id" }],
-        isError: true,
-      }),
-    };
-  }
-
-  const sandboxId = args.id;
   const path = String(args.path ?? "");
   const offset = typeof args.offset === "number" ? args.offset : undefined;
   const limit = typeof args.limit === "number" ? args.limit : undefined;
@@ -67,7 +61,7 @@ export async function callRead(
   } catch (error) {
     const response = jsonError(error);
     const body = await response.json();
-    await auditRead(args, response.status, body, startedAt);
+    await auditRead(sandboxId, args, response.status, body, startedAt);
     return {
       kind: "response",
       status: 200,
@@ -79,7 +73,15 @@ export async function callRead(
   }
 
   if (kind === "image" || kind === "binary") {
-    return callSandboxArtifact(request, id, args, progressToken, stream, startedAt);
+    return callSandboxArtifact(
+      request,
+      id,
+      sandboxId,
+      args,
+      progressToken,
+      stream,
+      startedAt,
+    );
   }
 
   await beginMcpActivity(sandboxId);
@@ -99,7 +101,7 @@ export async function callRead(
       encoding: "utf8",
       data: result.content,
     };
-    await auditRead(args, 200, payload, startedAt);
+    await auditRead(sandboxId, args, 200, payload, startedAt);
     return {
       kind: "response",
       status: 200,
@@ -111,7 +113,7 @@ export async function callRead(
   } catch (error) {
     const response = jsonError(error);
     const body = await response.json();
-    await auditRead(args, response.status, body, startedAt);
+    await auditRead(sandboxId, args, response.status, body, startedAt);
     return {
       kind: "response",
       status: 200,

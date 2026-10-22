@@ -1,18 +1,17 @@
-import type { Sandbox, SandboxState } from "@/lib/sandbox/schema";
+import type { Sandbox } from "@/lib/sandbox/schema";
 import type { SandboxRecordDoc } from "@/lib/sandbox/record";
 import { DEFAULT_RESOURCES } from "@/lib/sealos/resources";
 import { primaryDiskGi, type Template } from "@/lib/template/schema";
 
-/** 用数据库记录 + 模板填充列表项；状态单独由 Sealos 补充。 */
+/** 用数据库记录 + 模板填充列表项（含已同步的 state）。 */
 export function sandboxFromRecord(
   record: SandboxRecordDoc,
-  state: SandboxState,
   template?: Template | null
 ): Sandbox {
   return {
     id: record.sandboxId,
     name: record.sandboxId,
-    state,
+    state: record.state,
     cpu: template?.cpu ?? DEFAULT_RESOURCES.cpu,
     memoryGi: template?.memoryGi ?? DEFAULT_RESOURCES.memoryGi,
     diskGi: template

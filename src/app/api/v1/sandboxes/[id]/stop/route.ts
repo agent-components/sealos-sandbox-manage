@@ -5,9 +5,10 @@ import { runSandboxApiCall } from "@/lib/api/call-context";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
 import { withSandboxIdle } from "@/lib/sandbox/idle";
+import { setSandboxState } from "@/lib/sandbox/record";
 import { withSandboxTags } from "@/lib/sandbox/tags";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
-import { toSandbox } from "@/lib/sealos/map";
+import { mapLaunchpadStatus, toSandbox } from "@/lib/sealos/map";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -31,9 +32,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         assertSandboxAllowed(user, id);
         await client.pauseApp(id);
         const app = await client.getApp(id);
+        await setSandboxState(id, mapLaunchpadStatus(app.status));
         const [sandbox] = await withSandboxIdle(
           user.username,
-          await withSandboxTags(user.username, [toSandbox(app, templateId)]),
+          await withSandboxTags(user.username, [toSandbox(app, templateId)])
         );
         const body = { sandbox };
         return { status: 200, result: body, value: jsonOk(body) };

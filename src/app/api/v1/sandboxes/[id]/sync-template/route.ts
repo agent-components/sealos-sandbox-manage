@@ -5,11 +5,12 @@ import { runSandboxApiCall } from "@/lib/api/call-context";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { setSandboxIdleConfig, withSandboxIdle } from "@/lib/sandbox/idle";
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
+import { setSandboxState } from "@/lib/sandbox/record";
 import { DEFAULT_IDLE_CONFIG } from "@/lib/sandbox/schema";
 import { withSandboxTags } from "@/lib/sandbox/tags";
 import { AuthError } from "@/lib/sealos/errors";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
-import { toSandbox } from "@/lib/sealos/map";
+import { mapLaunchpadStatus, toSandbox } from "@/lib/sealos/map";
 import { getTemplate } from "@/lib/template/store";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         }
 
         const app = await client.syncAppFromTemplate(id, existing, template);
+        await setSandboxState(id, mapLaunchpadStatus(app.status));
 
         await setSandboxIdleConfig(user.username, id, {
           autoShutdown:
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
         const [sandbox] = await withSandboxIdle(
           user.username,
-          await withSandboxTags(user.username, [toSandbox(app, templateId)]),
+          await withSandboxTags(user.username, [toSandbox(app, templateId)])
         );
         const body = { sandbox };
         return { status: 200, result: body, value: jsonOk(body) };

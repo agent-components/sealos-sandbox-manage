@@ -42,17 +42,22 @@ async function apiFailure(error: unknown) {
   return { status: response.status, body: (await response.json()) as unknown };
 }
 
+function loggedArgs(sandboxId: string, args: Record<string, unknown>) {
+  return { id: sandboxId, ...args };
+}
+
 function auditRead(
+  sandboxId: string,
   args: Record<string, unknown>,
   status: number,
   result: unknown,
-  startedAt: number
+  startedAt: number,
 ) {
   return recordMcpCall({
     tool: "read",
     method: "tools/call",
     path: "/mcp/read",
-    arguments: args,
+    arguments: loggedArgs(sandboxId, args),
     status,
     result,
     startedAt,
@@ -63,28 +68,17 @@ function auditRead(
 /**
  * 供 MCP `read` 在图片/二进制场景复用。
  * 文本在 SSE 里随到随推；图片返回 base64；其他文件在工具结果里给 base64。
+ * 沙箱由请求头 x-sandbox-id 指定。
  */
 export async function callSandboxArtifact(
   request: Request,
   id: JsonRpcId,
+  sandboxId: string,
   args: Record<string, unknown>,
   progressToken: string | number | undefined,
   stream: boolean,
-  startedAt = Date.now()
+  startedAt = Date.now(),
 ): Promise<ArtifactDispatch> {
-  if (typeof args.id !== "string" || args.id.length === 0) {
-    await auditRead(args, 400, { error: "缺少参数 id" }, startedAt);
-    return {
-      kind: "response",
-      status: 200,
-      body: rpcResult(id, {
-        content: [{ type: "text", text: "缺少参数 id" }],
-        isError: true,
-      }),
-    };
-  }
-
-  const sandboxId = args.id;
   await beginMcpActivity(sandboxId);
 
   let artifact: Awaited<ReturnType<typeof openSandboxArtifact>>;
@@ -92,11 +86,11 @@ export async function callSandboxArtifact(
     artifact = await openSandboxArtifact(
       sandboxId,
       String(args.path ?? ""),
-      request.signal
+      request.signal,
     );
   } catch (error) {
     const failure = await apiFailure(error);
-    await auditRead(args, failure.status, failure.body, startedAt);
+    await auditRead(sandboxId, args, failure.status, failure.body, startedAt);
     await endMcpActivity(sandboxId, {
       touch: failure.status !== 401 && failure.status !== 403,
     });
@@ -115,7 +109,7 @@ export async function callSandboxArtifact(
       data: artifact.base64,
       bytes: artifact.bytes,
     };
-    await auditRead(args, 200, payload, startedAt);
+    await auditRead(sandboxId, args, 200, payload, startedAt);
     await endMcpActivity(sandboxId, { touch: true });
     return {
       kind: "response",
@@ -147,7 +141,7 @@ export async function callSandboxArtifact(
           encoding: "utf8" as const,
           data: bytes.toString("utf8"),
         };
-        await auditRead(args, 200, payload, startedAt);
+        await auditRead(sandboxId, args, 200, payload, startedAt);
         return {
           kind: "response",
           status: 200,
@@ -164,7 +158,7 @@ export async function callSandboxArtifact(
         data: bytes.toString("base64"),
         bytes: bytes.length,
       };
-      await auditRead(args, 200, payload, startedAt);
+      await auditRead(sandboxId, args, 200, payload, startedAt);
       return {
         kind: "response",
         status: 200,
@@ -180,7 +174,7 @@ export async function callSandboxArtifact(
       };
     } catch (error) {
       if (error instanceof ExecCancelledError || request.signal.aborted) {
-        await auditRead(args, 499, { error: "已取消" }, startedAt);
+        await auditRead(sandboxId, args, 499, { error: "已取消" }, startedAt);
         return {
           kind: "response",
           status: 499,
@@ -191,7 +185,7 @@ export async function callSandboxArtifact(
         };
       }
       const failure = await apiFailure(error);
-      await auditRead(args, failure.status, failure.body, startedAt);
+      await auditRead(sandboxId, args, failure.status, failure.body, startedAt);
       return {
         kind: "response",
         status: 200,
@@ -260,7 +254,7 @@ export async function callSandboxArtifact(
           encoding: "utf8" as const,
           data,
         };
-        await auditRead(args, 200, payload, startedAt);
+        await auditRead(sandboxId, args, 200, payload, startedAt);
         send(
           rpcResult(id, {
             content: [{ type: "text", text: data }],
@@ -269,11 +263,11 @@ export async function callSandboxArtifact(
         );
       } catch (error) {
         if (abort.signal.aborted || request.signal.aborted) {
-          await auditRead(args, 499, { error: "已取消" }, startedAt);
+          await auditRead(sandboxId, args, 499, { error: "已取消" }, startedAt);
           return;
         }
         const failure = await apiFailure(error);
-        await auditRead(args, failure.status, failure.body, startedAt);
+        await auditRead(sandboxId, args, failure.status, failure.body, startedAt);
         send(await failureResult(id, error));
       } finally {
         clearInterval(heartbeat);

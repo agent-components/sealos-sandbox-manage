@@ -10,8 +10,16 @@ export type { CallChannel };
 
 export const SANDBOX_CHANNEL_HEADER = "x-sandbox-channel";
 
+/** MCP 请求用此头指定操作的沙箱。 */
+export const SANDBOX_ID_HEADER = "x-sandbox-id";
+
 export function callChannel(req: Request): CallChannel {
   return req.headers.get(SANDBOX_CHANNEL_HEADER) === "mcp" ? "mcp" : "rest";
+}
+
+export function sandboxIdFromRequest(req: Request): string | null {
+  const value = req.headers.get(SANDBOX_ID_HEADER)?.trim();
+  return value ? value : null;
 }
 
 /** 包裹一次沙箱相关请求：可选空闲计时；写入调用日志。 */

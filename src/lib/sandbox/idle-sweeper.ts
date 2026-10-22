@@ -2,8 +2,10 @@ import cron, { type ScheduledTask } from "node-cron";
 
 import { resolveKubeconfig } from "@/lib/auth/resolve";
 import { listIdleShutdownCandidates } from "@/lib/sandbox/idle";
+import { setSandboxState, syncSandboxStates } from "@/lib/sandbox/record";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { mapLaunchpadStatus } from "@/lib/sealos/map";
+import type { SandboxState } from "@/lib/sandbox/schema";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -12,7 +14,7 @@ declare global {
   var _idleSweeping: boolean | undefined;
 }
 
-/** 每分钟扫描一次：找出空闲超时的运行中沙箱并关机。 */
+/** 每分钟扫描一次：先从 Sealos 同步状态，再对空闲超时的 running 沙箱关机。 */
 export function startIdleSweeper() {
   if (global._idleCron) return;
   if (!cron.validate("* * * * *")) {
@@ -23,26 +25,49 @@ export function startIdleSweeper() {
   });
 }
 
+async function syncStatesFromSealos(kubeconfig: string) {
+  const client = createLaunchpadClient({ kubeconfig });
+  const apps = await client.listApps();
+  const states = new Map<string, SandboxState>(
+    apps.map((app) => [app.name, mapLaunchpadStatus(app.status)])
+  );
+  await syncSandboxStates(states);
+}
+
 async function sweepIdleSandboxes() {
   if (global._idleSweeping) return;
   global._idleSweeping = true;
   try {
+    const kubeconfig = await resolveKubeconfig();
+    try {
+      await syncStatesFromSealos(kubeconfig);
+    } catch (error) {
+      console.error("同步沙箱状态失败", error);
+    }
+
     const candidates = await listIdleShutdownCandidates();
     if (candidates.length === 0) return;
 
-    const kubeconfig = await resolveKubeconfig();
     const client = createLaunchpadClient({ kubeconfig });
 
     for (const candidate of candidates) {
       try {
-        const app = await client.getApp(candidate.sandboxId);
-        if (mapLaunchpadStatus(app.status) !== "running") continue;
         await client.pauseApp(candidate.sandboxId);
+        await setSandboxState(candidate.sandboxId, "stopped");
         console.info(
-          `空闲关机：${candidate.sandboxId}（等待 ${candidate.idleMinutes} 分钟）`,
+          `空闲关机：${candidate.sandboxId}（等待 ${candidate.idleMinutes} 分钟）`
         );
       } catch (error) {
         console.error(`空闲关机失败：${candidate.sandboxId}`, error);
+        try {
+          const app = await client.getApp(candidate.sandboxId);
+          await setSandboxState(
+            candidate.sandboxId,
+            mapLaunchpadStatus(app.status)
+          );
+        } catch {
+          // 纠偏失败时留到下一轮全量同步
+        }
       }
     }
   } catch (error) {

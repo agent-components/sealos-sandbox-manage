@@ -29,6 +29,7 @@ export function mcpConnectJson(key: string) {
           url: `${origin}/api/mcp`,
           headers: {
             Authorization: `Bearer ${key}`,
+            "x-sandbox-id": "<sandbox-id>",
           },
         },
       },

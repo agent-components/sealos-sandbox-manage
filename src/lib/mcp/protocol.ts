@@ -1,3 +1,4 @@
+import { sandboxIdFromRequest } from "@/lib/api/call-context";
 import { openApiDocument } from "@/lib/openapi/document";
 import {
   callDelete,
@@ -106,11 +107,9 @@ async function handleRequest(
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: info.title, version: info.version },
         instructions: [
-          "MCP 工具对标 Cursor Agent 本地文件操作：read、write、edit、delete、grep、glob、exec。",
-          "与 OpenAPI/REST 独立；创建/列表/关机等沙箱管理请走 REST。",
-          "每个工具需传沙箱 id；路径为沙箱内绝对路径。",
-          "认证与 REST 相同：Authorization: Bearer sandbox_...，或登录会话 cookie。",
-          "读/写/搜文件用专用工具；exec 仅用于跑命令。exec 可 SSE 推送输出且不限时。",
+          "在沙箱内操作文件与命令：read / write / edit / delete / grep / glob / exec。",
+          "路径须为沙箱内绝对路径。读、写、搜文件用专用工具，不要用 exec 代替。",
+          "已有文件优先 edit；write 用于新建或整文件覆盖。",
         ].join("\n"),
       }),
     };
@@ -152,25 +151,35 @@ async function handleRequest(
         body: rpcError(id, -32602, "arguments 必须是对象"),
       };
     }
+    const sandboxId = sandboxIdFromRequest(request);
+    if (!sandboxId) {
+      return {
+        kind: "response",
+        status: 200,
+        body: rpcResult(id, toolError("缺少请求头 x-sandbox-id")),
+      };
+    }
     const toolArgs = args as Record<string, unknown>;
     if (name === "read") {
       return callRead(
         request,
         id,
+        sandboxId,
         toolArgs,
         progressToken(input),
         acceptsEventStream(request)
       );
     }
-    if (name === "write") return callWrite(request, id, toolArgs);
-    if (name === "edit") return callEdit(request, id, toolArgs);
-    if (name === "delete") return callDelete(request, id, toolArgs);
-    if (name === "grep") return callGrep(request, id, toolArgs);
-    if (name === "glob") return callGlob(request, id, toolArgs);
+    if (name === "write") return callWrite(request, id, sandboxId, toolArgs);
+    if (name === "edit") return callEdit(request, id, sandboxId, toolArgs);
+    if (name === "delete") return callDelete(request, id, sandboxId, toolArgs);
+    if (name === "grep") return callGrep(request, id, sandboxId, toolArgs);
+    if (name === "glob") return callGlob(request, id, sandboxId, toolArgs);
     if (name === "exec") {
       return callSandboxCommand(
         request,
         id,
+        sandboxId,
         toolArgs,
         progressToken(input),
         acceptsEventStream(request)

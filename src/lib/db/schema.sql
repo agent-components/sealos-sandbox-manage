@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS sandbox.records (
   owner text NOT NULL,
   template_id text NOT NULL,
   tags text[] NOT NULL DEFAULT '{}',
+  state text NOT NULL DEFAULT 'starting',
   auto_shutdown boolean NOT NULL DEFAULT false,
   idle_minutes integer NOT NULL DEFAULT 5,
   last_activity_at timestamptz NOT NULL DEFAULT now(),
@@ -49,6 +50,8 @@ CREATE TABLE IF NOT EXISTS sandbox.records (
 
 ALTER TABLE sandbox.records
   ADD COLUMN IF NOT EXISTS tags text[] NOT NULL DEFAULT '{}';
+ALTER TABLE sandbox.records
+  ADD COLUMN IF NOT EXISTS state text NOT NULL DEFAULT 'starting';
 ALTER TABLE sandbox.records
   ADD COLUMN IF NOT EXISTS auto_shutdown boolean NOT NULL DEFAULT false;
 ALTER TABLE sandbox.records
@@ -65,7 +68,8 @@ ALTER TABLE sandbox.records DROP COLUMN IF EXISTS last_idle_shutdown_at;
 CREATE INDEX IF NOT EXISTS records_owner_idx ON sandbox.records (owner);
 DROP INDEX IF EXISTS sandbox.records_idle_shutdown_idx;
 CREATE INDEX IF NOT EXISTS records_idle_shutdown_idx
-  ON sandbox.records (auto_shutdown, last_activity_at);
+  ON sandbox.records (last_activity_at)
+  WHERE auto_shutdown = true AND state = 'running';
 
 DO $$
 BEGIN
