@@ -45,7 +45,7 @@ export type ListSandboxesQuery = PageQuery & {
   tag?: string[];
   /** 标签关键词，空格或逗号分隔，每个词都要能在某个标签中找到 */
   q?: string;
-  /** 匹配沙箱 ID、镜像或模板名称 */
+  /** 匹配沙箱 ID、模板镜像或模板名称 */
   keyword?: string;
   state?: Sandbox["state"];
   templateId?: string;
@@ -61,9 +61,7 @@ export type CreateTemplateBody = Omit<
   "id" | "createdAt" | "updatedAt"
 > & { id?: string };
 
-export type UpdateTemplateBody = Partial<
-  Omit<CreateTemplateBody, "id">
->;
+export type UpdateTemplateBody = Partial<Omit<CreateTemplateBody, "id">>;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -83,7 +81,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const sandboxClient = {
   me: () =>
-    request<{ authenticated: boolean; user: SandboxUser | null }>("/api/auth/me"),
+    request<{ authenticated: boolean; user: SandboxUser | null }>(
+      "/api/auth/me"
+    ),
   login: (username: string, password: string) =>
     request<{ user: SandboxUser }>("/api/auth/login", {
       method: "POST",
@@ -101,7 +101,7 @@ export const sandboxClient = {
     appendPage(q, query);
     const qs = q.toString();
     return request<PageResult<Sandbox>>(
-      `/api/v1/sandboxes${qs ? `?${qs}` : ""}`,
+      `/api/v1/sandboxes${qs ? `?${qs}` : ""}`
     );
   },
   createSandbox: (body: CreateSandboxBody) =>
@@ -110,16 +110,21 @@ export const sandboxClient = {
       body: JSON.stringify(body),
     }),
   getSandbox: (id: string) =>
-    request<{ sandbox: Sandbox }>(`/api/v1/sandboxes/${encodeURIComponent(id)}`),
+    request<{ sandbox: Sandbox }>(
+      `/api/v1/sandboxes/${encodeURIComponent(id)}`
+    ),
   updateSandbox: (id: string, body: UpdateSandboxBody) =>
-    request<{ sandbox: Sandbox }>(`/api/v1/sandboxes/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    }),
+    request<{ sandbox: Sandbox }>(
+      `/api/v1/sandboxes/${encodeURIComponent(id)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }
+    ),
   syncSandboxFromTemplate: (id: string) =>
     request<{ sandbox: Sandbox }>(
       `/api/v1/sandboxes/${encodeURIComponent(id)}/sync-template`,
-      { method: "POST" },
+      { method: "POST" }
     ),
   deleteSandbox: (id: string) =>
     request<{ ok: true }>(`/api/v1/sandboxes/${encodeURIComponent(id)}`, {
@@ -128,21 +133,21 @@ export const sandboxClient = {
   stopSandbox: (id: string) =>
     request<{ sandbox: Sandbox }>(
       `/api/v1/sandboxes/${encodeURIComponent(id)}/stop`,
-      { method: "POST" },
+      { method: "POST" }
     ),
   resumeSandbox: (id: string) =>
     request<{ sandbox: Sandbox }>(
       `/api/v1/sandboxes/${encodeURIComponent(id)}/resume`,
-      { method: "POST" },
+      { method: "POST" }
     ),
   runSandboxCommand: (id: string, command: string) =>
     request<{ ok: boolean; exitCode: number; stdout: string; stderr: string }>(
       `/api/v1/sandboxes/${encodeURIComponent(id)}/commands`,
-      { method: "POST", body: JSON.stringify({ command }) },
+      { method: "POST", body: JSON.stringify({ command }) }
     ),
   getSandboxLogs: (
     id: string,
-    opts?: { pod?: string; tailLines?: number; previous?: boolean },
+    opts?: { pod?: string; tailLines?: number; previous?: boolean }
   ) => {
     const q = new URLSearchParams();
     if (opts?.pod) q.set("pod", opts.pod);
@@ -150,14 +155,17 @@ export const sandboxClient = {
     if (opts?.previous) q.set("previous", "true");
     const qs = q.toString();
     return request<{
-      pods: { name: string; phase: string; container: string; ready: boolean }[];
+      pods: {
+        name: string;
+        phase: string;
+        container: string;
+        ready: boolean;
+      }[];
       pod: string | null;
       container: string | null;
       logs: string;
       message?: string;
-    }>(
-      `/api/v1/sandboxes/${encodeURIComponent(id)}/logs${qs ? `?${qs}` : ""}`,
-    );
+    }>(`/api/v1/sandboxes/${encodeURIComponent(id)}/logs${qs ? `?${qs}` : ""}`);
   },
 
   listTemplates: (query?: PageQuery & { q?: string }) => {
@@ -166,12 +174,12 @@ export const sandboxClient = {
     appendPage(q, query);
     const qs = q.toString();
     return request<PageResult<Template>>(
-      `/api/v1/templates${qs ? `?${qs}` : ""}`,
+      `/api/v1/templates${qs ? `?${qs}` : ""}`
     );
   },
   getTemplate: (id: string) =>
     request<{ template: Template }>(
-      `/api/v1/templates/${encodeURIComponent(id)}`,
+      `/api/v1/templates/${encodeURIComponent(id)}`
     ),
   createTemplate: (body: CreateTemplateBody) =>
     request<{ template: Template }>("/api/v1/templates", {
@@ -181,19 +189,21 @@ export const sandboxClient = {
   updateTemplate: (id: string, body: UpdateTemplateBody) =>
     request<{ template: Template }>(
       `/api/v1/templates/${encodeURIComponent(id)}`,
-      { method: "PATCH", body: JSON.stringify(body) },
+      { method: "PATCH", body: JSON.stringify(body) }
     ),
   deleteTemplate: (id: string) =>
     request<{ ok: true }>(`/api/v1/templates/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
 
-  listMcpLogs: (query?: PageQuery & {
-    tool?: string;
-    apiKeyId?: string;
-    from?: string;
-    to?: string;
-  }) => {
+  listMcpLogs: (
+    query?: PageQuery & {
+      tool?: string;
+      apiKeyId?: string;
+      from?: string;
+      to?: string;
+    }
+  ) => {
     const q = new URLSearchParams();
     if (query?.tool) q.set("tool", query.tool);
     appendPage(q, query);
@@ -253,26 +263,21 @@ export const sandboxClient = {
     if (query?.q?.trim()) q.set("q", query.q.trim());
     appendPage(q, query);
     const qs = q.toString();
-    return request<PageResult<ApiKey>>(
-      `/api/v1/apikeys${qs ? `?${qs}` : ""}`,
-    );
+    return request<PageResult<ApiKey>>(`/api/v1/apikeys${qs ? `?${qs}` : ""}`);
   },
   createApiKey: (body: { name: string; sandboxIds?: string[] }) =>
     request<{ apiKey: ApiKey }>("/api/v1/apikeys", {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  updateApiKey: (
-    id: string,
-    body: { name?: string; sandboxIds?: string[] },
-  ) =>
+  updateApiKey: (id: string, body: { name?: string; sandboxIds?: string[] }) =>
     request<{ apiKey: ApiKey }>(`/api/v1/apikeys/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   getApiKeySecret: (id: string) =>
     request<{ key: string }>(
-      `/api/v1/apikeys/${encodeURIComponent(id)}/secret`,
+      `/api/v1/apikeys/${encodeURIComponent(id)}/secret`
     ),
   deleteApiKey: (id: string) =>
     request<{ ok: true }>(`/api/v1/apikeys/${encodeURIComponent(id)}`, {

@@ -17,7 +17,8 @@ const idleMinutesSchema = {
   type: "integer",
   minimum: 5,
   maximum: 10080,
-  description: "空闲等待分钟数，至少 5。超时后自动关机（MCP 与 OpenAPI/REST 活动均计入）",
+  description:
+    "空闲等待分钟数，至少 5。超时后自动关机（MCP 与 OpenAPI/REST 活动均计入）",
 } as const;
 
 const sandboxSchema = {
@@ -173,11 +174,17 @@ const createSandboxBody = {
       minLength: 1,
       maxLength: 48,
       pattern: "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
-      description: "省略时由服务端生成。小写字母、数字和连字符，首尾为字母或数字",
+      description:
+        "省略时由服务端生成。小写字母、数字和连字符，首尾为字母或数字",
     },
     cpu: cpuSchema,
     memoryGi: memorySchema,
-    diskGi: { type: "integer", minimum: 1, maximum: 1000, description: "磁盘 Gi" },
+    diskGi: {
+      type: "integer",
+      minimum: 1,
+      maximum: 1000,
+      description: "磁盘 Gi",
+    },
     env: {
       type: "array",
       items: {
@@ -210,7 +217,9 @@ const createSandboxBody = {
   },
 } as const;
 
-function errors(...codes: Array<400 | 401 | 403 | 404 | 409 | 413 | 500 | 504>) {
+function errors(
+  ...codes: Array<400 | 401 | 403 | 404 | 409 | 413 | 500 | 504>
+) {
   const text: Record<number, string> = {
     400: "参数校验失败",
     401: "未登录或 API Key 无效",
@@ -228,7 +237,7 @@ function errors(...codes: Array<400 | 401 | 403 | 404 | 409 | 413 | 500 | 504>) 
         description: text[code],
         content: { "application/json": { schema: errorSchema } },
       },
-    ]),
+    ])
   );
 }
 
@@ -251,6 +260,8 @@ export function openApiDocument() {
         get: {
           operationId: "listSandboxes",
           summary: "查看沙箱列表",
+          description:
+            "以数据库中的沙箱记录为准。列表中的 state 从 Sealos 补充；其余字段来自数据库与关联模板。详情请调用 getSandbox。",
           security: userAuth,
           parameters: [
             {
@@ -264,19 +275,21 @@ export function openApiDocument() {
             {
               name: "q",
               in: "query",
-              description: "标签关键词，空格或逗号分隔，每个词都要能在某个标签中找到",
+              description:
+                "标签关键词，空格或逗号分隔，每个词都要能在某个标签中找到",
               schema: { type: "string" },
             },
             {
               name: "keyword",
               in: "query",
-              description: "匹配沙箱 ID、镜像或模板名称，不区分大小写",
+              description: "匹配沙箱 ID、模板镜像或模板名称，不区分大小写",
               schema: { type: "string" },
             },
             {
               name: "state",
               in: "query",
-              description: "按状态筛选",
+              description:
+                "按 Sealos 状态筛选；Sealos 上不存在的沙箱视为 error",
               schema: {
                 type: "string",
                 enum: ["starting", "running", "stopped", "error"],
@@ -291,19 +304,22 @@ export function openApiDocument() {
             {
               name: "current",
               in: "query",
-              description: "页码，从 1 开始。也接受别名 page。未传 pageSize 时忽略，返回全部",
+              description:
+                "页码，从 1 开始。也接受别名 page。未传 pageSize 时忽略，返回全部",
               schema: { type: "integer", minimum: 1, default: 1 },
             },
             {
               name: "pageSize",
               in: "query",
-              description: "每页条数，最大 100。也接受别名 limit。省略时返回全部匹配结果",
+              description:
+                "每页条数，最大 100。也接受别名 limit。省略时返回全部匹配结果",
               schema: { type: "integer", minimum: 1, maximum: 100 },
             },
           ],
           responses: {
             "200": {
-              description: "当前用户的沙箱列表。list 为当前页，total 为符合筛选条件的总数",
+              description:
+                "当前用户数据库中的沙箱列表（state 来自 Sealos）。list 为当前页，total 为符合筛选条件的总数",
               content: {
                 "application/json": {
                   schema: {
@@ -329,7 +345,12 @@ export function openApiDocument() {
             content: {
               "application/json": {
                 schema: createSandboxBody,
-                example: { templateId: "dev", cpu: 0.5, memoryGi: 0.5, diskGi: 3 },
+                example: {
+                  templateId: "dev",
+                  cpu: 0.5,
+                  memoryGi: 0.5,
+                  diskGi: 3,
+                },
               },
             },
           },
@@ -512,7 +533,10 @@ export function openApiDocument() {
                   },
                 },
                 "application/octet-stream": {
-                  schema: { type: "string", contentMediaType: "application/octet-stream" },
+                  schema: {
+                    type: "string",
+                    contentMediaType: "application/octet-stream",
+                  },
                 },
               },
             },
@@ -541,7 +565,8 @@ export function openApiDocument() {
         bearerAuth: {
           type: "http",
           scheme: "bearer",
-          description: "控制台创建的 API Key，形如 sandbox_...。也可以传 public.users.token。",
+          description:
+            "控制台创建的 API Key，形如 sandbox_...。也可以传 public.users.token。",
         },
         sessionCookie: {
           type: "apiKey",

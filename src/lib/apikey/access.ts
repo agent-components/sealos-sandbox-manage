@@ -7,12 +7,3 @@ export function assertSandboxAllowed(user: RequestUser, sandboxId: string) {
   if ((user.sandboxIds ?? []).includes(sandboxId)) return;
   throw new AuthError("该令牌无权访问此沙箱", 403);
 }
-
-export function filterAppsByApiKey<T extends { name: string }>(
-  user: RequestUser,
-  apps: T[],
-): T[] {
-  if (!user.apiKeyId) return apps;
-  const allowed = new Set(user.sandboxIds ?? []);
-  return apps.filter((app) => allowed.has(app.name));
-}

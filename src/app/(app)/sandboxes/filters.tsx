@@ -15,7 +15,7 @@ export type SandboxFilters = {
 
 export function sandboxFilters(templates: Template[]): FilterItem<SandboxFilters>[] {
   return [
-    { name: "q", label: "关键词", placeholder: "名称、镜像或模板" },
+    { name: "q", label: "关键词", placeholder: "名称、模板镜像或模板名" },
     {
       name: "tag",
       label: "标签",

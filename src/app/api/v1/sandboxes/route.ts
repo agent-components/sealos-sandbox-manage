@@ -1,8 +1,10 @@
 import { NextRequest } from "next/server";
 import { requireUser, resolveKubeconfig } from "@/lib/auth/resolve";
-import { filterAppsByApiKey } from "@/lib/apikey/access";
 import { grantApiKeySandbox } from "@/lib/apikey/store";
-import { runSandboxApiCall, touchSandboxActivity } from "@/lib/api/call-context";
+import {
+  runSandboxApiCall,
+  touchSandboxActivity,
+} from "@/lib/api/call-context";
 import { parsePageQuery, slicePage } from "@/lib/api/page";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { createSandboxId } from "@/lib/sandbox/id";
@@ -11,36 +13,31 @@ import {
   setSandboxIdleConfig,
   withSandboxIdle,
 } from "@/lib/sandbox/idle";
+import { sandboxFromRecord } from "@/lib/sandbox/from-record";
 import {
   CreateSandboxSchema,
   IdleConfigSchema,
   SandboxStateSchema,
   TagsSchema,
+  type SandboxState,
 } from "@/lib/sandbox/schema";
-import { selectOwnedApps } from "@/lib/sandbox/ownership";
 import {
   deleteSandboxRecord,
+  listSandboxRecords,
   saveSandboxRecord,
 } from "@/lib/sandbox/record";
-import {
-  findSandboxIdsByTagQuery,
-  findSandboxIdsByTags,
-  setSandboxTags,
-  withSandboxTags,
-} from "@/lib/sandbox/tags";
+import { setSandboxTags, withSandboxTags } from "@/lib/sandbox/tags";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
-import { toSandbox } from "@/lib/sealos/map";
+import { mapLaunchpadStatus, toSandbox } from "@/lib/sealos/map";
 import { getTemplate, listTemplates } from "@/lib/template/store";
 
-function intersectIds(current: Set<string> | null, next: string[]): Set<string> {
-  if (!current) return new Set(next);
-  const allowed = new Set(next);
-  return new Set([...current].filter((id) => allowed.has(id)));
-}
-
-function createdAtMs(value?: string) {
-  const time = value ? Date.parse(value) : Number.NaN;
-  return Number.isNaN(time) ? 0 : time;
+/** 从 Sealos 拉取应用状态；列表中其余字段来自数据库。 */
+async function loadSealosStates(
+  kubeconfig: string
+): Promise<Map<string, SandboxState>> {
+  const client = createLaunchpadClient({ kubeconfig });
+  const apps = await client.listApps();
+  return new Map(apps.map((app) => [app.name, mapLaunchpadStatus(app.status)]));
 }
 
 export async function GET(req: NextRequest) {
@@ -54,8 +51,11 @@ export async function GET(req: NextRequest) {
       .split(/[\s,]+/)
       .map((value) => value.trim())
       .filter(Boolean);
-    const text = (req.nextUrl.searchParams.get("keyword") ?? "").trim().toLowerCase();
-    const templateId = req.nextUrl.searchParams.get("templateId")?.trim() || undefined;
+    const text = (req.nextUrl.searchParams.get("keyword") ?? "")
+      .trim()
+      .toLowerCase();
+    const templateId =
+      req.nextUrl.searchParams.get("templateId")?.trim() || undefined;
     const stateRaw = req.nextUrl.searchParams.get("state")?.trim() || undefined;
     const page = parsePageQuery(req.nextUrl.searchParams);
 
@@ -76,64 +76,36 @@ export async function GET(req: NextRequest) {
       run: async () => {
         const state = stateRaw ? SandboxStateSchema.parse(stateRaw) : undefined;
         const user = await requireUser();
-        const kubeconfig = await resolveKubeconfig();
-        const client = createLaunchpadClient({ kubeconfig });
-        const apps = await client.listApps();
-        let owned = filterAppsByApiKey(
-          user,
-          await selectOwnedApps(apps, user.username),
-        );
-
         const tags = tagQuery.length > 0 ? TagsSchema.parse(tagQuery) : [];
 
-        let matchedIds: Set<string> | null = null;
-        if (tags.length > 0) {
-          matchedIds = intersectIds(
-            matchedIds,
-            await findSandboxIdsByTags(user.username, tags),
-          );
-        }
-        if (keyword.length > 0) {
-          matchedIds = intersectIds(
-            matchedIds,
-            await findSandboxIdsByTagQuery(user.username, keyword),
-          );
-        }
-        if (matchedIds) {
-          owned = owned.filter((item) => matchedIds.has(item.name));
-        }
+        const records = await listSandboxRecords({
+          owner: user.username,
+          allowedIds: user.apiKeyId ? user.sandboxIds ?? [] : null,
+          tags,
+          tagTerms: keyword,
+          templateId,
+          keyword: text || undefined,
+        });
 
-        let sandboxes = owned.map((item) => toSandbox(item.app, item.templateId));
+        const kubeconfig = await resolveKubeconfig();
+        const states = await loadSealosStates(kubeconfig);
+
+        const templates = await listTemplates();
+        const templateById = new Map(templates.map((item) => [item.id, item]));
+
+        let sandboxes = records.map((record) =>
+          sandboxFromRecord(
+            record,
+            states.get(record.sandboxId) ?? "error",
+            templateById.get(record.templateId)
+          )
+        );
         if (state) {
           sandboxes = sandboxes.filter((item) => item.state === state);
         }
-        if (templateId) {
-          sandboxes = sandboxes.filter((item) => item.templateId === templateId);
-        }
-        if (text) {
-          const templates = await listTemplates();
-          const templateNameById = new Map(
-            templates.map((item) => [item.id, item.name.toLowerCase()]),
-          );
-          sandboxes = sandboxes.filter((item) => {
-            const templateName = item.templateId
-              ? (templateNameById.get(item.templateId) ?? "")
-              : "";
-            return (
-              item.id.toLowerCase().includes(text) ||
-              (item.image ?? "").toLowerCase().includes(text) ||
-              templateName.includes(text)
-            );
-          });
-        }
-        sandboxes.sort(
-          (a, b) => createdAtMs(b.createdAt) - createdAtMs(a.createdAt),
-        );
+
         const paged = slicePage(sandboxes, page);
-        const list = await withSandboxIdle(
-          user.username,
-          await withSandboxTags(user.username, paged.list),
-        );
+        const list = await withSandboxIdle(user.username, paged.list);
         const body = { list, total: paged.total };
         return { status: 200, result: body, value: jsonOk(body) };
       },
@@ -151,9 +123,10 @@ export async function POST(req: NextRequest) {
       tool: "createSandbox",
       method: "POST",
       path: "/sandboxes",
-      arguments: raw && typeof raw === "object" && !Array.isArray(raw)
-        ? (raw as Record<string, unknown>)
-        : {},
+      arguments:
+        raw && typeof raw === "object" && !Array.isArray(raw)
+          ? (raw as Record<string, unknown>)
+          : {},
       run: async () => {
         const user = await requireUser();
         const kubeconfig = await resolveKubeconfig();
@@ -161,8 +134,14 @@ export async function POST(req: NextRequest) {
 
         const template = await getTemplate(input.templateId);
         if (!template) {
-          const body = { error: `模板「${input.templateId}」不存在，请先创建模板` };
-          return { status: 400, result: body, value: jsonOk(body, { status: 400 }) };
+          const body = {
+            error: `模板「${input.templateId}」不存在，请先创建模板`,
+          };
+          return {
+            status: 400,
+            result: body,
+            value: jsonOk(body, { status: 400 }),
+          };
         }
 
         const idleConfig = IdleConfigSchema.parse({
@@ -187,7 +166,11 @@ export async function POST(req: NextRequest) {
           await setSandboxTags(user.username, id, input.tags);
           await setSandboxIdleConfig(user.username, id, idleConfig);
           if (user.apiKeyId) {
-            const granted = await grantApiKeySandbox(user.apiKeyId, user.username, id);
+            const granted = await grantApiKeySandbox(
+              user.apiKeyId,
+              user.username,
+              id
+            );
             if (!granted) {
               throw new Error("令牌不存在，无法授予沙箱权限");
             }
@@ -200,11 +183,15 @@ export async function POST(req: NextRequest) {
         }
         const [sandbox] = await withSandboxIdle(
           user.username,
-          await withSandboxTags(user.username, [toSandbox(app, template.id)]),
+          await withSandboxTags(user.username, [toSandbox(app, template.id)])
         );
         await touchSandboxActivity(id);
         const body = { sandbox };
-        return { status: 201, result: body, value: jsonOk(body, { status: 201 }) };
+        return {
+          status: 201,
+          result: body,
+          value: jsonOk(body, { status: 201 }),
+        };
       },
     });
   } catch (error) {
