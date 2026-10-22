@@ -33,6 +33,7 @@ const sandboxSchema = {
     "tags",
     "autoShutdown",
     "idleMinutes",
+    "inflight",
   ],
   properties: {
     id: { type: "string" },
@@ -134,6 +135,11 @@ const sandboxSchema = {
       description: "空闲超时后是否自动关机",
     },
     idleMinutes: idleMinutesSchema,
+    inflight: {
+      type: "integer",
+      minimum: 0,
+      description: "进行中的 MCP/API 请求数",
+    },
     createdAt: { type: "string" },
     upTime: { type: "string" },
   },

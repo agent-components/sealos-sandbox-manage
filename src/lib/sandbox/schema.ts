@@ -131,6 +131,7 @@ export const SandboxSchema = z.object({
   tags: z.array(z.string()).default([]),
   autoShutdown: z.boolean().default(false),
   idleMinutes: IdleMinutesSchema.default(5),
+  inflight: z.number().int().min(0).default(0),
   createdAt: z.string().optional(),
   upTime: z.string().optional(),
 });

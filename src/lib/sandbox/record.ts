@@ -14,6 +14,7 @@ export type SandboxRecordDoc = {
   state: SandboxState;
   autoShutdown: boolean;
   idleMinutes: number;
+  inflight: number;
   createdAt: Date;
 };
 
@@ -25,11 +26,12 @@ type RecordRow = {
   state: string;
   auto_shutdown: boolean;
   idle_minutes: number;
+  inflight: number;
   created_at: Date;
 };
 
 const RECORD_COLUMNS = `sandbox_id, owner, template_id, tags, state,
-  auto_shutdown, idle_minutes, created_at`;
+  auto_shutdown, idle_minutes, inflight, created_at`;
 
 export type ListSandboxRecordsOptions = {
   owner: string;
@@ -60,6 +62,8 @@ function toRecord(row: RecordRow): SandboxRecordDoc {
       typeof row.idle_minutes === "number" && row.idle_minutes >= 5
         ? row.idle_minutes
         : DEFAULT_IDLE_CONFIG.idleMinutes,
+    inflight:
+      typeof row.inflight === "number" && row.inflight >= 0 ? row.inflight : 0,
     createdAt: row.created_at,
   };
 }
@@ -222,7 +226,7 @@ export async function listSandboxRecords(
 
   const result = await query<RecordRow>(
     `SELECT r.sandbox_id, r.owner, r.template_id, r.tags, r.state,
-            r.auto_shutdown, r.idle_minutes, r.created_at
+            r.auto_shutdown, r.idle_minutes, r.inflight, r.created_at
      FROM sandbox.records r
      LEFT JOIN sandbox.templates t ON t.id = r.template_id
      WHERE ${conditions.join(" AND ")}

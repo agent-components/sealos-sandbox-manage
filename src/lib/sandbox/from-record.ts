@@ -28,6 +28,7 @@ export function sandboxFromRecord(
     tags: record.tags,
     autoShutdown: record.autoShutdown,
     idleMinutes: record.idleMinutes,
+    inflight: record.inflight,
     createdAt: record.createdAt.toISOString(),
   };
 }

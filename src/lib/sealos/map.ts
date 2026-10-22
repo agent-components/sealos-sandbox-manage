@@ -5,14 +5,7 @@ import {
   nearestMemoryGi,
 } from "@/lib/sealos/resources";
 
-const PORT_PROTOCOLS = [
-  "http",
-  "grpc",
-  "ws",
-  "tcp",
-  "udp",
-  "sctp",
-] as const;
+const PORT_PROTOCOLS = ["http", "grpc", "ws", "tcp", "udp", "sctp"] as const;
 
 type PortProtocol = (typeof PORT_PROTOCOLS)[number];
 
@@ -165,6 +158,7 @@ export function toSandbox(app: LaunchpadApp, templateId?: string): Sandbox {
     tags: [],
     autoShutdown: false,
     idleMinutes: 5,
+    inflight: 0,
     createdAt: app.createdAt,
     upTime: app.upTime,
   };
