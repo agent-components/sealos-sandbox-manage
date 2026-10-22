@@ -7,15 +7,13 @@ import {
 
 type IdleRow = {
   sandbox_id: string;
-  owner: string;
   auto_shutdown: boolean;
   idle_minutes: number;
-  last_activity_at: Date;
-  inflight: number;
-  updated_at: Date;
 };
 
-function asConfig(row: Pick<IdleRow, "auto_shutdown" | "idle_minutes"> | null): IdleConfig {
+function asConfig(
+  row: Pick<IdleRow, "auto_shutdown" | "idle_minutes"> | null
+): IdleConfig {
   if (!row) return { ...DEFAULT_IDLE_CONFIG };
   return {
     autoShutdown: !!row.auto_shutdown,
@@ -29,41 +27,28 @@ function asConfig(row: Pick<IdleRow, "auto_shutdown" | "idle_minutes"> | null): 
 export async function setSandboxIdleConfig(
   owner: string,
   sandboxId: string,
-  config: IdleConfig,
+  config: IdleConfig
 ): Promise<void> {
   await query(
-    `INSERT INTO sandbox.idle (
-       owner, sandbox_id, auto_shutdown, idle_minutes, last_activity_at, inflight
-     )
-     VALUES ($1, $2, $3, $4, now(), 0)
-     ON CONFLICT (owner, sandbox_id) DO UPDATE
-     SET auto_shutdown = EXCLUDED.auto_shutdown,
-         idle_minutes = EXCLUDED.idle_minutes,
-         updated_at = now()`,
-    [owner, sandboxId, config.autoShutdown, config.idleMinutes],
-  );
-}
-
-export async function deleteSandboxIdle(
-  owner: string,
-  sandboxId: string,
-): Promise<void> {
-  await query(
-    `DELETE FROM sandbox.idle WHERE owner = $1 AND sandbox_id = $2`,
-    [owner, sandboxId],
+    `UPDATE sandbox.records
+     SET auto_shutdown = $3,
+         idle_minutes = $4,
+         updated_at = now()
+     WHERE owner = $1 AND sandbox_id = $2`,
+    [owner, sandboxId, config.autoShutdown, config.idleMinutes]
   );
 }
 
 export async function withSandboxIdle(
   owner: string,
-  sandboxes: Sandbox[],
+  sandboxes: Sandbox[]
 ): Promise<Sandbox[]> {
   if (sandboxes.length === 0) return sandboxes;
   const result = await query<IdleRow>(
-    `SELECT sandbox_id, owner, auto_shutdown, idle_minutes, last_activity_at, inflight, updated_at
-     FROM sandbox.idle
+    `SELECT sandbox_id, auto_shutdown, idle_minutes
+     FROM sandbox.records
      WHERE owner = $1 AND sandbox_id = ANY($2::text[])`,
-    [owner, sandboxes.map((sandbox) => sandbox.id)],
+    [owner, sandboxes.map((sandbox) => sandbox.id)]
   );
   const byId = new Map(result.rows.map((row) => [row.sandbox_id, row]));
   return sandboxes.map((sandbox) => {
@@ -76,14 +61,14 @@ export async function withSandboxIdle(
   });
 }
 
-/** 沙箱 API 请求开始：有空闲配置的沙箱才增加 inflight。 */
+/** 沙箱 API 请求开始：有记录的沙箱才增加 inflight。 */
 export async function beginMcpActivity(sandboxId: string): Promise<void> {
   try {
     await query(
-      `UPDATE sandbox.idle
+      `UPDATE sandbox.records
        SET inflight = inflight + 1, updated_at = now()
        WHERE sandbox_id = $1`,
-      [sandboxId],
+      [sandboxId]
     );
   } catch (error) {
     console.error("空闲 inflight 增加失败", error);
@@ -96,17 +81,17 @@ export async function beginMcpActivity(sandboxId: string): Promise<void> {
  */
 export async function endMcpActivity(
   sandboxId: string,
-  opts?: { touch?: boolean },
+  opts?: { touch?: boolean }
 ): Promise<void> {
   const touch = opts?.touch !== false;
   try {
     await query(
-      `UPDATE sandbox.idle
+      `UPDATE sandbox.records
        SET inflight = GREATEST(0, inflight - 1),
            last_activity_at = CASE WHEN $2::boolean THEN now() ELSE last_activity_at END,
            updated_at = now()
        WHERE sandbox_id = $1`,
-      [sandboxId, touch],
+      [sandboxId, touch]
     );
   } catch (error) {
     console.error("空闲活动结束失败", error);
@@ -117,10 +102,10 @@ export async function endMcpActivity(
 export async function touchMcpActivity(sandboxId: string): Promise<void> {
   try {
     await query(
-      `UPDATE sandbox.idle
+      `UPDATE sandbox.records
        SET last_activity_at = now(), updated_at = now()
        WHERE sandbox_id = $1`,
-      [sandboxId],
+      [sandboxId]
     );
   } catch (error) {
     console.error("空闲活动刷新失败", error);
@@ -136,7 +121,7 @@ export type IdleCandidate = {
 
 /** 扫描候选：已开自动关机、无进行中请求、空闲时间够长。 */
 export async function listIdleShutdownCandidates(
-  now = new Date(),
+  now = new Date()
 ): Promise<IdleCandidate[]> {
   const result = await query<{
     sandbox_id: string;
@@ -145,11 +130,11 @@ export async function listIdleShutdownCandidates(
     last_activity_at: Date;
   }>(
     `SELECT sandbox_id, owner, GREATEST(idle_minutes, 5) AS idle_minutes, last_activity_at
-     FROM sandbox.idle
+     FROM sandbox.records
      WHERE auto_shutdown = true
        AND inflight <= 0
        AND last_activity_at <= $1::timestamptz - (GREATEST(idle_minutes, 5) * interval '1 minute')`,
-    [now],
+    [now]
   );
   return result.rows.map((row) => ({
     sandboxId: row.sandbox_id,
@@ -162,7 +147,7 @@ export async function listIdleShutdownCandidates(
 export async function withMcpSandboxActivity<T>(
   sandboxId: string,
   run: () => Promise<T>,
-  opts?: { shouldTouch?: (result: T) => boolean },
+  opts?: { shouldTouch?: (result: T) => boolean }
 ): Promise<T> {
   await beginMcpActivity(sandboxId);
   let touch = true;

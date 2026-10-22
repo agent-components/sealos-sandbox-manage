@@ -27,8 +27,8 @@ export function sandboxFromRecord(
     image: template?.image,
     templateId: record.templateId || undefined,
     tags: record.tags,
-    autoShutdown: false,
-    idleMinutes: 5,
+    autoShutdown: record.autoShutdown,
+    idleMinutes: record.idleMinutes,
     createdAt: record.createdAt.toISOString(),
   };
 }

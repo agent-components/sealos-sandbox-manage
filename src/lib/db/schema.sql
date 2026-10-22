@@ -34,32 +34,35 @@ CREATE TABLE IF NOT EXISTS sandbox.templates (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS sandbox.idle (
-  owner text NOT NULL,
-  sandbox_id text NOT NULL,
-  auto_shutdown boolean NOT NULL DEFAULT false,
-  idle_minutes integer NOT NULL DEFAULT 5,
-  last_activity_at timestamptz NOT NULL DEFAULT now(),
-  inflight integer NOT NULL DEFAULT 0,
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (owner, sandbox_id)
-);
-
-CREATE INDEX IF NOT EXISTS idle_shutdown_idx
-  ON sandbox.idle (auto_shutdown, last_activity_at);
-
 CREATE TABLE IF NOT EXISTS sandbox.records (
   sandbox_id text PRIMARY KEY,
   owner text NOT NULL,
   template_id text NOT NULL,
   tags text[] NOT NULL DEFAULT '{}',
+  auto_shutdown boolean NOT NULL DEFAULT false,
+  idle_minutes integer NOT NULL DEFAULT 5,
+  last_activity_at timestamptz NOT NULL DEFAULT now(),
+  inflight integer NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
 ALTER TABLE sandbox.records
   ADD COLUMN IF NOT EXISTS tags text[] NOT NULL DEFAULT '{}';
+ALTER TABLE sandbox.records
+  ADD COLUMN IF NOT EXISTS auto_shutdown boolean NOT NULL DEFAULT false;
+ALTER TABLE sandbox.records
+  ADD COLUMN IF NOT EXISTS idle_minutes integer NOT NULL DEFAULT 5;
+ALTER TABLE sandbox.records
+  ADD COLUMN IF NOT EXISTS last_activity_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE sandbox.records
+  ADD COLUMN IF NOT EXISTS inflight integer NOT NULL DEFAULT 0;
+ALTER TABLE sandbox.records
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 
 CREATE INDEX IF NOT EXISTS records_owner_idx ON sandbox.records (owner);
+CREATE INDEX IF NOT EXISTS records_idle_shutdown_idx
+  ON sandbox.records (auto_shutdown, last_activity_at);
 
 DO $$
 BEGIN
@@ -73,6 +76,24 @@ BEGIN
   END IF;
 END $$;
 
+-- 旧版独立 idle 表并入 records 后删除
+DO $$
+BEGIN
+  IF to_regclass('sandbox.idle') IS NOT NULL THEN
+    UPDATE sandbox.records AS record
+    SET auto_shutdown = idle.auto_shutdown,
+        idle_minutes = idle.idle_minutes,
+        last_activity_at = idle.last_activity_at,
+        inflight = idle.inflight,
+        updated_at = idle.updated_at
+    FROM sandbox.idle AS idle
+    WHERE record.sandbox_id = idle.sandbox_id
+      AND record.owner = idle.owner;
+    DROP TABLE sandbox.idle;
+  END IF;
+END $$;
+
+DROP INDEX IF EXISTS sandbox.idle_shutdown_idx;
 DROP INDEX IF EXISTS sandbox.records_tags_key_idx;
 ALTER TABLE sandbox.records DROP COLUMN IF EXISTS tags_key;
 CREATE INDEX IF NOT EXISTS records_tags_idx ON sandbox.records USING gin (tags);

@@ -4,11 +4,7 @@ import { assertSandboxAllowed } from "@/lib/apikey/access";
 import { revokeSandboxFromApiKeys } from "@/lib/apikey/store";
 import { runSandboxApiCall } from "@/lib/api/call-context";
 import { jsonError, jsonOk } from "@/lib/api/response";
-import {
-  deleteSandboxIdle,
-  setSandboxIdleConfig,
-  withSandboxIdle,
-} from "@/lib/sandbox/idle";
+import { setSandboxIdleConfig, withSandboxIdle } from "@/lib/sandbox/idle";
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
 import { deleteSandboxRecord } from "@/lib/sandbox/record";
 import { DEFAULT_IDLE_CONFIG, UpdateSandboxSchema } from "@/lib/sandbox/schema";
@@ -18,10 +14,13 @@ import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { toSandbox } from "@/lib/sealos/map";
 import { getTemplate } from "@/lib/template/store";
 
-async function withSandboxExtras(owner: string, sandbox: ReturnType<typeof toSandbox>) {
+async function withSandboxExtras(
+  owner: string,
+  sandbox: ReturnType<typeof toSandbox>
+) {
   const [enriched] = await withSandboxIdle(
     owner,
-    await withSandboxTags(owner, [sandbox]),
+    await withSandboxTags(owner, [sandbox])
   );
   return enriched!;
 }
@@ -47,7 +46,10 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         const templateId = await assertOwnedBy(app, user.username);
         assertSandboxAllowed(user, id);
         const body = {
-          sandbox: await withSandboxExtras(user.username, toSandbox(app, templateId)),
+          sandbox: await withSandboxExtras(
+            user.username,
+            toSandbox(app, templateId)
+          ),
         };
         return { status: 200, result: body, value: jsonOk(body) };
       },
@@ -93,7 +95,10 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
           ? {
               resources: {
                 ...resourcePatch,
-                replicas: Math.max(1, Math.round(existing.quota?.replicas ?? 1)),
+                replicas: Math.max(
+                  1,
+                  Math.round(existing.quota?.replicas ?? 1)
+                ),
               },
             }
           : {}),
@@ -102,8 +107,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         await setSandboxIdleConfig(user.username, id, {
           autoShutdown:
             template.autoShutdown ?? DEFAULT_IDLE_CONFIG.autoShutdown,
-          idleMinutes:
-            template.idleMinutes ?? DEFAULT_IDLE_CONFIG.idleMinutes,
+          idleMinutes: template.idleMinutes ?? DEFAULT_IDLE_CONFIG.idleMinutes,
         });
       }
     } else if (resourcePatch || body.env !== undefined) {
@@ -119,15 +123,24 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     if (body.autoShutdown !== undefined || body.idleMinutes !== undefined) {
       const current = await withSandboxExtras(
         user.username,
-        toSandbox(existing, templateId),
+        toSandbox(existing, templateId)
       );
       await setSandboxIdleConfig(user.username, id, {
-        autoShutdown: body.autoShutdown ?? current.autoShutdown ?? DEFAULT_IDLE_CONFIG.autoShutdown,
-        idleMinutes: body.idleMinutes ?? current.idleMinutes ?? DEFAULT_IDLE_CONFIG.idleMinutes,
+        autoShutdown:
+          body.autoShutdown ??
+          current.autoShutdown ??
+          DEFAULT_IDLE_CONFIG.autoShutdown,
+        idleMinutes:
+          body.idleMinutes ??
+          current.idleMinutes ??
+          DEFAULT_IDLE_CONFIG.idleMinutes,
       });
     }
     return jsonOk({
-      sandbox: await withSandboxExtras(user.username, toSandbox(app, templateId)),
+      sandbox: await withSandboxExtras(
+        user.username,
+        toSandbox(app, templateId)
+      ),
     });
   } catch (error) {
     return jsonError(error);
@@ -154,7 +167,6 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
         assertSandboxAllowed(user, id);
         await client.deleteApp(id);
         await deleteSandboxRecord(id);
-        await deleteSandboxIdle(user.username, id);
         await revokeSandboxFromApiKeys(user.username, id);
         const body = { ok: true as const };
         return { status: 200, result: body, value: jsonOk(body) };

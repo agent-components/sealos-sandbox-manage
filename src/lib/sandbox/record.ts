@@ -1,10 +1,13 @@
 import { query } from "@/lib/db/postgres";
+import { DEFAULT_IDLE_CONFIG, type IdleConfig } from "@/lib/sandbox/schema";
 
 export type SandboxRecordDoc = {
   sandboxId: string;
   owner: string;
   templateId: string;
   tags: string[];
+  autoShutdown: boolean;
+  idleMinutes: number;
   createdAt: Date;
 };
 
@@ -13,8 +16,13 @@ type RecordRow = {
   owner: string;
   template_id: string;
   tags: string[] | null;
+  auto_shutdown: boolean;
+  idle_minutes: number;
   created_at: Date;
 };
+
+const RECORD_COLUMNS = `sandbox_id, owner, template_id, tags,
+  auto_shutdown, idle_minutes, created_at`;
 
 export type ListSandboxRecordsOptions = {
   owner: string;
@@ -33,6 +41,11 @@ function toRecord(row: RecordRow): SandboxRecordDoc {
     owner: row.owner,
     templateId: row.template_id,
     tags: row.tags ?? [],
+    autoShutdown: !!row.auto_shutdown,
+    idleMinutes:
+      typeof row.idle_minutes === "number" && row.idle_minutes >= 5
+        ? row.idle_minutes
+        : DEFAULT_IDLE_CONFIG.idleMinutes,
     createdAt: row.created_at,
   };
 }
@@ -40,12 +53,16 @@ function toRecord(row: RecordRow): SandboxRecordDoc {
 export async function saveSandboxRecord(
   owner: string,
   sandboxId: string,
-  templateId: string
+  templateId: string,
+  idle?: IdleConfig
 ): Promise<void> {
+  const config = idle ?? DEFAULT_IDLE_CONFIG;
   await query(
-    `INSERT INTO sandbox.records (sandbox_id, owner, template_id)
-     VALUES ($1, $2, $3)`,
-    [sandboxId, owner, templateId]
+    `INSERT INTO sandbox.records (
+       sandbox_id, owner, template_id, auto_shutdown, idle_minutes
+     )
+     VALUES ($1, $2, $3, $4, $5)`,
+    [sandboxId, owner, templateId, config.autoShutdown, config.idleMinutes]
   );
 }
 
@@ -57,7 +74,7 @@ export async function getSandboxRecord(
   sandboxId: string
 ): Promise<SandboxRecordDoc | null> {
   const result = await query<RecordRow>(
-    `SELECT sandbox_id, owner, template_id, tags, created_at
+    `SELECT ${RECORD_COLUMNS}
      FROM sandbox.records
      WHERE sandbox_id = $1`,
     [sandboxId]
@@ -71,7 +88,7 @@ export async function findSandboxRecords(
 ): Promise<Map<string, SandboxRecordDoc>> {
   if (sandboxIds.length === 0) return new Map();
   const result = await query<RecordRow>(
-    `SELECT sandbox_id, owner, template_id, tags, created_at
+    `SELECT ${RECORD_COLUMNS}
      FROM sandbox.records
      WHERE sandbox_id = ANY($1::text[])`,
     [sandboxIds]
@@ -135,7 +152,8 @@ export async function listSandboxRecords(
   }
 
   const result = await query<RecordRow>(
-    `SELECT r.sandbox_id, r.owner, r.template_id, r.tags, r.created_at
+    `SELECT r.sandbox_id, r.owner, r.template_id, r.tags,
+            r.auto_shutdown, r.idle_minutes, r.created_at
      FROM sandbox.records r
      LEFT JOIN sandbox.templates t ON t.id = r.template_id
      WHERE ${conditions.join(" AND ")}

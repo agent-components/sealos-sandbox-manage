@@ -8,11 +8,7 @@ import {
 import { parsePageQuery, slicePage } from "@/lib/api/page";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { createSandboxId } from "@/lib/sandbox/id";
-import {
-  deleteSandboxIdle,
-  setSandboxIdleConfig,
-  withSandboxIdle,
-} from "@/lib/sandbox/idle";
+import { withSandboxIdle } from "@/lib/sandbox/idle";
 import { sandboxFromRecord } from "@/lib/sandbox/from-record";
 import {
   CreateSandboxSchema,
@@ -105,8 +101,7 @@ export async function GET(req: NextRequest) {
         }
 
         const paged = slicePage(sandboxes, page);
-        const list = await withSandboxIdle(user.username, paged.list);
-        const body = { list, total: paged.total };
+        const body = { list: paged.list, total: paged.total };
         return { status: 200, result: body, value: jsonOk(body) };
       },
     });
@@ -162,9 +157,8 @@ export async function POST(req: NextRequest) {
           env: input.env,
         });
         try {
-          await saveSandboxRecord(user.username, id, template.id);
+          await saveSandboxRecord(user.username, id, template.id, idleConfig);
           await setSandboxTags(user.username, id, input.tags);
-          await setSandboxIdleConfig(user.username, id, idleConfig);
           if (user.apiKeyId) {
             const granted = await grantApiKeySandbox(
               user.apiKeyId,
@@ -178,7 +172,6 @@ export async function POST(req: NextRequest) {
         } catch (error) {
           await client.deleteApp(id).catch(() => undefined);
           await deleteSandboxRecord(id).catch(() => undefined);
-          await deleteSandboxIdle(user.username, id).catch(() => undefined);
           throw error;
         }
         const [sandbox] = await withSandboxIdle(
