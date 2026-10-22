@@ -2,9 +2,10 @@ import { randomBytes } from "crypto";
 
 import { query } from "@/lib/db/postgres";
 import { getMinioClient, minioBucket } from "@/lib/minio/client";
+import { MCP_TOOL_NAMES } from "@/lib/mcp/tools";
 
-/** 只有执行沙箱命令会写入调用日志。 */
-export const AUDITED_TOOL = "runSandboxCommand";
+/** 写入调用日志的工具名。 */
+export const LOGGED_TOOLS = MCP_TOOL_NAMES;
 
 export type CallChannel = "mcp" | "rest";
 
@@ -44,8 +45,8 @@ export type McpCallLogView = Omit<
 };
 
 /**
- * 记录一次 runSandboxCommand。元数据写入 PostgreSQL，命令结果写入 MinIO。
- * 其他工具直接返回。存储失败不影响本次调用。
+ * 记录一次工具调用。元数据写入 PostgreSQL，结果写入 MinIO。
+ * 存储失败不影响本次调用。
  */
 export async function recordMcpCall(input: {
   tool: string;
@@ -61,7 +62,7 @@ export async function recordMcpCall(input: {
   /** 请求开始时刻；省略则与完成时间相同 */
   startedAt?: Date | number;
 }): Promise<void> {
-  if (input.tool !== AUDITED_TOOL) return;
+  if (!(LOGGED_TOOLS as readonly string[]).includes(input.tool)) return;
 
   let username = input.username;
   let apiKeyId = input.apiKeyId;
@@ -85,11 +86,13 @@ export async function recordMcpCall(input: {
     input.startedAt instanceof Date
       ? input.startedAt
       : typeof input.startedAt === "number"
-        ? new Date(input.startedAt)
-        : completedAt;
+      ? new Date(input.startedAt)
+      : completedAt;
   const durationMs = Math.max(0, completedAt.getTime() - startedAt.getTime());
 
-  const id = `mcp_${completedAt.getTime().toString(36)}_${randomBytes(4).toString("hex")}`;
+  const id = `mcp_${completedAt.getTime().toString(36)}_${randomBytes(
+    4
+  ).toString("hex")}`;
   const key = objectKey(completedAt, id);
   let resultKey: string | null = null;
   let resultError: string | null = null;
@@ -98,7 +101,8 @@ export async function recordMcpCall(input: {
     await putResult(key, input.result);
     resultKey = key;
   } catch (error) {
-    resultError = error instanceof Error ? error.message : "结果写入对象存储失败";
+    resultError =
+      error instanceof Error ? error.message : "结果写入对象存储失败";
     console.error("MCP 结果写入 MinIO 失败", error);
   }
 
@@ -123,7 +127,7 @@ export async function recordMcpCall(input: {
         input.tool,
         input.method,
         concretePath(input.path, input.arguments),
-        JSON.stringify(input.arguments),
+        JSON.stringify(sanitizeArgs(input.arguments)),
         input.status,
         input.status >= 200 && input.status < 400,
         resultKey,
@@ -132,11 +136,26 @@ export async function recordMcpCall(input: {
         completedAt,
         durationMs,
         completedAt,
-      ],
+      ]
     );
   } catch (error) {
     console.error("MCP 调用日志写入数据库失败", error);
   }
+}
+
+/** 避免把超大 contents 塞进 arguments 列。 */
+function sanitizeArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...args };
+  if (typeof next.contents === "string" && next.contents.length > 4096) {
+    next.contents = `[omitted ${next.contents.length} chars]`;
+  }
+  if (typeof next.old_string === "string" && next.old_string.length > 4096) {
+    next.old_string = `[omitted ${next.old_string.length} chars]`;
+  }
+  if (typeof next.new_string === "string" && next.new_string.length > 4096) {
+    next.new_string = `[omitted ${next.new_string.length} chars]`;
+  }
+  return next;
 }
 
 function concretePath(template: string, args: Record<string, unknown>) {
@@ -148,7 +167,9 @@ function concretePath(template: string, args: Record<string, unknown>) {
     return match;
   });
   if (!path) return "";
-  return path.startsWith("/api/") ? path : `/api/v1${path.startsWith("/") ? path : `/${path}`}`;
+  return path.startsWith("/api/")
+    ? path
+    : `/api/v1${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 function objectKey(now: Date, id: string) {

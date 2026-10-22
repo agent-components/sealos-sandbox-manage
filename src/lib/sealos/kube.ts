@@ -14,7 +14,10 @@ export type KubeContext = {
 
 type KubeconfigFile = {
   "current-context": string;
-  contexts: { name: string; context: { cluster: string; user: string; namespace?: string } }[];
+  contexts: {
+    name: string;
+    context: { cluster: string; user: string; namespace?: string };
+  }[];
   clusters: {
     name: string;
     cluster: { server: string; "certificate-authority-data"?: string };
@@ -54,7 +57,7 @@ export function loadKubeContext(kubeconfigYaml: string): KubeContext {
 async function k8sRequest(
   ctx: KubeContext,
   path: string,
-  init?: { method?: string },
+  init?: { method?: string }
 ): Promise<{ status: number; body: string; contentType: string }> {
   const url = new URL(path, ctx.server);
   return new Promise((resolve, reject) => {
@@ -78,7 +81,7 @@ async function k8sRequest(
             contentType: String(res.headers["content-type"] ?? ""),
           });
         });
-      },
+      }
     );
     req.on("error", reject);
     req.end();
@@ -94,7 +97,7 @@ export type KubePodSummary = {
 
 export async function listAppPods(
   kubeconfigYaml: string,
-  appName: string,
+  appName: string
 ): Promise<KubePodSummary[]> {
   const ctx = loadKubeContext(kubeconfigYaml);
   const selectors = [
@@ -103,7 +106,9 @@ export async function listAppPods(
   ];
 
   for (const selector of selectors) {
-    const path = `/api/v1/namespaces/${encodeURIComponent(ctx.namespace)}/pods?labelSelector=${encodeURIComponent(selector)}`;
+    const path = `/api/v1/namespaces/${encodeURIComponent(
+      ctx.namespace
+    )}/pods?labelSelector=${encodeURIComponent(selector)}`;
     const res = await k8sRequest(ctx, path);
     if (res.status !== 200) continue;
     const data = JSON.parse(res.body) as {
@@ -135,7 +140,7 @@ export async function getPodLogs(
     container: string;
     tailLines?: number;
     previous?: boolean;
-  },
+  }
 ): Promise<{ logs: string; status: number }> {
   const ctx = loadKubeContext(kubeconfigYaml);
   const params = new URLSearchParams({
@@ -145,7 +150,9 @@ export async function getPodLogs(
   });
   if (opts.previous) params.set("previous", "true");
 
-  const path = `/api/v1/namespaces/${encodeURIComponent(ctx.namespace)}/pods/${encodeURIComponent(opts.pod)}/log?${params}`;
+  const path = `/api/v1/namespaces/${encodeURIComponent(
+    ctx.namespace
+  )}/pods/${encodeURIComponent(opts.pod)}/log?${params}`;
   const res = await k8sRequest(ctx, path);
   if (res.status >= 200 && res.status < 300) {
     return { logs: res.body, status: res.status };
@@ -196,8 +203,11 @@ export function parseExecExitCode(raw: string): number {
       details?: { causes?: Array<{ reason?: string; message?: string }> };
     };
     if (status.status === "Success") return 0;
-    const cause = status.details?.causes?.find((item) => item.reason === "ExitCode");
-    if (cause?.message && /^\d+$/.test(cause.message)) return Number(cause.message);
+    const cause = status.details?.causes?.find(
+      (item) => item.reason === "ExitCode"
+    );
+    if (cause?.message && /^\d+$/.test(cause.message))
+      return Number(cause.message);
     const match = status.message?.match(/exit code[: ]+(\d+)/i);
     if (match) return Number(match[1]);
   } catch {
@@ -207,7 +217,9 @@ export function parseExecExitCode(raw: string): number {
   return 1;
 }
 
-function takeFrame(buf: Buffer): { rest: Buffer; fin: boolean; opcode: number; payload: Buffer } | null {
+function takeFrame(
+  buf: Buffer
+): { rest: Buffer; fin: boolean; opcode: number; payload: Buffer } | null {
   if (buf.length < 2) return null;
   const fin = (buf[0]! & 0x80) !== 0;
   const opcode = buf[0]! & 0x0f;
@@ -242,10 +254,47 @@ function sendPong(socket: Socket) {
   socket.write(frame);
 }
 
+/** 客户端发往服务端的 WebSocket 二进制帧（必须带 mask）。 */
+function sendMaskedBinary(socket: Socket, payload: Buffer) {
+  const mask = crypto.randomBytes(4);
+  const len = payload.length;
+  let header: Buffer;
+  if (len < 126) {
+    header = Buffer.alloc(2);
+    header[0] = 0x82;
+    header[1] = 0x80 | len;
+  } else if (len < 65536) {
+    header = Buffer.alloc(4);
+    header[0] = 0x82;
+    header[1] = 0x80 | 126;
+    header.writeUInt16BE(len, 2);
+  } else {
+    header = Buffer.alloc(10);
+    header[0] = 0x82;
+    header[1] = 0x80 | 127;
+    header.writeBigUInt64BE(BigInt(len), 2);
+  }
+  const masked = Buffer.alloc(len);
+  for (let i = 0; i < len; i += 1) {
+    masked[i] = payload[i]! ^ mask[i % 4]!;
+  }
+  socket.write(Buffer.concat([header, mask, masked]));
+}
+
+/** 向 pods/exec 的 stdin 通道（channel 0）写入数据。 */
+function writeStdin(socket: Socket, data: Buffer) {
+  const chunkSize = 32 * 1024;
+  for (let offset = 0; offset < data.length; offset += chunkSize) {
+    const slice = data.subarray(offset, offset + chunkSize);
+    sendMaskedBinary(socket, Buffer.concat([Buffer.from([0]), slice]));
+  }
+}
+
 /**
  * 在 Pod 内执行命令，收回 stdout、stderr 和退出码。
  * 使用 Kubernetes pods/exec 的 WebSocket 协议（v4.channel.k8s.io）。
  * `timeoutMs` 未传时 60 秒；小于等于 0 表示不限制。`onOutput` 在输出到达时回调。
+ * 传入 `stdin` 时打开标准输入并向 channel 0 写入；进程侧宜用 `head -c N` 等按字节读完即退出。
  */
 export async function execInPod(
   kubeconfigYaml: string,
@@ -253,6 +302,8 @@ export async function execInPod(
     pod: string;
     container: string;
     command: string[];
+    /** 写入容器 stdin 的内容。 */
+    stdin?: Buffer | string;
     timeoutMs?: number;
     /** 标准输出上限。未传时 1MB。 */
     maxBytes?: number;
@@ -262,22 +313,31 @@ export async function execInPod(
     signal?: AbortSignal;
     onOutput?: (chunk: PodExecChunk) => void;
     onStdout?: (chunk: Buffer) => void;
-  },
+  }
 ): Promise<PodExecResult> {
   const ctx = loadKubeContext(kubeconfigYaml);
+  const stdinBuffer =
+    opts.stdin === undefined
+      ? undefined
+      : typeof opts.stdin === "string"
+      ? Buffer.from(opts.stdin, "utf8")
+      : opts.stdin;
   const params = new URLSearchParams();
   for (const part of opts.command) params.append("command", part);
   params.set("container", opts.container);
   params.set("stdout", "true");
   params.set("stderr", "true");
-  params.set("stdin", "false");
+  params.set("stdin", stdinBuffer ? "true" : "false");
   params.set("tty", "false");
   const url = new URL(
-    `/api/v1/namespaces/${encodeURIComponent(ctx.namespace)}/pods/${encodeURIComponent(opts.pod)}/exec?${params}`,
-    ctx.server,
+    `/api/v1/namespaces/${encodeURIComponent(
+      ctx.namespace
+    )}/pods/${encodeURIComponent(opts.pod)}/exec?${params}`,
+    ctx.server
   );
 
-  const timeoutMs = opts.timeoutMs === undefined ? EXEC_TIMEOUT_MS : opts.timeoutMs;
+  const timeoutMs =
+    opts.timeoutMs === undefined ? EXEC_TIMEOUT_MS : opts.timeoutMs;
 
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -328,12 +388,12 @@ export async function execInPod(
             reject(
               new SealosApiError(
                 message || `执行命令失败（${status}）`,
-                status >= 400 && status < 600 ? status : 502,
-              ),
-            ),
+                status >= 400 && status < 600 ? status : 502
+              )
+            )
           );
         });
-      },
+      }
     );
 
     if (opts.signal?.aborted) {
@@ -344,11 +404,15 @@ export async function execInPod(
     if (timeoutMs > 0) {
       timer = setTimeout(
         () => settle(() => reject(new SealosApiError("命令执行超时", 504))),
-        timeoutMs,
+        timeoutMs
       );
     }
 
-    const emit = (stream: "stdout" | "stderr", data: Buffer, decoder: TextDecoder) => {
+    const emit = (
+      stream: "stdout" | "stderr",
+      data: Buffer,
+      decoder: TextDecoder
+    ) => {
       const text = decoder.decode(data, { stream: true });
       if (text) opts.onOutput?.({ stream, text });
     };
@@ -372,7 +436,9 @@ export async function execInPod(
           if (tailOut) opts.onOutput?.({ stream: "stdout", text: tailOut });
           if (tailErr) opts.onOutput?.({ stream: "stderr", text: tailErr });
           resolve({
-            exitCode: parseExecExitCode(Buffer.concat(statusBytes).toString("utf8")),
+            exitCode: parseExecExitCode(
+              Buffer.concat(statusBytes).toString("utf8")
+            ),
             stdout: Buffer.concat(stdout).toString("utf8"),
             stderr: Buffer.concat(stderr).toString("utf8"),
           });
@@ -380,7 +446,12 @@ export async function execInPod(
 
       const stdoutLimit = opts.maxBytes ?? EXEC_MAX_BYTES;
       const retainStdout = opts.retainStdout !== false;
-      const pushStream = (chunks: Buffer[], current: number, data: Buffer, label: "stdout" | "stderr") => {
+      const pushStream = (
+        chunks: Buffer[],
+        current: number,
+        data: Buffer,
+        label: "stdout" | "stderr"
+      ) => {
         const limit = label === "stdout" ? stdoutLimit : EXEC_MAX_BYTES;
         if (current + data.length > limit) {
           const message =
@@ -413,6 +484,15 @@ export async function execInPod(
           }
         } else if (channel === 3) statusBytes.push(data);
       };
+
+      if (stdinBuffer) {
+        try {
+          writeStdin(upgraded, stdinBuffer);
+        } catch (error) {
+          fail(error instanceof Error ? error : new Error("写入标准输入失败"));
+          return;
+        }
+      }
 
       upgraded.on("data", (chunk: Buffer) => {
         if (settled) return;

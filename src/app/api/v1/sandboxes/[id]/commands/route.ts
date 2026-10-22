@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const body = RunSandboxCommandSchema.parse(raw);
     return await runSandboxApiCall({
       req,
-      tool: "runSandboxCommand",
+      tool: "exec",
       method: "POST",
       path: "/sandboxes/{id}/commands",
       arguments: { id, command: body.command },

@@ -1,44 +1,10 @@
-import { openApiDocument } from "@/lib/openapi/document";
-
-const HTTP_METHODS = ["get", "post", "put", "patch", "delete"] as const;
-
 type JsonObject = Record<string, unknown>;
-
-type ParameterObject = {
-  name?: string;
-  in?: string;
-  required?: boolean;
-  description?: string;
-  schema?: JsonObject;
-};
-
-type OperationObject = {
-  operationId?: string;
-  summary?: string;
-  description?: string;
-  parameters?: ParameterObject[];
-  requestBody?: {
-    required?: boolean;
-    content?: {
-      "application/json"?: { schema?: JsonObject };
-    };
-  };
-  responses?: Record<
-    string,
-    {
-      content?: {
-        "application/json"?: { schema?: JsonObject };
-      };
-    }
-  >;
-};
 
 export type McpToolDefinition = {
   name: string;
   title: string;
   description: string;
   inputSchema: JsonObject;
-  outputSchema?: JsonObject;
   annotations: {
     title: string;
     readOnlyHint: boolean;
@@ -48,192 +14,217 @@ export type McpToolDefinition = {
   };
 };
 
-/** OpenAPI 操作与 MCP 工具定义的对应关系，供 tools/list 使用。 */
-export type McpRoute = {
-  definition: McpToolDefinition;
-  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  path: string;
-  pathParams: string[];
-  queryParams: string[];
-  /** 为 null 表示该操作没有 JSON 请求体。 */
-  bodyProperties: string[] | null;
-};
+const sandboxId = {
+  type: "string",
+  description: "沙箱 ID",
+} as const;
 
-function cloneSchema(schema: unknown): JsonObject | undefined {
-  if (!schema || typeof schema !== "object" || Array.isArray(schema))
-    return undefined;
-  return JSON.parse(JSON.stringify(schema)) as JsonObject;
-}
+const absolutePath = {
+  type: "string",
+  description: "沙箱内的绝对路径，必须以 / 开头",
+} as const;
 
-function successSchema(operation: OperationObject): JsonObject | undefined {
-  const codes = Object.keys(operation.responses ?? {})
-    .filter((code) => code.startsWith("2"))
-    .sort();
-  for (const code of codes) {
-    const schema = cloneSchema(
-      operation.responses?.[code]?.content?.["application/json"]?.schema
-    );
-    if (schema) return schema;
+function tool(
+  name: string,
+  title: string,
+  description: string,
+  properties: JsonObject,
+  required: string[],
+  hints: {
+    readOnlyHint: boolean;
+    destructiveHint: boolean;
+    idempotentHint: boolean;
   }
-  return undefined;
-}
-
-function annotations(method: string, operationId: string, title: string) {
-  const readOnly = method === "GET";
-  const command = operationId === "runSandboxCommand";
+): McpToolDefinition {
   return {
+    name,
     title,
-    readOnlyHint: readOnly,
-    destructiveHint: command,
-    idempotentHint: readOnly,
-    openWorldHint: true,
-  };
-}
-
-function buildRoute(
-  path: string,
-  method: string,
-  operation: OperationObject
-): McpRoute {
-  const operationId = operation.operationId;
-  if (!operationId) {
-    throw new Error(`OpenAPI ${method.toUpperCase()} ${path} 缺少 operationId`);
-  }
-
-  const properties: JsonObject = {};
-  const required: string[] = [];
-  const pathParams: string[] = [];
-  const queryParams: string[] = [];
-  const seen = new Set<string>();
-
-  for (const parameter of operation.parameters ?? []) {
-    if (
-      !parameter.name ||
-      (parameter.in !== "path" && parameter.in !== "query")
-    )
-      continue;
-    if (seen.has(parameter.name)) {
-      throw new Error(`OpenAPI 参数重名：${operationId}.${parameter.name}`);
-    }
-    seen.add(parameter.name);
-    const schema = cloneSchema(parameter.schema) ?? {};
-    if (parameter.description && typeof schema.description !== "string") {
-      schema.description = parameter.description;
-    }
-    properties[parameter.name] = schema;
-    if (parameter.in === "path") {
-      pathParams.push(parameter.name);
-      required.push(parameter.name);
-    } else {
-      queryParams.push(parameter.name);
-      if (parameter.required) required.push(parameter.name);
-    }
-  }
-
-  const bodySchema = cloneSchema(
-    operation.requestBody?.content?.["application/json"]?.schema
-  );
-  let bodyProperties: string[] | null = null;
-  if (bodySchema) {
-    bodyProperties = [];
-    const bodyFields = bodySchema.properties;
-    if (
-      bodyFields &&
-      typeof bodyFields === "object" &&
-      !Array.isArray(bodyFields)
-    ) {
-      for (const [name, schema] of Object.entries(bodyFields as JsonObject)) {
-        if (seen.has(name)) {
-          throw new Error(`OpenAPI 参数重名：${operationId}.${name}`);
-        }
-        seen.add(name);
-        properties[name] = schema;
-        bodyProperties.push(name);
-      }
-    }
-    if (
-      operation.requestBody?.required !== false &&
-      Array.isArray(bodySchema.required)
-    ) {
-      for (const name of bodySchema.required) {
-        if (typeof name === "string") required.push(name);
-      }
-    }
-  }
-
-  const title = operation.summary || operationId;
-  const description = [
-    operation.summary,
-    operation.description,
-    `对应 REST ${method.toUpperCase()} /api/v1${path}。`,
-    operationId === "runSandboxCommand"
-      ? "通过 MCP 调用时，stdout/stderr 会随到随以 SSE 推送，执行时间不限制，客户端断开即取消命令。上文的 60 秒超时只约束 REST。单路输出仍不得超过 1MB。"
-      : undefined,
-  ]
-    .filter((part): part is string => Boolean(part))
-    .join("\n\n");
-
-  const inputSchema: JsonObject = {
-    type: "object",
-    properties,
-    additionalProperties: false,
-  };
-  if (required.length > 0) inputSchema.required = required;
-
-  const outputSchema = successSchema(operation);
-  return {
-    definition: {
-      name: operationId,
-      title,
-      description,
-      inputSchema,
-      ...(outputSchema ? { outputSchema } : {}),
-      annotations: annotations(method.toUpperCase(), operationId, title),
+    description,
+    inputSchema: {
+      type: "object",
+      properties,
+      required,
+      additionalProperties: false,
     },
-    method: method.toUpperCase() as McpRoute["method"],
-    path,
-    pathParams,
-    queryParams,
-    bodyProperties,
+    annotations: {
+      title,
+      ...hints,
+      openWorldHint: true,
+    },
   };
 }
 
-/** 对外暴露的 MCP 工具；REST / OpenAPI 仍保留完整接口。 */
-export const MCP_TOOL_NAMES = [
-  "runSandboxCommand",
-  "getSandboxArtifact",
-] as const;
+/** MCP Agent 文件工具（对标 Cursor）；与 OpenAPI/REST 独立。 */
+export const MCP_TOOLS: McpToolDefinition[] = [
+  tool(
+    "read",
+    "Read",
+    [
+      "读取沙箱内文件。对标 Cursor Read。",
+      "文本：支持 offset（行，正数从 1 起，负数从尾部）与 limit，返回带行号内容。",
+      "图片/二进制：走 artifact 通道返回；offset/limit 不适用。",
+      "不要用 exec 读文件。",
+    ].join("\n"),
+    {
+      id: sandboxId,
+      path: absolutePath,
+      offset: {
+        type: "integer",
+        description:
+          "起始行。正数从文件头 1-indexed；负数从文件尾倒数。仅文本有效。",
+      },
+      limit: {
+        type: "integer",
+        description: "读取行数。仅文本有效。",
+      },
+    },
+    ["id", "path"],
+    { readOnlyHint: true, destructiveHint: false, idempotentHint: true }
+  ),
+  tool(
+    "write",
+    "Write",
+    [
+      "创建或覆盖沙箱内文件。对标 Cursor Write。",
+      "已有文件优先用 edit 做精确替换，避免整文件重写。",
+      "会自动创建父目录。内容上限 32MB。",
+    ].join("\n"),
+    {
+      id: sandboxId,
+      path: absolutePath,
+      contents: { type: "string", description: "文件全文内容" },
+    },
+    ["id", "path", "contents"],
+    { readOnlyHint: false, destructiveHint: true, idempotentHint: true }
+  ),
+  tool(
+    "edit",
+    "StrReplace",
+    [
+      "在文件中做精确字符串替换。对标 Cursor StrReplace。",
+      "默认 old_string 必须唯一匹配；replace_all 为 true 时替换全部。",
+      "old_string 与 new_string 不能相同。",
+    ].join("\n"),
+    {
+      id: sandboxId,
+      path: absolutePath,
+      old_string: { type: "string", description: "要替换的原文（须精确匹配）" },
+      new_string: { type: "string", description: "替换后的文本" },
+      replace_all: {
+        type: "boolean",
+        description: "为 true 时替换所有匹配；默认 false（要求唯一）",
+      },
+    },
+    ["id", "path", "old_string", "new_string"],
+    { readOnlyHint: false, destructiveHint: true, idempotentHint: false }
+  ),
+  tool(
+    "delete",
+    "Delete",
+    "删除沙箱内普通文件。对标 Cursor Delete。不能删目录。",
+    {
+      id: sandboxId,
+      path: absolutePath,
+    },
+    ["id", "path"],
+    { readOnlyHint: false, destructiveHint: true, idempotentHint: true }
+  ),
+  tool(
+    "grep",
+    "Grep",
+    [
+      "在沙箱内按正则搜索文件内容。对标 Cursor Grep。",
+      "精确字符串/符号搜索请用本工具，不要用 exec 调 grep/rg。",
+    ].join("\n"),
+    {
+      id: sandboxId,
+      pattern: { type: "string", description: "正则表达式" },
+      path: {
+        type: "string",
+        description: "搜索的文件或目录绝对路径，默认 /",
+      },
+      glob: {
+        type: "string",
+        description: "文件名过滤，如 *.ts",
+      },
+      case_insensitive: {
+        type: "boolean",
+        description: "忽略大小写",
+      },
+      output_mode: {
+        type: "string",
+        enum: ["content", "files_with_matches", "count"],
+        description: "默认 content",
+      },
+      context: {
+        type: "integer",
+        description: "匹配行上下各取几行上下文",
+      },
+      head_limit: {
+        type: "integer",
+        description: "限制返回条数，默认 100",
+      },
+      multiline: {
+        type: "boolean",
+        description: "允许多行匹配",
+      },
+    },
+    ["id", "pattern"],
+    { readOnlyHint: true, destructiveHint: false, idempotentHint: true }
+  ),
+  tool(
+    "glob",
+    "Glob",
+    [
+      "按 glob 模式查找文件路径。对标 Cursor Glob。",
+      "不以 **/ 开头的 pattern 会自动加 **/ 前缀。",
+      "结果按修改时间新→旧，最多 200 条。",
+    ].join("\n"),
+    {
+      id: sandboxId,
+      glob_pattern: { type: "string", description: "glob 模式，如 **/*.ts" },
+      target_directory: {
+        type: "string",
+        description: "搜索根目录绝对路径，默认 /",
+      },
+    },
+    ["id", "glob_pattern"],
+    { readOnlyHint: true, destructiveHint: false, idempotentHint: true }
+  ),
+  tool(
+    "exec",
+    "Shell",
+    [
+      "在沙箱内执行 shell 命令。对标 Cursor Shell。",
+      "读/写/搜文件请用 read、write、edit、grep、glob，不要用本工具代替。",
+      "可用 working_directory 指定工作目录，避免 cd &&。",
+      "MCP 不限执行时间；Accept 含 text/event-stream 时 SSE 推送 stdout/stderr。",
+      "沙箱已停止时会先开机。单路输出上限 1MB。",
+    ].join("\n"),
+    {
+      id: sandboxId,
+      command: {
+        type: "string",
+        description: "要执行的命令（经 /bin/sh -c）",
+        maxLength: 16384,
+      },
+      working_directory: {
+        type: "string",
+        description: "工作目录绝对路径",
+      },
+    },
+    ["id", "command"],
+    { readOnlyHint: false, destructiveHint: true, idempotentHint: false }
+  ),
+];
 
-/** 从当前 OpenAPI 文档生成 MCP 工具，仅包含 {@link MCP_TOOL_NAMES}。 */
-function mcpRoutesFromOpenApi(): McpRoute[] {
-  const document = openApiDocument() as unknown as {
-    paths: Record<
-      string,
-      Partial<Record<(typeof HTTP_METHODS)[number], OperationObject>>
-    >;
-  };
-  const allow = new Set<string>(MCP_TOOL_NAMES);
-  const routes: McpRoute[] = [];
-  for (const [path, item] of Object.entries(document.paths)) {
-    for (const method of HTTP_METHODS) {
-      const operation = item?.[method];
-      if (!operation?.operationId || !allow.has(operation.operationId))
-        continue;
-      routes.push(buildRoute(path, method, operation));
-    }
-  }
-  const missing = MCP_TOOL_NAMES.filter(
-    (name) => !routes.some((route) => route.definition.name === name)
-  );
-  if (missing.length > 0) {
-    throw new Error(`OpenAPI 缺少 MCP 工具：${missing.join(", ")}`);
-  }
-  return routes;
+export const MCP_TOOL_NAMES = MCP_TOOLS.map((item) => item.name);
+
+export function mcpTools(): McpToolDefinition[] {
+  return MCP_TOOLS;
 }
 
-let cached: McpRoute[] | undefined;
-
-export function mcpRoutes(): McpRoute[] {
-  if (!cached) cached = mcpRoutesFromOpenApi();
-  return cached;
+/** @deprecated 使用 mcpTools */
+export function mcpRoutes() {
+  return MCP_TOOLS.map((definition) => ({ definition }));
 }

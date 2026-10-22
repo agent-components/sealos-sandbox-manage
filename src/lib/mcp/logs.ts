@@ -1,6 +1,10 @@
 import { query } from "@/lib/db/postgres";
 import { getMinioClient, minioBucket } from "@/lib/minio/client";
-import { AUDITED_TOOL, type McpCallLog, type McpCallLogView } from "@/lib/mcp/audit";
+import {
+  LOGGED_TOOLS,
+  type McpCallLog,
+  type McpCallLogView,
+} from "@/lib/mcp/audit";
 
 type LogRow = {
   id: string;
@@ -61,8 +65,15 @@ export type ListMcpLogsOpts = {
 };
 
 function logFilter(username: string, opts?: ListMcpLogsOpts) {
-  const where = ["(username = $1 OR username IS NULL)", "tool = $2"];
-  const params: unknown[] = [username, AUDITED_TOOL];
+  const where = ["(username = $1 OR username IS NULL)"];
+  const params: unknown[] = [username];
+  if (opts?.tool) {
+    params.push(opts.tool);
+    where.push(`tool = $${params.length}`);
+  } else {
+    params.push([...LOGGED_TOOLS]);
+    where.push(`tool = ANY($${params.length}::text[])`);
+  }
   if (opts?.apiKeyId === "session") {
     where.push("api_key_id IS NULL");
   } else if (opts?.apiKeyId) {
@@ -84,10 +95,6 @@ export async function listMcpLogs(
   username: string,
   opts?: ListMcpLogsOpts,
 ): Promise<{ list: McpCallLogView[]; total: number }> {
-  if (opts?.tool && opts.tool !== AUDITED_TOOL) {
-    return { list: [], total: 0 };
-  }
-
   const pageSize = Math.min(
     Math.max(opts?.pageSize ?? opts?.limit ?? 20, 1),
     100,
@@ -124,8 +131,8 @@ export async function getMcpLog(
             arguments, status, ok, result_key, result_error,
             started_at, completed_at, duration_ms, created_at
      FROM sandbox.mcp_logs
-     WHERE id = $1 AND tool = $2 AND (username = $3 OR username IS NULL)`,
-    [id, AUDITED_TOOL, username],
+     WHERE id = $1 AND tool = ANY($2::text[]) AND (username = $3 OR username IS NULL)`,
+    [id, [...LOGGED_TOOLS], username],
   );
   const row = result.rows[0];
   return row ? toView(row) : null;

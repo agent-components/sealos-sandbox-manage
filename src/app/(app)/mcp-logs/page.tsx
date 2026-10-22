@@ -64,34 +64,34 @@ export default function McpLogsPage() {
 
   return (
     <ListPage<McpLogRow, McpLogFilters>
-        title={
-          <div>
-            <Typography.Title level={3} style={{ margin: 0 }}>
-              调用日志
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              只记录 runSandboxCommand（MCP 与 REST）；命令结果存在对象存储
-            </Typography.Text>
-          </div>
-        }
-        extra={(ctx) => (
-          <Button onClick={() => ctx.refreshTable()}>刷新</Button>
-        )}
-        filter={{ items: filterItems }}
-        table={{
-          rowKey: "id",
-          columns,
-          density: "compact",
-          title: "日志",
-          columnResize: { persistenceKey: "sandbox-mcp-logs-width" },
-          columnSetting: { persistenceKey: "sandbox-mcp-logs-columns" },
-          extra: (_ctx, columnSetting) => columnSetting?.trigger ?? null,
-          scroll: { x: 1100, y: "calc(100vh - 420px)" },
-          pagination: listPagination,
-        }}
-        request={request}
-        float={{ floats }}
-        initialValues={{ pageSize: 20 }}
-      />
+      title={
+        <div>
+          <Typography.Title level={3} style={{ margin: 0 }}>
+            调用日志
+          </Typography.Title>
+          <Typography.Text type="secondary">
+            记录全部 MCP 工具调用（及 REST 的 exec/read）；结果存在对象存储
+          </Typography.Text>
+        </div>
+      }
+      extra={(ctx) => (
+        <Button onClick={() => ctx.refreshTable()}>刷新</Button>
+      )}
+      filter={{ items: filterItems }}
+      table={{
+        rowKey: "id",
+        columns,
+        density: "compact",
+        title: "日志",
+        columnResize: { persistenceKey: "sandbox-mcp-logs-width" },
+        columnSetting: { persistenceKey: "sandbox-mcp-logs-columns" },
+        extra: (_ctx, columnSetting) => columnSetting?.trigger ?? null,
+        scroll: { x: 1100, y: "calc(100vh - 420px)" },
+        pagination: listPagination,
+      }}
+      request={request}
+      float={{ floats }}
+      initialValues={{ pageSize: 20 }}
+    />
   );
 }

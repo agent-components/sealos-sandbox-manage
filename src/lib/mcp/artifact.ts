@@ -1,4 +1,5 @@
 import { jsonError } from "@/lib/api/response";
+import { recordMcpCall } from "@/lib/mcp/audit";
 import { beginMcpActivity, endMcpActivity } from "@/lib/sandbox/idle";
 import { openSandboxArtifact } from "@/lib/sandbox/artifact";
 import { ExecCancelledError } from "@/lib/sealos/kube";
@@ -41,10 +42,27 @@ async function apiFailure(error: unknown) {
   return { status: response.status, body: (await response.json()) as unknown };
 }
 
+function auditRead(
+  args: Record<string, unknown>,
+  status: number,
+  result: unknown,
+  startedAt: number
+) {
+  return recordMcpCall({
+    tool: "read",
+    method: "tools/call",
+    path: "/mcp/read",
+    arguments: args,
+    status,
+    result,
+    startedAt,
+    channel: "mcp",
+  });
+}
+
 /**
- * MCP 的 getSandboxArtifact。
+ * 供 MCP `read` 在图片/二进制场景复用。
  * 文本在 SSE 里随到随推；图片返回 base64；其他文件在工具结果里给 base64。
- * HTTP 接口对其他文件则是附件下载流。
  */
 export async function callSandboxArtifact(
   request: Request,
@@ -52,8 +70,10 @@ export async function callSandboxArtifact(
   args: Record<string, unknown>,
   progressToken: string | number | undefined,
   stream: boolean,
+  startedAt = Date.now()
 ): Promise<ArtifactDispatch> {
   if (typeof args.id !== "string" || args.id.length === 0) {
+    await auditRead(args, 400, { error: "缺少参数 id" }, startedAt);
     return {
       kind: "response",
       status: 200,
@@ -69,16 +89,33 @@ export async function callSandboxArtifact(
 
   let artifact: Awaited<ReturnType<typeof openSandboxArtifact>>;
   try {
-    artifact = await openSandboxArtifact(sandboxId, String(args.path ?? ""), request.signal);
+    artifact = await openSandboxArtifact(
+      sandboxId,
+      String(args.path ?? ""),
+      request.signal
+    );
   } catch (error) {
     const failure = await apiFailure(error);
+    await auditRead(args, failure.status, failure.body, startedAt);
     await endMcpActivity(sandboxId, {
       touch: failure.status !== 401 && failure.status !== 403,
     });
-    return { kind: "response", status: 200, body: await failureResult(id, error) };
+    return {
+      kind: "response",
+      status: 200,
+      body: await failureResult(id, error),
+    };
   }
 
   if (artifact.kind === "image") {
+    const payload = {
+      path: artifact.path,
+      mediaType: artifact.mediaType,
+      encoding: "base64" as const,
+      data: artifact.base64,
+      bytes: artifact.bytes,
+    };
+    await auditRead(args, 200, payload, startedAt);
     await endMcpActivity(sandboxId, { touch: true });
     return {
       kind: "response",
@@ -89,14 +126,13 @@ export async function callSandboxArtifact(
             type: "text",
             text: `${artifact.mediaType}，${artifact.bytes} 字节`,
           },
-          { type: "image", data: artifact.base64, mimeType: artifact.mediaType },
+          {
+            type: "image",
+            data: artifact.base64,
+            mimeType: artifact.mediaType,
+          },
         ],
-        structuredContent: {
-          path: artifact.path,
-          mediaType: artifact.mediaType,
-          encoding: "base64",
-          data: artifact.base64,
-        },
+        structuredContent: payload,
       }),
     };
   }
@@ -105,20 +141,30 @@ export async function callSandboxArtifact(
     try {
       const bytes = await readStream(artifact.stream);
       if (artifact.kind === "text") {
+        const payload = {
+          path: artifact.path,
+          mediaType: artifact.mediaType,
+          encoding: "utf8" as const,
+          data: bytes.toString("utf8"),
+        };
+        await auditRead(args, 200, payload, startedAt);
         return {
           kind: "response",
           status: 200,
           body: rpcResult(id, {
-            content: [{ type: "text", text: bytes.toString("utf8") }],
-            structuredContent: {
-              path: artifact.path,
-              mediaType: artifact.mediaType,
-              encoding: "utf8",
-              data: bytes.toString("utf8"),
-            },
+            content: [{ type: "text", text: payload.data }],
+            structuredContent: payload,
           }),
         };
       }
+      const payload = {
+        path: artifact.path,
+        mediaType: artifact.mediaType,
+        encoding: "base64" as const,
+        data: bytes.toString("base64"),
+        bytes: bytes.length,
+      };
+      await auditRead(args, 200, payload, startedAt);
       return {
         kind: "response",
         status: 200,
@@ -126,22 +172,31 @@ export async function callSandboxArtifact(
           content: [
             {
               type: "text",
-              text: `${artifact.filename} 是二进制文件，${bytes.length} 字节。HTTP 接口以附件流下载。`,
+              text: `${artifact.filename} 是二进制文件，${bytes.length} 字节。`,
             },
           ],
-          structuredContent: {
-            path: artifact.path,
-            mediaType: artifact.mediaType,
-            encoding: "base64",
-            data: bytes.toString("base64"),
-          },
+          structuredContent: payload,
         }),
       };
     } catch (error) {
       if (error instanceof ExecCancelledError || request.signal.aborted) {
-        return { kind: "response", status: 499, body: rpcResult(id, { content: [{ type: "text", text: "已取消" }], isError: true }) };
+        await auditRead(args, 499, { error: "已取消" }, startedAt);
+        return {
+          kind: "response",
+          status: 499,
+          body: rpcResult(id, {
+            content: [{ type: "text", text: "已取消" }],
+            isError: true,
+          }),
+        };
       }
-      return { kind: "response", status: 200, body: await failureResult(id, error) };
+      const failure = await apiFailure(error);
+      await auditRead(args, failure.status, failure.body, startedAt);
+      return {
+        kind: "response",
+        status: 200,
+        body: await failureResult(id, error),
+      };
     } finally {
       await endMcpActivity(sandboxId, { touch: true });
     }
@@ -166,7 +221,9 @@ export async function callSandboxArtifact(
         }
       };
       const send = (payload: unknown) => {
-        write(`event: message\ndata: ${JSON.stringify(payload)}\n\n${FLUSH_PAD}`);
+        write(
+          `event: message\ndata: ${JSON.stringify(payload)}\n\n${FLUSH_PAD}`
+        );
       };
       const heartbeat = setInterval(() => {
         write(`: ping\n\n${FLUSH_PAD}`);
@@ -197,21 +254,26 @@ export async function callSandboxArtifact(
         const tail = decoder.decode();
         if (tail) collected.push(tail);
         const data = collected.join("");
+        const payload = {
+          path: artifact.path,
+          mediaType: artifact.mediaType,
+          encoding: "utf8" as const,
+          data,
+        };
+        await auditRead(args, 200, payload, startedAt);
         send(
           rpcResult(id, {
             content: [{ type: "text", text: data }],
-            structuredContent: {
-              path: artifact.path,
-              mediaType: artifact.mediaType,
-              encoding: "utf8",
-              data,
-            },
-          }),
+            structuredContent: payload,
+          })
         );
       } catch (error) {
         if (abort.signal.aborted || request.signal.aborted) {
+          await auditRead(args, 499, { error: "已取消" }, startedAt);
           return;
         }
+        const failure = await apiFailure(error);
+        await auditRead(args, failure.status, failure.body, startedAt);
         send(await failureResult(id, error));
       } finally {
         clearInterval(heartbeat);

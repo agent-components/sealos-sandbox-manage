@@ -60,7 +60,10 @@ ALTER TABLE sandbox.records
 ALTER TABLE sandbox.records
   ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 
+ALTER TABLE sandbox.records DROP COLUMN IF EXISTS last_idle_shutdown_at;
+
 CREATE INDEX IF NOT EXISTS records_owner_idx ON sandbox.records (owner);
+DROP INDEX IF EXISTS sandbox.records_idle_shutdown_idx;
 CREATE INDEX IF NOT EXISTS records_idle_shutdown_idx
   ON sandbox.records (auto_shutdown, last_activity_at);
 

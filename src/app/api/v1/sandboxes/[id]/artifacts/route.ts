@@ -1,7 +1,10 @@
 import { NextRequest } from "next/server";
 import { runSandboxApiCall } from "@/lib/api/call-context";
 import { jsonError, jsonOk } from "@/lib/api/response";
-import { contentDisposition, openSandboxArtifact } from "@/lib/sandbox/artifact";
+import {
+  contentDisposition,
+  openSandboxArtifact,
+} from "@/lib/sandbox/artifact";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -11,7 +14,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     const path = req.nextUrl.searchParams.get("path") ?? "";
     return await runSandboxApiCall({
       req,
-      tool: "getSandboxArtifact",
+      tool: "read",
       method: "GET",
       path: "/sandboxes/{id}/artifacts",
       arguments: { id, path },
@@ -30,7 +33,10 @@ export async function GET(req: NextRequest, ctx: Ctx) {
             status: 200,
             result: null,
             value: jsonOk(body, {
-              headers: { "X-Artifact-Kind": "image", "Cache-Control": "no-store" },
+              headers: {
+                "X-Artifact-Kind": "image",
+                "Cache-Control": "no-store",
+              },
             }),
           };
         }
@@ -42,7 +48,10 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           "X-Artifact-Kind": artifact.kind,
         });
         if (artifact.kind === "binary") {
-          headers.set("Content-Disposition", contentDisposition(artifact.filename));
+          headers.set(
+            "Content-Disposition",
+            contentDisposition(artifact.filename)
+          );
         }
         return {
           status: 200,

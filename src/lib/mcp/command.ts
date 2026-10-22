@@ -1,9 +1,17 @@
 import { jsonError } from "@/lib/api/response";
-import { AUDITED_TOOL, recordMcpCall } from "@/lib/mcp/audit";
+import { recordMcpCall } from "@/lib/mcp/audit";
 import { beginMcpActivity, endMcpActivity } from "@/lib/sandbox/idle";
-import { RunSandboxCommandSchema } from "@/lib/sandbox/schema";
+import {
+  ArtifactPathSchema,
+  RunSandboxCommandSchema,
+} from "@/lib/sandbox/schema";
 import { resolveSandboxForCommand } from "@/lib/sandbox/command";
-import { ExecCancelledError, execInPod, type PodExecChunk, type PodExecResult } from "@/lib/sealos/kube";
+import {
+  ExecCancelledError,
+  execInPod,
+  type PodExecChunk,
+  type PodExecResult,
+} from "@/lib/sealos/kube";
 
 type JsonRpcId = string | number | null;
 
@@ -53,20 +61,25 @@ function outputMessage(chunk: PodExecChunk) {
   };
 }
 
-function progressMessage(token: string | number, progress: number, chunk: PodExecChunk) {
+function progressMessage(
+  token: string | number,
+  progress: number,
+  chunk: PodExecChunk
+) {
   return {
     jsonrpc: "2.0" as const,
     method: "notifications/progress",
     params: {
       progressToken: token,
       progress,
-      message: chunk.stream === "stderr" ? `[stderr] ${chunk.text}` : chunk.text,
+      message:
+        chunk.stream === "stderr" ? `[stderr] ${chunk.text}` : chunk.text,
     },
   };
 }
 
 /**
- * MCP 的 runSandboxCommand。
+ * MCP 的 exec（对标 Cursor Shell）。
  * 接受 SSE 时边执行边推送输出，并且不限制执行时间；客户端断开则取消命令。
  * 不接受 SSE 时仍等到命令结束再返回 JSON，同样不限时。
  * 沙箱已停止时会先开机再执行。
@@ -76,7 +89,7 @@ export async function callSandboxCommand(
   id: JsonRpcId,
   args: Record<string, unknown>,
   progressToken: string | number | undefined,
-  stream: boolean,
+  stream: boolean
 ): Promise<CommandDispatch> {
   const startedAt = Date.now();
   if (typeof args.id !== "string" || args.id.length === 0) {
@@ -98,6 +111,21 @@ export async function callSandboxCommand(
     };
   }
 
+  let workingDirectory: string | undefined;
+  if (args.working_directory !== undefined && args.working_directory !== null) {
+    const cwd = ArtifactPathSchema.safeParse(args.working_directory);
+    if (!cwd.success) {
+      const failure = await apiFailure(cwd.error);
+      await auditCommand(args, failure.status, failure.body, startedAt);
+      return {
+        kind: "response",
+        status: 200,
+        body: rpcResult(id, toolText(failure.body, true)),
+      };
+    }
+    workingDirectory = cwd.data;
+  }
+
   const sandboxId = args.id;
   await beginMcpActivity(sandboxId);
 
@@ -110,10 +138,23 @@ export async function callSandboxCommand(
       touch: failure.status !== 401 && failure.status !== 403,
     });
     await auditCommand(args, failure.status, failure.body, startedAt);
-    return { kind: "response", status: 200, body: rpcResult(id, toolText(failure.body, true)) };
+    return {
+      kind: "response",
+      status: 200,
+      body: rpcResult(id, toolText(failure.body, true)),
+    };
   }
 
-  const command = ["/bin/sh", "-c", parsed.data.command];
+  const command = workingDirectory
+    ? [
+        "/bin/sh",
+        "-c",
+        'cd -- "$1" && /bin/sh -c "$2"',
+        "exec",
+        workingDirectory,
+        parsed.data.command,
+      ]
+    : ["/bin/sh", "-c", parsed.data.command];
   if (!stream) {
     try {
       const result = await execInPod(target.kubeconfig, {
@@ -133,7 +174,11 @@ export async function callSandboxCommand(
     } catch (error) {
       if (error instanceof ExecCancelledError || request.signal.aborted) {
         await auditCommand(args, 499, { error: "命令已取消" }, startedAt);
-        return { kind: "response", status: 499, body: rpcResult(id, toolText("命令已取消", true)) };
+        return {
+          kind: "response",
+          status: 499,
+          body: rpcResult(id, toolText("命令已取消", true)),
+        };
       }
       const failure = await apiFailure(error);
       await auditCommand(args, failure.status, failure.body, startedAt);
@@ -166,7 +211,9 @@ export async function callSandboxCommand(
         }
       };
       const send = (payload: unknown) => {
-        write(`event: message\ndata: ${JSON.stringify(payload)}\n\n${FLUSH_PAD}`);
+        write(
+          `event: message\ndata: ${JSON.stringify(payload)}\n\n${FLUSH_PAD}`
+        );
       };
       const heartbeat = setInterval(() => {
         write(`: ping\n\n${FLUSH_PAD}`);
@@ -193,7 +240,11 @@ export async function callSandboxCommand(
         await auditCommand(args, 200, body, startedAt);
         send(rpcResult(id, toolText(body, false)));
       } catch (error) {
-        if (error instanceof ExecCancelledError || abort.signal.aborted || request.signal.aborted) {
+        if (
+          error instanceof ExecCancelledError ||
+          abort.signal.aborted ||
+          request.signal.aborted
+        ) {
           await auditCommand(args, 499, { error: "命令已取消" }, startedAt);
           return;
         }
@@ -224,12 +275,12 @@ function auditCommand(
   args: Record<string, unknown>,
   status: number,
   result: unknown,
-  startedAt: number,
+  startedAt: number
 ) {
   return recordMcpCall({
-    tool: AUDITED_TOOL,
-    method: "POST",
-    path: "/sandboxes/{id}/commands",
+    tool: "exec",
+    method: "tools/call",
+    path: "/mcp/exec",
     arguments: args,
     status,
     result,

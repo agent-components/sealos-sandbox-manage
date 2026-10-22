@@ -1,7 +1,14 @@
 import { openApiDocument } from "@/lib/openapi/document";
-import { callSandboxArtifact } from "@/lib/mcp/artifact";
+import {
+  callDelete,
+  callEdit,
+  callGlob,
+  callGrep,
+  callWrite,
+} from "@/lib/mcp/agent-tools";
 import { callSandboxCommand } from "@/lib/mcp/command";
-import { mcpRoutes } from "@/lib/mcp/tools";
+import { callRead } from "@/lib/mcp/read";
+import { mcpTools } from "@/lib/mcp/tools";
 
 export const SUPPORTED_PROTOCOL_VERSIONS = [
   "2025-06-18",
@@ -99,10 +106,11 @@ async function handleRequest(
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: info.title, version: info.version },
         instructions: [
-          info.description,
-          "当前 MCP 仅暴露 runSandboxCommand、getSandboxArtifact；其余沙箱接口请走 REST。",
+          "MCP 工具对标 Cursor Agent 本地文件操作：read、write、edit、delete、grep、glob、exec。",
+          "与 OpenAPI/REST 独立；创建/列表/关机等沙箱管理请走 REST。",
+          "每个工具需传沙箱 id；路径为沙箱内绝对路径。",
           "认证与 REST 相同：Authorization: Bearer sandbox_...，或登录会话 cookie。",
-          "runSandboxCommand 会用 SSE 持续推送 stdout/stderr，执行时间不限制；客户端断开即取消。命令结束后的最终结果里仍有 ok、exitCode、stdout、stderr。非零退出码时 ok 为 false。",
+          "读/写/搜文件用专用工具；exec 仅用于跑命令。exec 可 SSE 推送输出且不限时。",
         ].join("\n"),
       }),
     };
@@ -121,7 +129,7 @@ async function handleRequest(
       kind: "response",
       status: 200,
       body: rpcResult(id, {
-        tools: mcpRoutes().map((route) => route.definition),
+        tools: mcpTools(),
       }),
     };
   }
@@ -144,20 +152,26 @@ async function handleRequest(
         body: rpcError(id, -32602, "arguments 必须是对象"),
       };
     }
-    if (name === "runSandboxCommand") {
-      return callSandboxCommand(
+    const toolArgs = args as Record<string, unknown>;
+    if (name === "read") {
+      return callRead(
         request,
         id,
-        args as Record<string, unknown>,
+        toolArgs,
         progressToken(input),
         acceptsEventStream(request)
       );
     }
-    if (name === "getSandboxArtifact") {
-      return callSandboxArtifact(
+    if (name === "write") return callWrite(request, id, toolArgs);
+    if (name === "edit") return callEdit(request, id, toolArgs);
+    if (name === "delete") return callDelete(request, id, toolArgs);
+    if (name === "grep") return callGrep(request, id, toolArgs);
+    if (name === "glob") return callGlob(request, id, toolArgs);
+    if (name === "exec") {
+      return callSandboxCommand(
         request,
         id,
-        args as Record<string, unknown>,
+        toolArgs,
         progressToken(input),
         acceptsEventStream(request)
       );

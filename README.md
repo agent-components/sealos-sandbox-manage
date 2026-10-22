@@ -11,8 +11,8 @@
 - 空闲超时后自动关机；进行中的请求会计入活动时间
 - 在容器内执行命令，读取文件，查看 Pod 日志
 - 登录会话与 API Key。Key 按沙箱授权，数据按用户隔离
-- MCP Streamable HTTP，工具与 OpenAPI 的沙箱接口一一对应
-- 记录 `runSandboxCommand` 的调用；结果可存到对象存储
+- MCP Streamable HTTP，提供对标 Cursor Agent 的文件工具（与 OpenAPI 独立）
+- 记录全部 MCP 工具调用；结果可存到对象存储
 
 ## 架构
 
@@ -60,16 +60,16 @@ npm run start
 
 复制 `.env.example` 为 `.env.local`。带 `*` 的是启动和初始化数据库所必需的。
 
-| 变量 | 说明 |
-| --- | --- |
-| `DATABASE_URL` * | PostgreSQL 连接串，路径是数据库名，例如 `postgresql://postgres:密码@host:5432/bl_harness`。登录读 `public.users`，其他表在 schema `sandbox` |
-| `SEALOS_LAUNCHPAD_BASE` * | App Launchpad 根地址，不要末尾斜杠 |
-| `SEALOS_KUBECONFIG_PATH` * | kubeconfig 文件路径，仅服务端读取。`.sealos/` 已被 git 忽略 |
-| `MINIO_ENDPOINT` | 对象存储地址，例如 `https://objectstorageapi.example.com` |
-| `MINIO_ACCESS_KEY` | 对象存储访问密钥 |
-| `MINIO_SECRET_KEY` | 对象存储私钥 |
-| `MINIO_BUCKET` | 存放命令结果的桶名 |
-| `MINIO_REGION` | 可选，默认 `us-east-1` |
+| 变量                        | 说明                                                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL` \*           | PostgreSQL 连接串，路径是数据库名，例如 `postgresql://postgres:密码@host:5432/bl_harness`。登录读 `public.users`，其他表在 schema `sandbox` |
+| `SEALOS_LAUNCHPAD_BASE` \*  | App Launchpad 根地址，不要末尾斜杠                                                                                                          |
+| `SEALOS_KUBECONFIG_PATH` \* | kubeconfig 文件路径，仅服务端读取。`.sealos/` 已被 git 忽略                                                                                 |
+| `MINIO_ENDPOINT`            | 对象存储地址，例如 `https://objectstorageapi.example.com`                                                                                   |
+| `MINIO_ACCESS_KEY`          | 对象存储访问密钥                                                                                                                            |
+| `MINIO_SECRET_KEY`          | 对象存储私钥                                                                                                                                |
+| `MINIO_BUCKET`              | 存放命令结果的桶名                                                                                                                          |
+| `MINIO_REGION`              | 可选，默认 `us-east-1`                                                                                                                      |
 
 四项 MinIO 配置要同时填写才会上传结果。缺任意一项时跳过上传，调用记录里会留下失败原因。
 
@@ -77,12 +77,12 @@ npm run start
 
 登录后有四个页面：
 
-| 路径 | 作用 |
-| --- | --- |
-| `/sandboxes` | 沙箱列表、创建、详情、日志、启停和删除 |
+| 路径         | 作用                                           |
+| ------------ | ---------------------------------------------- |
+| `/sandboxes` | 沙箱列表、创建、详情、日志、启停和删除         |
 | `/templates` | 镜像、端口、环境变量、存储、启动命令和默认规格 |
-| `/mcp-logs` | `runSandboxCommand` 的调用记录 |
-| `/apikeys` | 令牌名称、授权沙箱，以及复制明文和 MCP 配置 |
+| `/mcp-logs`  | `exec` 的调用记录                              |
+| `/apikeys`   | 令牌名称、授权沙箱，以及复制明文和 MCP 配置    |
 
 ## 认证与权限
 
@@ -101,15 +101,21 @@ npm run start
 
 `initialize`、`tools/list` 和 `ping` 不需要登录。`tools/call` 与 REST 使用同一套认证：`Authorization: Bearer sandbox_...`，或登录 Cookie。
 
-工具名就是 OpenAPI 的 `operationId`。当前仅暴露：
+MCP 工具与 OpenAPI **相互独立**，对标 Cursor Agent 本地文件操作。每个工具需传沙箱 `id`，路径为沙箱内绝对路径：
 
-`runSandboxCommand`、`getSandboxArtifact`
+| 工具     | 对标       | 作用                                                      |
+| -------- | ---------- | --------------------------------------------------------- |
+| `read`   | Read       | 读文件；文本支持 `offset`/`limit`；图片/二进制走 artifact |
+| `write`  | Write      | 创建/覆盖文件                                             |
+| `edit`   | StrReplace | 精确字符串替换                                            |
+| `delete` | Delete     | 删除普通文件                                              |
+| `grep`   | Grep       | 内容搜索                                                  |
+| `glob`   | Glob       | 按模式找路径                                              |
+| `exec`   | Shell      | 执行命令（可 SSE、不限时）                                |
 
-其余沙箱接口请走 REST。
+沙箱的创建、列表、启停、删除等请走 REST。
 
-路径参数、查询参数和 JSON 请求体都摊平在工具参数里。
-
-`runSandboxCommand` 在 MCP 中不限制执行时间。客户端 `Accept` 含 `text/event-stream` 时，输出在同一次 POST 的 SSE 里推送（`notifications/message`；带了 `progressToken` 时还有 `notifications/progress`），结束后再返回 `ok`、`exitCode`、`stdout`、`stderr`。客户端断开会取消命令。单路输出上限仍是 1MB。
+`exec` 在 MCP 中不限制执行时间。客户端 `Accept` 含 `text/event-stream` 时，输出在同一次 POST 的 SSE 里推送（`notifications/message`；带了 `progressToken` 时还有 `notifications/progress`），结束后再返回 `ok`、`exitCode`、`stdout`、`stderr`。客户端断开会取消命令。单路输出上限仍是 1MB。
 
 ```json
 {
