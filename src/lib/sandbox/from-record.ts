@@ -29,6 +29,7 @@ export function sandboxFromRecord(
     autoShutdown: record.autoShutdown,
     idleMinutes: record.idleMinutes,
     inflight: record.inflight,
+    lastActivityAt: record.lastActivityAt.toISOString(),
     createdAt: record.createdAt.toISOString(),
   };
 }

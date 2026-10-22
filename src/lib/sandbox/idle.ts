@@ -9,6 +9,7 @@ type IdleRow = {
   sandbox_id: string;
   auto_shutdown: boolean;
   idle_minutes: number;
+  last_activity_at: Date | null;
 };
 
 function asConfig(
@@ -45,18 +46,22 @@ export async function withSandboxIdle(
 ): Promise<Sandbox[]> {
   if (sandboxes.length === 0) return sandboxes;
   const result = await query<IdleRow>(
-    `SELECT sandbox_id, auto_shutdown, idle_minutes
+    `SELECT sandbox_id, auto_shutdown, idle_minutes, last_activity_at
      FROM sandbox.records
      WHERE owner = $1 AND sandbox_id = ANY($2::text[])`,
     [owner, sandboxes.map((sandbox) => sandbox.id)]
   );
   const byId = new Map(result.rows.map((row) => [row.sandbox_id, row]));
   return sandboxes.map((sandbox) => {
-    const config = asConfig(byId.get(sandbox.id) ?? null);
+    const row = byId.get(sandbox.id);
+    const config = asConfig(row ?? null);
     return {
       ...sandbox,
       autoShutdown: config.autoShutdown,
       idleMinutes: config.idleMinutes,
+      lastActivityAt: row?.last_activity_at
+        ? row.last_activity_at.toISOString()
+        : sandbox.lastActivityAt,
     };
   });
 }

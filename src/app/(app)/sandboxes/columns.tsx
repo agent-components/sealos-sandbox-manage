@@ -9,10 +9,9 @@ import type {
 import { StateBadge } from "@/components/StateBadge";
 import { sandboxClient } from "@/lib/client";
 import type { Sandbox } from "@/lib/sandbox/schema";
-import { memoryLabel } from "@/lib/sealos/resources";
 import type { SandboxFilters } from "./filters";
 
-function formatCreatedAt(value?: string) {
+function formatTime(value?: string) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
@@ -181,12 +180,21 @@ export function sandboxColumns(
       ),
     },
     {
+      title: "上次活跃",
+      dataIndex: "lastActivityAt",
+      key: "lastActivityAt",
+      width: 170,
+      render: (value?: string) => (
+        <Typography.Text type="secondary">{formatTime(value)}</Typography.Text>
+      ),
+    },
+    {
       title: "创建时间",
       dataIndex: "createdAt",
       key: "createdAt",
       width: 170,
       render: (value?: string) => (
-        <Typography.Text type="secondary">{formatCreatedAt(value)}</Typography.Text>
+        <Typography.Text type="secondary">{formatTime(value)}</Typography.Text>
       ),
     },
     {

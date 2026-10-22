@@ -140,6 +140,10 @@ const sandboxSchema = {
       minimum: 0,
       description: "进行中的 MCP/API 请求数",
     },
+    lastActivityAt: {
+      type: "string",
+      description: "上次活跃时间（ISO 8601）",
+    },
     createdAt: { type: "string" },
     upTime: { type: "string" },
   },
