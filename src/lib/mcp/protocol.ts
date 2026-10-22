@@ -1,9 +1,13 @@
 import { openApiDocument } from "@/lib/openapi/document";
-import { callMcpTool, mcpRoutes } from "@/lib/mcp/call";
 import { callSandboxArtifact } from "@/lib/mcp/artifact";
 import { callSandboxCommand } from "@/lib/mcp/command";
+import { mcpRoutes } from "@/lib/mcp/tools";
 
-export const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"] as const;
+export const SUPPORTED_PROTOCOL_VERSIONS = [
+  "2025-06-18",
+  "2025-03-26",
+  "2024-11-05",
+] as const;
 const DEFAULT_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0];
 
 type JsonRpcId = string | number | null;
@@ -28,9 +32,12 @@ function rpcResult(id: JsonRpcId, result: unknown) {
   return { jsonrpc: "2.0" as const, id, result };
 }
 
-function progressToken(params: Record<string, unknown> | null): string | number | undefined {
+function progressToken(
+  params: Record<string, unknown> | null
+): string | number | undefined {
   const meta = params?._meta;
-  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return undefined;
+  if (!meta || typeof meta !== "object" || Array.isArray(meta))
+    return undefined;
   const token = (meta as Record<string, unknown>).progressToken;
   if (typeof token === "string" || typeof token === "number") return token;
   return undefined;
@@ -41,7 +48,9 @@ function acceptsEventStream(request: Request): boolean {
   if (!accept) return false;
   return accept
     .split(",")
-    .some((part) => part.split(";")[0]?.trim().toLowerCase() === "text/event-stream");
+    .some(
+      (part) => part.split(";")[0]?.trim().toLowerCase() === "text/event-stream"
+    );
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -56,21 +65,10 @@ function toolError(message: string) {
   };
 }
 
-function toolSuccess(status: number, body: unknown) {
-  const isError = status >= 400;
-  const text = typeof body === "string" ? body : JSON.stringify(body, null, 2);
-  const structured =
-    !isError && body && typeof body === "object" && !Array.isArray(body)
-      ? (body as Record<string, unknown>)
-      : undefined;
-  return {
-    content: [{ type: "text" as const, text }],
-    ...(structured ? { structuredContent: structured } : {}),
-    ...(isError ? { isError: true } : {}),
-  };
-}
-
-async function handleRequest(request: Request, message: JsonRpcRequest): Promise<McpDispatch> {
+async function handleRequest(
+  request: Request,
+  message: JsonRpcRequest
+): Promise<McpDispatch> {
   const { id, method, params } = message;
 
   if (method === "ping") {
@@ -88,7 +86,7 @@ async function handleRequest(request: Request, message: JsonRpcRequest): Promise
       };
     }
     const protocolVersion = SUPPORTED_PROTOCOL_VERSIONS.includes(
-      requested as (typeof SUPPORTED_PROTOCOL_VERSIONS)[number],
+      requested as (typeof SUPPORTED_PROTOCOL_VERSIONS)[number]
     )
       ? requested
       : DEFAULT_PROTOCOL_VERSION;
@@ -102,7 +100,7 @@ async function handleRequest(request: Request, message: JsonRpcRequest): Promise
         serverInfo: { name: info.title, version: info.version },
         instructions: [
           info.description,
-          "这些工具与 GET /api/openapi.json 中的沙箱接口一致，工具名即 operationId。",
+          "当前 MCP 仅暴露 runSandboxCommand、getSandboxArtifact；其余沙箱接口请走 REST。",
           "认证与 REST 相同：Authorization: Bearer sandbox_...，或登录会话 cookie。",
           "runSandboxCommand 会用 SSE 持续推送 stdout/stderr，执行时间不限制；客户端断开即取消。命令结束后的最终结果里仍有 ok、exitCode、stdout、stderr。非零退出码时 ok 为 false。",
         ].join("\n"),
@@ -152,7 +150,7 @@ async function handleRequest(request: Request, message: JsonRpcRequest): Promise
         id,
         args as Record<string, unknown>,
         progressToken(input),
-        acceptsEventStream(request),
+        acceptsEventStream(request)
       );
     }
     if (name === "getSandboxArtifact") {
@@ -161,33 +159,14 @@ async function handleRequest(request: Request, message: JsonRpcRequest): Promise
         id,
         args as Record<string, unknown>,
         progressToken(input),
-        acceptsEventStream(request),
+        acceptsEventStream(request)
       );
     }
-    const toolArgs = args as Record<string, unknown>;
-    // 通用工具转发到同一套 REST handler；空闲计时在 REST 层处理。调用日志只记 runSandboxCommand。
-    try {
-      const outcome = await callMcpTool(request, name, toolArgs);
-      if (outcome.ok) {
-        return {
-          kind: "response",
-          status: 200,
-          body: rpcResult(id, toolSuccess(outcome.status, outcome.body)),
-        };
-      }
-      return {
-        kind: "response",
-        status: 200,
-        body: rpcResult(id, toolError(outcome.message)),
-      };
-    } catch (error) {
-      console.error(error);
-      return {
-        kind: "response",
-        status: 200,
-        body: rpcResult(id, toolError("服务器内部错误")),
-      };
-    }
+    return {
+      kind: "response",
+      status: 200,
+      body: rpcResult(id, toolError(`未知工具：${name}`)),
+    };
   }
 
   return {
@@ -198,7 +177,10 @@ async function handleRequest(request: Request, message: JsonRpcRequest): Promise
 }
 
 /** 处理一条 JSON-RPC 消息。通知返回 202，请求返回 JSON-RPC 响应。 */
-export async function dispatchMcp(request: Request, payload: unknown): Promise<McpDispatch> {
+export async function dispatchMcp(
+  request: Request,
+  payload: unknown
+): Promise<McpDispatch> {
   if (Array.isArray(payload)) {
     return {
       kind: "response",
@@ -208,7 +190,12 @@ export async function dispatchMcp(request: Request, payload: unknown): Promise<M
   }
 
   const message = asObject(payload);
-  if (!message || message.jsonrpc !== "2.0" || typeof message.method !== "string" || !message.method) {
+  if (
+    !message ||
+    message.jsonrpc !== "2.0" ||
+    typeof message.method !== "string" ||
+    !message.method
+  ) {
     return {
       kind: "response",
       status: 400,
@@ -228,7 +215,11 @@ export async function dispatchMcp(request: Request, payload: unknown): Promise<M
     return { kind: "accepted" };
   }
 
-  if (message.id !== null && typeof message.id !== "string" && typeof message.id !== "number") {
+  if (
+    message.id !== null &&
+    typeof message.id !== "string" &&
+    typeof message.id !== "number"
+  ) {
     return {
       kind: "response",
       status: 400,

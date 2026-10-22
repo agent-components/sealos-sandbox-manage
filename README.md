@@ -101,9 +101,11 @@ npm run start
 
 `initialize`、`tools/list` 和 `ping` 不需要登录。`tools/call` 与 REST 使用同一套认证：`Authorization: Bearer sandbox_...`，或登录 Cookie。
 
-工具名就是 OpenAPI 的 `operationId`：
+工具名就是 OpenAPI 的 `operationId`。当前仅暴露：
 
-`listSandboxes`、`getSandbox`、`createSandbox`、`stopSandbox`、`resumeSandbox`、`runSandboxCommand`、`getSandboxArtifact`、`deleteSandbox`
+`runSandboxCommand`、`getSandboxArtifact`
+
+其余沙箱接口请走 REST。
 
 路径参数、查询参数和 JSON 请求体都摊平在工具参数里。
 
