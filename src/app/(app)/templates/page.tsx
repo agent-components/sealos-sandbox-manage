@@ -8,7 +8,7 @@ import {
   useListPageContext,
   type FloatComponentProps,
 } from "listpage-components/ListPage";
-import { listPagination } from "@/components/list-page";
+import { HydratedProTable } from "@/components/list-page";
 import { sandboxClient } from "@/lib/client";
 import type { Template } from "@/lib/template/schema";
 import { templateColumns, type TemplateFilters } from "./columns";
@@ -96,15 +96,15 @@ export default function TemplatesPage() {
         ],
       }}
       table={{
-        rowKey: "id",
-        columns,
-        density: "compact",
-        title: "模板列表",
-        columnResize: { persistenceKey: "sandbox-templates-width" },
-        columnSetting: { persistenceKey: "sandbox-templates-columns" },
-        extra: (_ctx, columnSetting) => columnSetting?.trigger ?? null,
-        scroll: { x: 1070 },
-        pagination: listPagination,
+        render: () => (
+          <HydratedProTable
+            columns={columns}
+            title="模板列表"
+            widthKey="sandbox-templates-width"
+            columnKey="sandbox-templates-columns"
+            scroll={{ x: 1070 }}
+          />
+        ),
       }}
       request={request}
       float={{ floats }}

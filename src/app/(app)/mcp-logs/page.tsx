@@ -6,7 +6,7 @@ import {
   ListPage,
   type FloatComponentProps,
 } from "listpage-components/ListPage";
-import { listPagination } from "@/components/list-page";
+import { HydratedProTable } from "@/components/list-page";
 import { sandboxClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
 import { mcpLogColumns } from "./columns";
@@ -79,15 +79,15 @@ export default function McpLogsPage() {
       )}
       filter={{ items: filterItems }}
       table={{
-        rowKey: "id",
-        columns,
-        density: "compact",
-        title: "日志",
-        columnResize: { persistenceKey: "sandbox-mcp-logs-width" },
-        columnSetting: { persistenceKey: "sandbox-mcp-logs-columns" },
-        extra: (_ctx, columnSetting) => columnSetting?.trigger ?? null,
-        scroll: { x: 1100, y: "calc(100vh - 420px)" },
-        pagination: listPagination,
+        render: () => (
+          <HydratedProTable
+            columns={columns}
+            title="日志"
+            widthKey="sandbox-mcp-logs-width"
+            columnKey="sandbox-mcp-logs-columns"
+            scroll={{ x: 1100, y: "calc(100vh - 420px)" }}
+          />
+        ),
       }}
       request={request}
       float={{ floats }}

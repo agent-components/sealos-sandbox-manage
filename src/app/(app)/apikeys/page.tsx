@@ -8,7 +8,7 @@ import {
   useListPageContext,
   type FloatComponentProps,
 } from "listpage-components/ListPage";
-import { listPagination } from "@/components/list-page";
+import { HydratedProTable } from "@/components/list-page";
 import { sandboxClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
 import { apiKeyColumns, type ApiKeyFilters } from "./columns";
@@ -90,15 +90,15 @@ export default function ApiKeysPage() {
         items: [{ name: "q", label: "关键词", placeholder: "名称或密钥" }],
       }}
       table={{
-        rowKey: "id",
-        columns,
-        density: "compact",
-        title: "令牌列表",
-        columnResize: { persistenceKey: "sandbox-apikeys-width" },
-        columnSetting: { persistenceKey: "sandbox-apikeys-columns" },
-        extra: (_ctx, columnSetting) => columnSetting?.trigger ?? null,
-        scroll: { x: 1160 },
-        pagination: listPagination,
+        render: () => (
+          <HydratedProTable
+            columns={columns}
+            title="令牌列表"
+            widthKey="sandbox-apikeys-width"
+            columnKey="sandbox-apikeys-columns"
+            scroll={{ x: 1160 }}
+          />
+        ),
       }}
       request={request}
       float={{ floats }}
