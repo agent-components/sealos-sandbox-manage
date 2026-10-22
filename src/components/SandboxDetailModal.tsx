@@ -1066,7 +1066,7 @@ export function SandboxDetailModal({
                     <EmptyHint>暂无文件映射</EmptyHint>
                   ) : (
                     <Space
-                      direction="vertical"
+                      orientation="vertical"
                       size={12}
                       style={{ width: "100%" }}
                     >

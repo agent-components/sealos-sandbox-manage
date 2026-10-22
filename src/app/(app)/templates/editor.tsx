@@ -734,7 +734,7 @@ export function TemplateEditor({
           children: (
             <TemplateForm saving={saving} wide>
               <Space
-                direction="vertical"
+                orientation="vertical"
                 size={12}
                 style={{ width: "100%" }}
               >

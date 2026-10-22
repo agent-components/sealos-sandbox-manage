@@ -217,7 +217,7 @@ export function CreateSandboxModal({
               key: "advanced",
               label: "高级配置",
               children: (
-                <Space direction="vertical" size={20} style={{ width: "100%" }}>
+                <Space orientation="vertical" size={20} style={{ width: "100%" }}>
                   <div>
                     <Typography.Text
                       strong
@@ -225,7 +225,7 @@ export function CreateSandboxModal({
                     >
                       环境变量
                     </Typography.Text>
-                    <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                    <Space orientation="vertical" size={8} style={{ width: "100%" }}>
                       {createEnv.map((item, index) => (
                         <Flex key={index} gap={8}>
                           <Input
