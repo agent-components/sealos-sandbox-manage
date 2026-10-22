@@ -288,10 +288,7 @@ function TemplateDiffList({ items }: { items: TemplateDiffItem[] }) {
 
 function sameTags(left: string[], right: string[]) {
   if (left.length !== right.length) return false;
-  return left.every(
-    (tag, index) =>
-      tag.toLocaleLowerCase() === right[index]?.toLocaleLowerCase(),
-  );
+  return left.every((tag, index) => tag === right[index]);
 }
 
 function normalizeEnv(list: SandboxEnv[]) {

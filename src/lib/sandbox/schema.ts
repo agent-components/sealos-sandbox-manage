@@ -11,14 +11,14 @@ export const SandboxStateSchema = z.enum([
 export type SandboxState = z.infer<typeof SandboxStateSchema>;
 
 export const ResourceSpecSchema = z.object({
-  cpu: z.number().refine((v) => (CPU_OPTIONS as readonly number[]).includes(v), {
-    message: "CPU 档位无效",
-  }),
-  memoryGi: z
+  cpu: z
     .number()
-    .refine((v) => MEMORY_OPTIONS.some((m) => m.gi === v), {
-      message: "内存档位无效",
+    .refine((v) => (CPU_OPTIONS as readonly number[]).includes(v), {
+      message: "CPU 档位无效",
     }),
+  memoryGi: z.number().refine((v) => MEMORY_OPTIONS.some((m) => m.gi === v), {
+    message: "内存档位无效",
+  }),
   diskGi: z.number().int().min(1).max(1000),
 });
 
@@ -41,9 +41,8 @@ export const TagsSchema = z
     const seen = new Set<string>();
     const unique: string[] = [];
     for (const tag of tags) {
-      const key = tag.toLocaleLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
+      if (seen.has(tag)) continue;
+      seen.add(tag);
       unique.push(tag);
     }
     return unique;
@@ -72,9 +71,7 @@ export const DEFAULT_IDLE_CONFIG: IdleConfig = {
 
 export const SandboxPortSchema = z.object({
   number: z.number().int(),
-  protocol: z
-    .enum(["http", "grpc", "ws", "tcp", "udp", "sctp"])
-    .optional(),
+  protocol: z.enum(["http", "grpc", "ws", "tcp", "udp", "sctp"]).optional(),
   isPublic: z.boolean().optional(),
   publicAddress: z.string().nullable(),
   privateAddress: z.string().nullable(),
@@ -165,7 +162,11 @@ export const CreateSandboxSchema = z.object({
 });
 
 export const RunSandboxCommandSchema = z.object({
-  command: z.string().trim().min(1, "请提供命令").max(16384, "命令最长 16384 个字符"),
+  command: z
+    .string()
+    .trim()
+    .min(1, "请提供命令")
+    .max(16384, "命令最长 16384 个字符"),
 });
 
 export const ArtifactPathSchema = z
@@ -200,14 +201,14 @@ export const UpdateSandboxSchema = z
       value.autoShutdown !== undefined ||
       value.idleMinutes !== undefined ||
       value.applyTemplate === true,
-    { message: "没有可更新的字段" },
+    { message: "没有可更新的字段" }
   )
   .refine(
     (value) => {
       const count = [value.cpu, value.memoryGi, value.diskGi].filter(
-        (item) => item !== undefined,
+        (item) => item !== undefined
       ).length;
       return count === 0 || count === 3;
     },
-    { message: "更新规格时需要同时提供 CPU、内存和磁盘" },
+    { message: "更新规格时需要同时提供 CPU、内存和磁盘" }
   );
