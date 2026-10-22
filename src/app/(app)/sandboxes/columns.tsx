@@ -135,36 +135,6 @@ export function sandboxColumns(
         },
       },
       {
-        title: "镜像",
-        dataIndex: "image",
-        key: "image",
-        width: 280,
-        render: (image?: string) =>
-          image ? (
-            <Typography.Text
-              type="secondary"
-              style={{ fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}
-            >
-              {image}
-            </Typography.Text>
-          ) : (
-            "—"
-          ),
-      },
-      {
-        title: "规格",
-        key: "spec",
-        width: 140,
-        render: (_, sb) => (
-          <Typography.Text
-            type="secondary"
-            style={{ whiteSpace: "nowrap" }}
-          >
-            {sb.cpu} 核 · {memoryLabel(sb.memoryGi)}
-          </Typography.Text>
-        ),
-      },
-      {
         title: "标签",
         dataIndex: "tags",
         key: "tags",
