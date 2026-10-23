@@ -569,8 +569,92 @@ export function openApiDocument() {
           },
         },
       },
+      "/billing": {
+        get: {
+          operationId: "getBilling",
+          summary: "用量账单",
+          description:
+            "按 Sealos 广州可用区口径汇总当前用户的 CPU、内存、存储卷与公网端口用量及费用。仅登录会话可用。不含外网流量；不计功能上线前的历史用量。省略 from/to 时默认本月月初至当前时刻。",
+          security: [{ sessionCookie: [] }],
+          parameters: [
+            {
+              name: "from",
+              in: "query",
+              description: "区间起点（含），ISO 8601",
+              schema: { type: "string", format: "date-time" },
+            },
+            {
+              name: "to",
+              in: "query",
+              description: "区间终点，ISO 8601",
+              schema: { type: "string", format: "date-time" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "区间合计与按沙箱明细",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["from", "to", "total", "sandboxes"],
+                    properties: {
+                      from: { type: "string", format: "date-time" },
+                      to: { type: "string", format: "date-time" },
+                      total: { $ref: "#/components/schemas/BillingUsage" },
+                      sandboxes: {
+                        type: "array",
+                        items: {
+                          allOf: [
+                            { $ref: "#/components/schemas/BillingUsage" },
+                            {
+                              type: "object",
+                              required: ["sandboxId"],
+                              properties: {
+                                sandboxId: { type: "string" },
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            ...errors(400, 401, 500),
+          },
+        },
+      },
     },
     components: {
+      schemas: {
+        BillingUsage: {
+          type: "object",
+          required: [
+            "cpuCoreHours",
+            "memoryGiHours",
+            "storageGiHours",
+            "portHours",
+            "cpuCost",
+            "memoryCost",
+            "storageCost",
+            "portCost",
+            "totalCost",
+          ],
+          properties: {
+            cpuCoreHours: { type: "number", description: "核·小时" },
+            memoryGiHours: { type: "number", description: "GB·小时" },
+            storageGiHours: { type: "number", description: "GB·小时" },
+            portHours: { type: "number", description: "公网端口·小时" },
+            cpuCost: { type: "number", description: "元，保留 4 位小数" },
+            memoryCost: { type: "number", description: "元，保留 4 位小数" },
+            storageCost: { type: "number", description: "元，保留 4 位小数" },
+            portCost: { type: "number", description: "元，保留 4 位小数" },
+            totalCost: { type: "number", description: "元，保留 4 位小数" },
+          },
+        },
+      },
       securitySchemes: {
         bearerAuth: {
           type: "http",

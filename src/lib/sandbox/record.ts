@@ -166,6 +166,14 @@ export async function findSandboxRecords(
   return new Map(result.rows.map((row) => [row.sandbox_id, toRecord(row)]));
 }
 
+/** 全部沙箱 ID → 所有者，供用量扫描对齐 Launchpad 列表。 */
+export async function listSandboxOwners(): Promise<Map<string, string>> {
+  const result = await query<{ sandbox_id: string; owner: string }>(
+    `SELECT sandbox_id, owner FROM sandbox.records`,
+  );
+  return new Map(result.rows.map((row) => [row.sandbox_id, row.owner]));
+}
+
 /** 列出当前用户在数据库中的沙箱记录（列表以 DB 为准） */
 export async function listSandboxRecords(
   options: ListSandboxRecordsOptions

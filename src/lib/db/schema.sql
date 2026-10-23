@@ -83,3 +83,31 @@ CREATE INDEX IF NOT EXISTS mcp_logs_started_idx ON sandbox.mcp_logs (started_at 
 CREATE INDEX IF NOT EXISTS mcp_logs_tool_started_idx ON sandbox.mcp_logs (tool, started_at DESC);
 CREATE INDEX IF NOT EXISTS mcp_logs_username_started_idx ON sandbox.mcp_logs (username, started_at DESC);
 CREATE INDEX IF NOT EXISTS mcp_logs_api_key_started_idx ON sandbox.mcp_logs (api_key_id, started_at DESC);
+
+-- 用量段：规格或运行状态变化时切段；ended_at 为空表示当前段仍在进行。
+CREATE TABLE IF NOT EXISTS sandbox.usage_segments (
+  id bigserial PRIMARY KEY,
+  sandbox_id text NOT NULL,
+  owner text NOT NULL,
+  compute_active boolean NOT NULL,
+  cpu double precision NOT NULL,
+  memory_gi double precision NOT NULL,
+  disk_gi double precision NOT NULL,
+  public_ports integer NOT NULL,
+  price_cpu double precision NOT NULL,
+  price_memory double precision NOT NULL,
+  price_storage double precision NOT NULL,
+  price_port double precision NOT NULL,
+  started_at timestamptz NOT NULL DEFAULT now(),
+  ended_at timestamptz
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS usage_segments_open_uidx
+  ON sandbox.usage_segments (sandbox_id)
+  WHERE ended_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS usage_segments_owner_started_idx
+  ON sandbox.usage_segments (owner, started_at DESC);
+
+CREATE INDEX IF NOT EXISTS usage_segments_sandbox_started_idx
+  ON sandbox.usage_segments (sandbox_id, started_at DESC);

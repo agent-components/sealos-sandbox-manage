@@ -9,6 +9,10 @@ import { assertOwnedBy } from "@/lib/sandbox/ownership";
 import { deleteSandboxRecord, setSandboxState } from "@/lib/sandbox/record";
 import { DEFAULT_IDLE_CONFIG, UpdateSandboxSchema } from "@/lib/sandbox/schema";
 import { setSandboxTags, withSandboxTags } from "@/lib/sandbox/tags";
+import {
+  reconcileSandboxUsage,
+  snapshotFromApp,
+} from "@/lib/billing/meter";
 import { AuthError } from "@/lib/sealos/errors";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { mapLaunchpadStatus, toSandbox } from "@/lib/sealos/map";
@@ -136,6 +140,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       });
     }
     await setSandboxState(id, mapLaunchpadStatus(app.status));
+    await reconcileSandboxUsage(snapshotFromApp(app, user.username));
     return jsonOk({
       sandbox: await withSandboxExtras(
         user.username,
@@ -166,6 +171,7 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
         await client.deleteApp(id);
         await deleteSandboxRecord(id);
         await revokeSandboxFromApiKeys(user.username, id);
+        await reconcileSandboxUsage({ sandboxId: id, end: true });
         const body = { ok: true as const };
         return { status: 200, result: body, value: jsonOk(body) };
       },

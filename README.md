@@ -13,6 +13,7 @@
 - 登录会话与 API Key。Key 按沙箱授权，数据按用户隔离
 - MCP Streamable HTTP，提供对标 Cursor Agent 的文件工具（与 OpenAPI 独立）
 - 记录全部 MCP 工具调用；结果可存到对象存储
+- 按 Sealos 广州可用区口径记录 CPU、内存、存储卷与公网端口用量，控制台展示账单（不扣余额、不拦截）
 
 ## 架构
 
@@ -70,6 +71,10 @@ npm run start
 | `MINIO_SECRET_KEY`          | 对象存储私钥                                                                                                                                |
 | `MINIO_BUCKET`              | 存放命令结果的桶名                                                                                                                          |
 | `MINIO_REGION`              | 可选，默认 `us-east-1`                                                                                                                      |
+| `BILLING_PRICE_CPU`         | 可选。CPU 单价（元/核·小时），默认广州 G `0.01742`                                                                                          |
+| `BILLING_PRICE_MEMORY`      | 可选。内存单价（元/GB·小时），默认 `0.008786`                                                                                               |
+| `BILLING_PRICE_STORAGE`     | 可选。存储卷单价（元/GB·小时），默认 `0.000532`                                                                                             |
+| `BILLING_PRICE_PORT`        | 可选。公网端口单价（元/个·小时），默认 `0.007`                                                                                              |
 
 四项 MinIO 配置要同时填写才会上传结果。缺任意一项时跳过上传，调用记录里会留下失败原因。
 
@@ -82,6 +87,7 @@ npm run start
 | `/sandboxes` | 沙箱列表、创建、详情、日志、启停和删除         |
 | `/templates` | 镜像、端口、环境变量、存储、启动命令和默认规格 |
 | `/mcp-logs`  | `exec` 的调用记录                              |
+| `/billing`   | 用量账单：按区间汇总 CPU、内存、存储与公网端口费用 |
 | `/apikeys`   | 令牌名称、授权沙箱、MCP 工具白名单，以及复制明文和 MCP 配置 |
 
 ## 认证与权限
@@ -143,6 +149,16 @@ CPU 档位：`0.1 / 0.2 / 0.5 / 1 / 2 / 3 / 4 / 8` 核。
 
 空闲关机默认关闭。打开后，等待时间至少 5 分钟、最长 7 天（10080 分钟）。REST 与 MCP 对沙箱的访问都会计入活动；有请求进行时不会关机。进程内每分钟扫描一次，只暂停仍在运行的实例。
 
+## 用量账单
+
+按 Sealos 广州（gzg）公开单价估算本机群成本，只记账与展示，不扣余额、不因费用停机。
+
+- **CPU、内存、公网端口**：仅 `running` 计费；CPU、内存按核数/GB × 副本数。
+- **存储卷**：沙箱仍存在（含暂停）时按磁盘 Gi 持续计费；从 Launchpad 确认删除后停止。
+- **不含**：外网流量；功能上线前的历史用量。
+- 创建、改配、启停、删除与每分钟状态扫描会切分用量段；段开启时写入当时单价。
+- `GET /api/v1/billing?from=&to=` 仅登录会话可用，默认本月；控制台路径 `/billing`。
+
 ## 开发
 
 ```bash
@@ -159,6 +175,7 @@ src/components/    控制台组件
 src/lib/auth/      会话与用户
 src/lib/apikey/    令牌
 src/lib/sandbox/   沙箱模型、命令、文件、空闲关机
+src/lib/billing/   用量段与账单汇总
 src/lib/template/  模板
 src/lib/mcp/       MCP 协议与调用日志
 src/lib/sealos/    Launchpad 与 Kubernetes

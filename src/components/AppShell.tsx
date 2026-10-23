@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import {
+  AccountBookOutlined,
   CloudServerOutlined,
   FileSearchOutlined,
   KeyOutlined,
@@ -32,6 +33,12 @@ const ROUTES = [
     path: "/mcp-logs",
     label: "调用日志",
     icon: <FileSearchOutlined />,
+  },
+  {
+    key: "billing",
+    path: "/billing",
+    label: "用量账单",
+    icon: <AccountBookOutlined />,
   },
   {
     key: "apikeys",

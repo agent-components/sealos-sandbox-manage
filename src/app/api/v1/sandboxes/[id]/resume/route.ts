@@ -4,9 +4,16 @@ import { assertSandboxAllowed } from "@/lib/apikey/access";
 import { runSandboxApiCall } from "@/lib/api/call-context";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
-import { withSandboxIdle } from "@/lib/sandbox/idle";
+import {
+  touchSandboxActivity,
+  withSandboxIdle,
+} from "@/lib/sandbox/idle";
 import { setSandboxState } from "@/lib/sandbox/record";
 import { withSandboxTags } from "@/lib/sandbox/tags";
+import {
+  reconcileSandboxUsage,
+  snapshotFromApp,
+} from "@/lib/billing/meter";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { mapLaunchpadStatus, toSandbox } from "@/lib/sealos/map";
 
@@ -31,6 +38,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         await client.startApp(id);
         const app = await client.getApp(id);
         await setSandboxState(id, mapLaunchpadStatus(app.status));
+        await touchSandboxActivity(id);
+        await reconcileSandboxUsage(snapshotFromApp(app, user.username));
         const [sandbox] = await withSandboxIdle(
           user.username,
           await withSandboxTags(user.username, [toSandbox(app, templateId)])

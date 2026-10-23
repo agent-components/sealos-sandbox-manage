@@ -27,13 +27,36 @@ import {
   nearestMemoryGi,
   type ResourceSpec,
 } from "@/lib/sealos/resources";
-import type { Template } from "@/lib/template/schema";
+import type {
+  Template,
+  TemplatePort,
+  TemplateStorage,
+} from "@/lib/template/schema";
 import {
   defaultTemplatePorts,
   formatSizeGi,
   parseSizeToGi,
   primaryDiskGi,
 } from "@/lib/template/schema";
+
+type PortDraft = TemplatePort & { key: string };
+type StorageDraft = TemplateStorage & { key: string };
+
+function portDraft(port: TemplatePort, index: number): PortDraft {
+  return { ...port, key: `port-${index}` };
+}
+
+function storageDraft(item: TemplateStorage, index: number): StorageDraft {
+  return { ...item, key: `storage-${index}` };
+}
+
+function freshPortDraft(port: TemplatePort): PortDraft {
+  return { ...port, key: `port-${crypto.randomUUID()}` };
+}
+
+function freshStorageDraft(item: TemplateStorage): StorageDraft {
+  return { ...item, key: `storage-${crypto.randomUUID()}` };
+}
 
 type FormState = {
   name: string;
@@ -49,9 +72,9 @@ type FormState = {
   replicas: number;
   autoShutdown: boolean;
   idleMinutes: number;
-  ports: Template["ports"];
+  ports: PortDraft[];
   envText: string;
-  storage: Template["storage"];
+  storage: StorageDraft[];
   configMap: Template["configMap"];
 };
 
@@ -69,7 +92,7 @@ const emptyForm = (): FormState => ({
   replicas: 1,
   autoShutdown: false,
   idleMinutes: 5,
-  ports: defaultTemplatePorts(),
+  ports: defaultTemplatePorts().map(portDraft),
   envText: "",
   storage: [],
   configMap: [],
@@ -94,9 +117,11 @@ function fromTemplate(tpl: Template): FormState {
     replicas: tpl.replicas ?? 1,
     autoShutdown: tpl.autoShutdown ?? false,
     idleMinutes: tpl.idleMinutes ?? 5,
-    ports: tpl.ports?.length ? tpl.ports : defaultTemplatePorts(),
+    ports: (tpl.ports?.length ? tpl.ports : defaultTemplatePorts()).map(
+      portDraft,
+    ),
     envText: formatEnvText(tpl.env ?? []),
-    storage: tpl.storage ?? [],
+    storage: (tpl.storage ?? []).map(storageDraft),
     configMap: tpl.configMap ?? [],
   };
 }
@@ -127,8 +152,10 @@ function toPayload(form: FormState) {
     replicas: form.replicas,
     autoShutdown: form.autoShutdown,
     idleMinutes: form.idleMinutes,
-    ports: form.ports,
-    storage: form.storage.filter((s) => s.name.trim() && s.path.trim()),
+    ports: form.ports.map(({ key: _key, ...port }) => port),
+    storage: form.storage
+      .filter((s) => s.name.trim() && s.path.trim())
+      .map(({ key: _key, ...item }) => item),
     configMap: form.configMap
       .filter((c) => c.path.trim())
       .map((c) => ({ path: c.path.trim(), value: c.value ?? "" })),
@@ -480,7 +507,7 @@ export function TemplateEditor({
                 className="template-drawer-edit-table"
                 size="small"
                 pagination={false}
-                rowKey={(_, index) => `port-${index}`}
+                rowKey="key"
                 dataSource={form.ports}
                 columns={[
                   {
@@ -591,7 +618,11 @@ export function TemplateEditor({
                     ...f,
                     ports: [
                       ...f.ports,
-                      { number: 80, protocol: "http", isPublic: true },
+                      freshPortDraft({
+                        number: 80,
+                        protocol: "http",
+                        isPublic: true,
+                      }),
                     ],
                   }))
                 }
@@ -610,7 +641,7 @@ export function TemplateEditor({
                 className="template-drawer-edit-table"
                 size="small"
                 pagination={false}
-                rowKey={(_, index) => `storage-${index}`}
+                rowKey="key"
                 dataSource={form.storage}
                 columns={[
                   {
@@ -715,7 +746,7 @@ export function TemplateEditor({
                     ...f,
                     storage: [
                       ...f.storage,
-                      {
+                      freshStorageDraft({
                         name:
                           f.storage.length === 0
                             ? "data"
@@ -725,7 +756,7 @@ export function TemplateEditor({
                             ? "/data"
                             : `/data${f.storage.length + 1}`,
                         size: "1Gi",
-                      },
+                      }),
                     ],
                   }))
                 }

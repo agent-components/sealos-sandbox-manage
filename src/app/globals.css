@@ -362,13 +362,16 @@
   }
 }
 
-/* 工具权限：芯片不能把表单项撑换行，标题留在切换控件左侧 */
-.apikey-tool-field .ant-form-item-row {
-  flex-wrap: nowrap;
+/* 工具权限：选「自定义」后芯片不能把整行挤到标题下面 */
+.apikey-tool-field > .ant-form-item-row {
+  flex-wrap: nowrap !important;
 }
 
-.apikey-tool-field .ant-form-item-control {
+.apikey-tool-field .ant-form-item-control,
+.apikey-tool-field .ant-form-item-control-input,
+.apikey-tool-field .ant-form-item-control-input-content {
   min-width: 0;
+  max-width: 100%;
 }
 
 /* 侧栏 logo 与标题间距（覆盖 listpage-components 的 gap: 0） */

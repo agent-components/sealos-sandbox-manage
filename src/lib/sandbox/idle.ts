@@ -83,7 +83,7 @@ export async function beginMcpActivity(sandboxId: string): Promise<void> {
 /**
  * MCP 工具调用结束。失败/中止传 touch: false。
  * 成功时刷新 last_activity_at，并减少 inflight（下限 0）。
- * last_activity_at 仅由此路径更新（不含 REST）。
+ * 另见 touchSandboxActivity（开机）。
  */
 export async function endMcpActivity(
   sandboxId: string,
@@ -102,6 +102,16 @@ export async function endMcpActivity(
   } catch (error) {
     console.error("空闲活动结束失败", error);
   }
+}
+
+/** 开机时刷新活跃时间，避免沿用关机前的时间戳被立刻再次空闲关机。 */
+export async function touchSandboxActivity(sandboxId: string): Promise<void> {
+  await query(
+    `UPDATE sandbox.records
+     SET last_activity_at = now(), updated_at = now()
+     WHERE sandbox_id = $1`,
+    [sandboxId],
+  );
 }
 
 export type IdleCandidate = {

@@ -40,6 +40,29 @@ export type PageQuery = {
   pageSize?: number;
 };
 
+export type BillingUsage = {
+  cpuCoreHours: number;
+  memoryGiHours: number;
+  storageGiHours: number;
+  portHours: number;
+  cpuCost: number;
+  memoryCost: number;
+  storageCost: number;
+  portCost: number;
+  totalCost: number;
+};
+
+export type SandboxBillingRow = BillingUsage & {
+  sandboxId: string;
+};
+
+export type BillingReport = {
+  from: string;
+  to: string;
+  total: BillingUsage;
+  sandboxes: SandboxBillingRow[];
+};
+
 export type ListSandboxesQuery = PageQuery & {
   /** 精确标签，需同时包含 */
   tag?: string[];
@@ -257,6 +280,14 @@ export const sandboxClient = {
       result: unknown;
       resultLoadError: string | null;
     }>(`/api/v1/mcp-logs/${encodeURIComponent(id)}`),
+
+  getBilling: (query?: { from?: string; to?: string }) => {
+    const q = new URLSearchParams();
+    if (query?.from) q.set("from", query.from);
+    if (query?.to) q.set("to", query.to);
+    const qs = q.toString();
+    return request<BillingReport>(`/api/v1/billing${qs ? `?${qs}` : ""}`);
+  },
 
   listApiKeys: (query?: PageQuery & { q?: string }) => {
     const q = new URLSearchParams();

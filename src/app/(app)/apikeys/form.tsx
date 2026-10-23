@@ -111,7 +111,7 @@ function ToolChips({
   }
 
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minWidth: 0 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, width: "100%", minWidth: 0 }}>
       {MCP_TOOL_NAME_LIST.map((name) => {
         const on = selected.has(name);
         return (
@@ -306,12 +306,18 @@ export function ApiKeyFormModal({
           )}
         />
       </Form.Item>
-      <Form.Item label="工具权限" className="apikey-tool-field" style={{ marginBottom: 0 }}>
+      <Form.Item
+        label="工具权限"
+        className="apikey-tool-field"
+        style={{ marginBottom: 0 }}
+        labelCol={{ flex: "0 0 88px" }}
+        wrapperCol={{ flex: "1 1 0", style: { minWidth: 0, maxWidth: "100%" } }}
+      >
         <Form.Item name="toolAccess" noStyle>
           <ToolAccessSwitch />
         </Form.Item>
         {toolAccess === "custom" ? (
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 12, width: "100%", minWidth: 0 }}>
             <Form.Item name="allowedTools" noStyle>
               <ToolChips />
             </Form.Item>

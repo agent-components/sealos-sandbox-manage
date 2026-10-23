@@ -19,6 +19,10 @@ import {
   saveSandboxRecord,
 } from "@/lib/sandbox/record";
 import { setSandboxTags, withSandboxTags } from "@/lib/sandbox/tags";
+import {
+  reconcileSandboxUsage,
+  snapshotFromApp,
+} from "@/lib/billing/meter";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { mapLaunchpadStatus, toSandbox } from "@/lib/sealos/map";
 import { getTemplate, listTemplates } from "@/lib/template/store";
@@ -140,6 +144,7 @@ export async function POST(req: NextRequest) {
             state: mapLaunchpadStatus(app.status),
           });
           await setSandboxTags(user.username, id, input.tags);
+          await reconcileSandboxUsage(snapshotFromApp(app, user.username));
           if (user.apiKeyId) {
             const granted = await grantApiKeySandbox(
               user.apiKeyId,
@@ -153,6 +158,9 @@ export async function POST(req: NextRequest) {
         } catch (error) {
           await client.deleteApp(id).catch(() => undefined);
           await deleteSandboxRecord(id).catch(() => undefined);
+          await reconcileSandboxUsage({ sandboxId: id, end: true }).catch(
+            () => undefined,
+          );
           throw error;
         }
         const [sandbox] = await withSandboxIdle(

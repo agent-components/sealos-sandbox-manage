@@ -8,6 +8,10 @@ import { assertOwnedBy } from "@/lib/sandbox/ownership";
 import { setSandboxState } from "@/lib/sandbox/record";
 import { DEFAULT_IDLE_CONFIG } from "@/lib/sandbox/schema";
 import { withSandboxTags } from "@/lib/sandbox/tags";
+import {
+  reconcileSandboxUsage,
+  snapshotFromApp,
+} from "@/lib/billing/meter";
 import { AuthError } from "@/lib/sealos/errors";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { mapLaunchpadStatus, toSandbox } from "@/lib/sealos/map";
@@ -43,6 +47,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
         const app = await client.syncAppFromTemplate(id, existing, template);
         await setSandboxState(id, mapLaunchpadStatus(app.status));
+        await reconcileSandboxUsage(snapshotFromApp(app, user.username));
 
         await setSandboxIdleConfig(user.username, id, {
           autoShutdown:
