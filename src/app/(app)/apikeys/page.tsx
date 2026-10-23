@@ -68,14 +68,9 @@ export default function ApiKeysPage() {
   return (
     <ListPage<ApiKey, ApiKeyFilters>
       title={
-        <div>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            令牌管理
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            每把令牌只能访问被授权的沙箱。用它创建的沙箱会自动加入授权列表
-          </Typography.Text>
-        </div>
+        <Typography.Title level={3} style={{ margin: 0 }}>
+          令牌管理
+        </Typography.Title>
       }
       extra={(ctx) => (
         <Button
@@ -96,7 +91,7 @@ export default function ApiKeysPage() {
             title="令牌列表"
             widthKey="sandbox-apikeys-width"
             columnKey="sandbox-apikeys-columns"
-            scroll={{ x: 1160 }}
+            scroll={{ x: 1220 }}
           />
         ),
       }}

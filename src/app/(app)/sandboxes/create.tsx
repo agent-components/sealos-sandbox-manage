@@ -4,9 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   App,
-  Button,
   Collapse,
-  Flex,
   Form,
   Input,
   Modal,
@@ -14,10 +12,11 @@ import {
   Space,
   Typography,
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { EnvTextEditor } from "@/components/EnvTextEditor";
 import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { sandboxClient } from "@/lib/client";
+import { formatEnvText, parseEnvText } from "@/lib/env-text";
 import { TagsSchema } from "@/lib/sandbox/schema";
 import {
   DEFAULT_RESOURCES,
@@ -46,9 +45,7 @@ export function CreateSandboxModal({
   const [createTags, setCreateTags] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [createEnv, setCreateEnv] = useState<{ name: string; value: string }[]>(
-    [],
-  );
+  const [createEnvText, setCreateEnvText] = useState("");
   const [createIdle, setCreateIdle] = useState({
     autoShutdown: false,
     idleMinutes: 5,
@@ -61,11 +58,7 @@ export function CreateSandboxModal({
       memoryGi: nearestMemoryGi(tpl.memoryGi),
       diskGi: primaryDiskGi(tpl.storage),
     });
-    setCreateEnv(
-      (tpl.env ?? [])
-        .filter((e) => e.name.trim())
-        .map((e) => ({ name: e.name, value: e.value ?? "" })),
-    );
+    setCreateEnvText(formatEnvText(tpl.env ?? []));
     setCreateIdle({
       autoShutdown: tpl.autoShutdown ?? false,
       idleMinutes: tpl.idleMinutes ?? 5,
@@ -124,6 +117,12 @@ export function CreateSandboxModal({
       message.error(parsedTags.error.issues[0]?.message ?? "标签无效");
       return;
     }
+    const parsedEnv = parseEnvText(createEnvText);
+    if (!parsedEnv.ok) {
+      setAdvancedOpen(true);
+      message.error(parsedEnv.error);
+      return;
+    }
     setCreating(true);
     try {
       await sandboxClient.createSandbox({
@@ -131,7 +130,7 @@ export function CreateSandboxModal({
         cpu: resources.cpu,
         memoryGi: resources.memoryGi,
         diskGi: resources.diskGi,
-        env: createEnv.filter((e) => e.name.trim()),
+        env: parsedEnv.env,
         tags: parsedTags.data,
         autoShutdown: createIdle.autoShutdown,
         idleMinutes: createIdle.idleMinutes,
@@ -225,67 +224,11 @@ export function CreateSandboxModal({
                     >
                       环境变量
                     </Typography.Text>
-                    <Space orientation="vertical" size={8} style={{ width: "100%" }}>
-                      {createEnv.map((item, index) => (
-                        <Flex key={index} gap={8}>
-                          <Input
-                            placeholder="KEY"
-                            value={item.name}
-                            style={{ flex: 1 }}
-                            onChange={(e) =>
-                              setCreateEnv((list) => {
-                                const next = [...list];
-                                next[index] = {
-                                  ...next[index]!,
-                                  name: e.target.value,
-                                };
-                                return next;
-                              })
-                            }
-                          />
-                          <Input
-                            placeholder="VALUE"
-                            value={item.value}
-                            style={{ flex: 1.4 }}
-                            onChange={(e) =>
-                              setCreateEnv((list) => {
-                                const next = [...list];
-                                next[index] = {
-                                  ...next[index]!,
-                                  value: e.target.value,
-                                };
-                                return next;
-                              })
-                            }
-                          />
-                          <Button
-                            type="link"
-                            danger
-                            style={{ paddingInline: 0 }}
-                            onClick={() =>
-                              setCreateEnv((list) =>
-                                list.filter((_, i) => i !== index),
-                              )
-                            }
-                          >
-                            删除
-                          </Button>
-                        </Flex>
-                      ))}
-                      <Button
-                        type="dashed"
-                        block
-                        icon={<PlusOutlined />}
-                        onClick={() =>
-                          setCreateEnv((list) => [
-                            ...list,
-                            { name: "", value: "" },
-                          ])
-                        }
-                      >
-                        添加环境变量
-                      </Button>
-                    </Space>
+                    <EnvTextEditor
+                      value={createEnvText}
+                      disabled={creating}
+                      onChange={setCreateEnvText}
+                    />
                   </div>
                   <div>
                     <Typography.Text

@@ -1,7 +1,7 @@
 "use client";
 
-import { CopyOutlined } from "@ant-design/icons";
-import { App, Button, Space, Tag, Tooltip, Typography } from "antd";
+import { CopyOutlined, EllipsisOutlined } from "@ant-design/icons";
+import { App, Button, Dropdown, Space, Tag, Tooltip, Typography } from "antd";
 import type {
   ListPageColumnType,
   ListPageContextValue,
@@ -68,7 +68,7 @@ function SandboxAccess({ ids }: { ids?: string[] }) {
 function AllowedToolsAccess({ tools }: { tools?: string[] | null }) {
   const list = tools ?? [];
   if (list.length === 0) {
-    return <Typography.Text type="secondary">全部</Typography.Text>;
+    return <Typography.Text type="secondary">不限制（全部）</Typography.Text>;
   }
   const [first, ...rest] = list;
   return (
@@ -129,46 +129,46 @@ function ApiKeyActions({
   ctx: ListPageContextValue<ApiKey, ApiKeyFilters>;
 }) {
   const { message, modal } = App.useApp();
+
+  function confirmDelete() {
+    modal.confirm({
+      title: "删除令牌",
+      content: `确认删除「${record.name}」？使用该密钥的请求将立即失效。`,
+      okText: "删除",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      onOk: async () => {
+        await sandboxClient.deleteApiKey(record.id);
+        message.success("已删除");
+        ctx.refreshTable();
+      },
+    });
+  }
+
   return (
-    <Space size={0}>
+    <Space size={8}>
       <Button
-        type="link"
+        type="primary"
         size="small"
-        style={{ paddingInline: 4 }}
         onClick={() => copySecret(record.id, mcpConnectJson, "已复制 MCP 接入配置", message)}
       >
         复制 MCP
       </Button>
-      <Button
-        type="link"
-        size="small"
-        style={{ paddingInline: 4 }}
-        onClick={() => ctx.showFloat("editor", record)}
-      >
+      <Button size="small" onClick={() => ctx.showFloat("editor", record)}>
         编辑
       </Button>
-      <Button
-        type="link"
-        size="small"
-        danger
-        style={{ paddingInline: 4 }}
-        onClick={() =>
-          modal.confirm({
-            title: "删除令牌",
-            content: `确认删除「${record.name}」？使用该密钥的请求将立即失效。`,
-            okText: "删除",
-            okButtonProps: { danger: true },
-            cancelText: "取消",
-            onOk: async () => {
-              await sandboxClient.deleteApiKey(record.id);
-              message.success("已删除");
-              ctx.refreshTable();
-            },
-          })
-        }
+      <Dropdown
+        trigger={["click"]}
+        placement="bottomRight"
+        menu={{
+          items: [{ key: "delete", danger: true, label: "删除" }],
+          onClick: ({ key }) => {
+            if (key === "delete") confirmDelete();
+          },
+        }}
       >
-        删除
-      </Button>
+        <Button size="small" icon={<EllipsisOutlined />} aria-label="更多操作" />
+      </Dropdown>
     </Space>
   );
 }
@@ -226,7 +226,7 @@ export function apiKeyColumns(): ListPageColumnType<ApiKey, ApiKeyFilters>[] {
     {
       title: "操作",
       key: "actions",
-      width: 180,
+      width: 240,
       align: "right",
       fixed: "right",
       component: ({ record, ctx }) => <ApiKeyActions record={record} ctx={ctx} />,

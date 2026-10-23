@@ -68,14 +68,9 @@ export default function TemplatesPage() {
   return (
     <ListPage<Template, TemplateFilters>
       title={
-        <div>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            模板管理
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            对齐 Sealos 应用管理参数；沙箱必须基于模板创建
-          </Typography.Text>
-        </div>
+        <Typography.Title level={3} style={{ margin: 0 }}>
+          模板管理
+        </Typography.Title>
       }
       extra={(ctx) => (
         <Button

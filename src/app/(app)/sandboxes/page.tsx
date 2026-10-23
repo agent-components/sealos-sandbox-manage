@@ -171,14 +171,9 @@ export default function SandboxesPage() {
   return (
     <ListPage<Sandbox, SandboxFilters>
       title={
-        <div>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            沙箱列表
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            基于模板创建 · 列表取自数据库，状态每 5 秒从 Sealos 刷新
-          </Typography.Text>
-        </div>
+        <Typography.Title level={3} style={{ margin: 0 }}>
+          沙箱列表
+        </Typography.Title>
       }
       extra={(ctx) => (
         <Button

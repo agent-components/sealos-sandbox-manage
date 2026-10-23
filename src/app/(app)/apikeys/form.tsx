@@ -1,24 +1,151 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { App, Checkbox, Form, Input, Select } from "antd";
+import { App, Form, Input, Select, theme } from "antd";
 import { FormModal } from "listpage-components/FormModal";
 import { sandboxClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
-import { MCP_TOOLS } from "@/lib/mcp/tools";
+import { MCP_TOOL_NAME_LIST, type McpToolName } from "@/lib/mcp/tools";
 import type { Sandbox } from "@/lib/sandbox/schema";
 import type { Template } from "@/lib/template/schema";
+
+type ToolAccess = "all" | "custom";
 
 type ApiKeyFormValues = {
   name: string;
   sandboxIds?: string[];
+  toolAccess: ToolAccess;
   allowedTools?: string[];
 };
 
-const toolOptions = MCP_TOOLS.map((item) => ({
-  value: item.name,
-  label: item.name,
-}));
+const TOOL_LABEL: Record<McpToolName, string> = {
+  read: "读文件",
+  write: "写文件",
+  edit: "编辑",
+  delete: "删除",
+  grep: "搜索",
+  glob: "匹配路径",
+  exec: "执行命令",
+};
+
+function toolAccessOf(tools: string[] | null | undefined): ToolAccess {
+  return tools && tools.length > 0 ? "custom" : "all";
+}
+
+const TOOL_ACCESS_OPTIONS: { value: ToolAccess; label: string }[] = [
+  { value: "all", label: "不限制（全部）" },
+  { value: "custom", label: "自定义" },
+];
+
+function ToolAccessSwitch({
+  value,
+  onChange,
+}: {
+  value?: ToolAccess;
+  onChange?: (value: ToolAccess) => void;
+}) {
+  const { token } = theme.useToken();
+  const current = value ?? "all";
+  return (
+    <div
+      role="radiogroup"
+      aria-label="工具权限"
+      style={{
+        display: "flex",
+        width: "100%",
+        padding: 2,
+        borderRadius: token.borderRadius,
+        background: token.colorFillTertiary,
+      }}
+    >
+      {TOOL_ACCESS_OPTIONS.map((option) => {
+        const selected = current === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange?.(option.value)}
+            style={{
+              flex: "1 1 0",
+              minWidth: 0,
+              height: 28,
+              margin: 0,
+              padding: "0 8px",
+              border: 0,
+              borderRadius: token.borderRadiusSM,
+              background: selected ? token.colorBgContainer : "transparent",
+              boxShadow: selected ? token.boxShadowTertiary : "none",
+              color: selected ? token.colorText : token.colorTextSecondary,
+              font: "inherit",
+              fontSize: token.fontSize,
+              lineHeight: "28px",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ToolChips({
+  value,
+  onChange,
+}: {
+  value?: string[];
+  onChange?: (next: string[]) => void;
+}) {
+  const { token } = theme.useToken();
+  const selected = new Set(value ?? []);
+
+  function toggle(name: McpToolName) {
+    const next = new Set(selected);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    onChange?.(MCP_TOOL_NAME_LIST.filter((item) => next.has(item)));
+  }
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minWidth: 0 }}>
+      {MCP_TOOL_NAME_LIST.map((name) => {
+        const on = selected.has(name);
+        return (
+          <button
+            key={name}
+            type="button"
+            aria-pressed={on}
+            onClick={() => toggle(name)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              height: 32,
+              margin: 0,
+              padding: "0 10px",
+              borderRadius: token.borderRadius,
+              border: `1px solid ${on ? token.colorPrimary : token.colorBorder}`,
+              background: on ? token.colorPrimaryBg : token.colorBgContainer,
+              color: on ? token.colorPrimary : token.colorText,
+              cursor: "pointer",
+              font: "inherit",
+              lineHeight: 1,
+            }}
+          >
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{name}</span>
+            <span style={{ fontSize: 13, color: token.colorTextSecondary }}>
+              {TOOL_LABEL[name]}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export function ApiKeyFormModal({
   open,
@@ -32,6 +159,13 @@ export function ApiKeyFormModal({
   onSaved: () => void;
 }) {
   const { message } = App.useApp();
+  const { token } = theme.useToken();
+  const [form] = Form.useForm<ApiKeyFormValues>();
+  const watchedAccess = Form.useWatch("toolAccess", form);
+  const watchedTools = Form.useWatch("allowedTools", form);
+  const toolAccess = watchedAccess ?? toolAccessOf(editing?.allowedTools);
+  const allowedTools = watchedTools ?? editing?.allowedTools ?? [];
+  const needsTool = toolAccess === "custom" && allowedTools.length === 0;
   const [sandboxes, setSandboxes] = useState<Sandbox[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [sandboxesLoading, setSandboxesLoading] = useState(false);
@@ -77,9 +211,11 @@ export function ApiKeyFormModal({
     }
     const sandboxIds = values.sandboxIds ?? [];
     const allowedTools =
-      values.allowedTools && values.allowedTools.length > 0
-        ? values.allowedTools
-        : null;
+      values.toolAccess === "custom" ? (values.allowedTools ?? []) : null;
+    if (allowedTools && allowedTools.length === 0) {
+      message.error("至少选择一个工具");
+      throw new Error("至少选择一个工具");
+    }
     if (editing) {
       await sandboxClient.updateApiKey(editing.id, {
         name: trimmed,
@@ -106,14 +242,21 @@ export function ApiKeyFormModal({
       initialValues={{
         name: editing?.name ?? "",
         sandboxIds: editing?.sandboxIds ?? [],
+        toolAccess: toolAccessOf(editing?.allowedTools),
         allowedTools: editing?.allowedTools ?? [],
       }}
       onCancel={onClose}
       onOk={save}
-      modalProps={{ centered: true, width: 520, okText: editing ? "保存" : "创建" }}
+      modalProps={{
+        centered: true,
+        width: 520,
+        okText: editing ? "保存" : "创建",
+        okButtonProps: { disabled: needsTool },
+      }}
       formProps={{
+        form,
         layout: "horizontal",
-        labelCol: { flex: "72px" },
+        labelCol: { flex: "88px" },
         wrapperCol: { flex: 1 },
         labelAlign: "right",
         colon: false,
@@ -130,7 +273,6 @@ export function ApiKeyFormModal({
       <Form.Item
         label="沙箱"
         name="sandboxIds"
-        extra="用这把令牌新建的沙箱会自动加入"
       >
         <Select
           mode="multiple"
@@ -164,16 +306,22 @@ export function ApiKeyFormModal({
           )}
         />
       </Form.Item>
-      <Form.Item
-        label="工具"
-        name="allowedTools"
-        extra="不勾选表示不限制（全部可用）；勾选后仅允许选中的工具"
-        style={{ marginBottom: 0 }}
-      >
-        <Checkbox.Group
-          options={toolOptions}
-          style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px" }}
-        />
+      <Form.Item label="工具权限" className="apikey-tool-field" style={{ marginBottom: 0 }}>
+        <Form.Item name="toolAccess" noStyle>
+          <ToolAccessSwitch />
+        </Form.Item>
+        {toolAccess === "custom" ? (
+          <div style={{ marginTop: 12 }}>
+            <Form.Item name="allowedTools" noStyle>
+              <ToolChips />
+            </Form.Item>
+            {needsTool ? (
+              <div style={{ marginTop: 8, fontSize: 12, lineHeight: "20px", color: token.colorTextSecondary }}>
+                至少选择一个工具
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </Form.Item>
     </FormModal>
   );

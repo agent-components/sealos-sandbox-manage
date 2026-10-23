@@ -1,13 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { PlusOutlined } from "@ant-design/icons";
 import {
   Alert,
   App,
   Button,
   Form,
-  Input,
   Select,
   Skeleton,
   Space,
@@ -16,10 +14,12 @@ import {
   Typography,
 } from "antd";
 import { ProDrawer } from "listpage-components/ProDrawer";
+import { EnvTextEditor } from "@/components/EnvTextEditor";
 import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { StateBadge } from "@/components/StateBadge";
 import { sandboxClient } from "@/lib/client";
+import { formatEnvText, parseEnvText } from "@/lib/env-text";
 import {
   CreateSandboxEnvSchema,
   TagsSchema,
@@ -434,7 +434,7 @@ export function SandboxDetailModal({
   const [sandbox, setSandbox] = useState<Sandbox | null>(null);
   const [resources, setResources] = useState<ResourceSpec | null>(null);
   const [tags, setTags] = useState<string[]>([]);
-  const [env, setEnv] = useState<SandboxEnv[]>([]);
+  const [envText, setEnvText] = useState("");
   const [idle, setIdle] = useState({ autoShutdown: false, idleMinutes: 5 });
   const [templateDraft, setTemplateDraft] = useState<TemplateDraft | null>(null);
   const tagsDirtyRef = useRef(false);
@@ -458,12 +458,7 @@ export function SandboxDetailModal({
       });
       if (!tagsDirtyRef.current) setTags(res.sandbox.tags);
       if (!envDirtyRef.current) {
-        setEnv(
-          (res.sandbox.env ?? []).map((item) => ({
-            name: item.name,
-            value: item.value ?? "",
-          })),
-        );
+        setEnvText(formatEnvText(res.sandbox.env ?? []));
       }
       if (!idleDirtyRef.current) {
         setIdle({
@@ -503,7 +498,7 @@ export function SandboxDetailModal({
     setSandbox(null);
     setResources(null);
     setTags([]);
-    setEnv([]);
+    setEnvText("");
     setTemplateDraft(null);
     setIdle({ autoShutdown: false, idleMinutes: 5 });
     void load();
@@ -521,15 +516,13 @@ export function SandboxDetailModal({
       setError(parsedTags.error.issues[0]?.message ?? "标签无效");
       return;
     }
-    const incompleteEnv = env.find(
-      (item) => !item.name.trim() && (item.value ?? "").length > 0,
-    );
-    if (incompleteEnv) {
+    const parsedText = parseEnvText(envText);
+    if (!parsedText.ok) {
       focusDetailTab("env");
-      setError("环境变量名不能为空");
+      setError(parsedText.error);
       return;
     }
-    const parsedEnv = z.array(CreateSandboxEnvSchema).safeParse(normalizeEnv(env));
+    const parsedEnv = z.array(CreateSandboxEnvSchema).safeParse(parsedText.env);
     if (!parsedEnv.success) {
       focusDetailTab("env");
       setError(parsedEnv.error.issues[0]?.message ?? "环境变量无效");
@@ -593,7 +586,12 @@ export function SandboxDetailModal({
       resources.memoryGi !== sandbox.memoryGi ||
       resources.diskGi !== sandbox.diskGi);
   const tagsDirty = !!sandbox && !sameTags(tags, sandbox.tags);
-  const envDirty = !!sandbox && !sameEnv(env, sandbox.env ?? []);
+  const parsedEnvText = parseEnvText(envText);
+  const envDirty =
+    !!sandbox &&
+    (parsedEnvText.ok
+      ? !sameEnv(parsedEnvText.env, sandbox.env ?? [])
+      : envText.trim() !== formatEnvText(sandbox.env ?? []).trim());
   const idleDirty =
     !!sandbox &&
     (idle.autoShutdown !== (sandbox.autoShutdown ?? false) ||
@@ -632,7 +630,14 @@ export function SandboxDetailModal({
       const res = await sandboxClient.getTemplate(templateId);
       const template = res.template;
       const nextDraft = draftFromTemplate(template, resources.diskGi);
-      const nextEnv = mergeEnvWithTemplate(env, template.env);
+      const currentEnv = parseEnvText(envText);
+      if (!currentEnv.ok) {
+        focusDetailTab("env");
+        setError(currentEnv.error);
+        message.error(currentEnv.error);
+        return;
+      }
+      const nextEnv = mergeEnvWithTemplate(currentEnv.env, template.env);
       const nextIdle = {
         autoShutdown: template.autoShutdown ?? false,
         idleMinutes: template.idleMinutes ?? 5,
@@ -645,7 +650,7 @@ export function SandboxDetailModal({
           ports: view.ports,
           storage: view.storage,
           configMap: view.configMap,
-          env,
+          env: currentEnv.env,
           idle,
         },
         nextDraft,
@@ -676,7 +681,7 @@ export function SandboxDetailModal({
           envDirtyRef.current = true;
           idleDirtyRef.current = true;
           applyTemplatePendingRef.current = true;
-          setEnv(nextEnv);
+          setEnvText(formatEnvText(nextEnv));
           setIdle(nextIdle);
           setTemplateDraft(nextDraft);
           message.success("已应用到表单，请点击保存配置以同步到 Sealos");
@@ -930,96 +935,14 @@ export function SandboxDetailModal({
               label: "环境变量",
               children: (
                 <DetailPane error={error}>
-                  <Table
-                    size="small"
-                    pagination={false}
-                    rowKey={(_, index) => `env-${index}`}
-                    dataSource={env}
-                    locale={{ emptyText: "暂无环境变量" }}
-                    columns={[
-                      {
-                        title: "变量名",
-                        dataIndex: "name",
-                        width: "36%",
-                        render: (value: string, _, index) => (
-                          <Input
-                            value={value}
-                            placeholder="KEY"
-                            disabled={busy !== null}
-                            onChange={(e) => {
-                              envDirtyRef.current = true;
-                              setEnv((list) => {
-                                const next = [...list];
-                                next[index] = {
-                                  ...next[index]!,
-                                  name: e.target.value,
-                                };
-                                return next;
-                              });
-                            }}
-                          />
-                        ),
-                      },
-                      {
-                        title: "值",
-                        dataIndex: "value",
-                        render: (value: string, _, index) => (
-                          <Input
-                            value={value}
-                            placeholder="VALUE"
-                            disabled={busy !== null}
-                            onChange={(e) => {
-                              envDirtyRef.current = true;
-                              setEnv((list) => {
-                                const next = [...list];
-                                next[index] = {
-                                  ...next[index]!,
-                                  value: e.target.value,
-                                };
-                                return next;
-                              });
-                            }}
-                          />
-                        ),
-                      },
-                      {
-                        title: "",
-                        key: "action",
-                        width: 64,
-                        align: "right" as const,
-                        render: (_: unknown, __: SandboxEnv, index: number) => (
-                          <Button
-                            type="link"
-                            danger
-                            size="small"
-                            style={{ paddingInline: 0 }}
-                            disabled={busy !== null}
-                            onClick={() => {
-                              envDirtyRef.current = true;
-                              setEnv((list) =>
-                                list.filter((_, i) => i !== index),
-                              );
-                            }}
-                          >
-                            删除
-                          </Button>
-                        ),
-                      },
-                    ]}
-                  />
-                  <Button
-                    type="dashed"
-                    block
-                    icon={<PlusOutlined />}
+                  <EnvTextEditor
+                    value={envText}
                     disabled={busy !== null}
-                    style={{ marginTop: 12 }}
-                    onClick={() => {
+                    onChange={(next) => {
                       envDirtyRef.current = true;
-                      setEnv((list) => [...list, { name: "", value: "" }]);
+                      setEnvText(next);
                     }}
-                  >
-                    添加环境变量
-                  </Button>
+                  />
                 </DetailPane>
               ),
             },

@@ -16,9 +16,11 @@ import {
 } from "antd";
 import { MinusOutlined, PlusOutlined } from "@ant-design/icons";
 import { ProDrawer } from "listpage-components/ProDrawer";
+import { EnvTextEditor } from "@/components/EnvTextEditor";
 import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
 import { sandboxClient } from "@/lib/client";
+import { formatEnvText, parseEnvText } from "@/lib/env-text";
 import {
   DEFAULT_RESOURCES,
   nearestCpu,
@@ -48,7 +50,7 @@ type FormState = {
   autoShutdown: boolean;
   idleMinutes: number;
   ports: Template["ports"];
-  env: Template["env"];
+  envText: string;
   storage: Template["storage"];
   configMap: Template["configMap"];
 };
@@ -68,7 +70,7 @@ const emptyForm = (): FormState => ({
   autoShutdown: false,
   idleMinutes: 5,
   ports: defaultTemplatePorts(),
-  env: [],
+  envText: "",
   storage: [],
   configMap: [],
 });
@@ -93,7 +95,7 @@ function fromTemplate(tpl: Template): FormState {
     autoShutdown: tpl.autoShutdown ?? false,
     idleMinutes: tpl.idleMinutes ?? 5,
     ports: tpl.ports?.length ? tpl.ports : defaultTemplatePorts(),
-    env: tpl.env ?? [],
+    envText: formatEnvText(tpl.env ?? []),
     storage: tpl.storage ?? [],
     configMap: tpl.configMap ?? [],
   };
@@ -126,7 +128,6 @@ function toPayload(form: FormState) {
     autoShutdown: form.autoShutdown,
     idleMinutes: form.idleMinutes,
     ports: form.ports,
-    env: form.env.filter((e) => e.name.trim()),
     storage: form.storage.filter((s) => s.name.trim() && s.path.trim()),
     configMap: form.configMap
       .filter((c) => c.path.trim())
@@ -225,10 +226,16 @@ export function TemplateEditor({
       message.error("至少配置一个网络端口");
       return;
     }
+    const parsedEnv = parseEnvText(form.envText);
+    if (!parsedEnv.ok) {
+      focusTemplateTab("env");
+      message.error(parsedEnv.error);
+      return;
+    }
 
     setSaving(true);
     try {
-      const payload = toPayload(form);
+      const payload = { ...toPayload(form), env: parsedEnv.env };
       if (editingId) {
         await sandboxClient.updateTemplate(editingId, payload);
         message.success("模板已更新");
@@ -832,92 +839,11 @@ export function TemplateEditor({
           label: "环境变量",
           children: (
             <TemplateForm saving={saving} wide>
-              <Table
-                className="template-drawer-edit-table"
-                size="small"
-                pagination={false}
-                rowKey={(_, index) => `env-${index}`}
-                dataSource={form.env}
-                locale={{ emptyText: "暂无环境变量" }}
-                columns={[
-                  {
-                    title: "变量名",
-                    dataIndex: "name",
-                    width: "36%",
-                    render: (value, _, index) => (
-                      <Input
-                        value={value}
-                        placeholder="KEY"
-                        onChange={(e) =>
-                          setForm((f) => {
-                            const env = [...f.env];
-                            env[index] = {
-                              ...env[index]!,
-                              name: e.target.value,
-                            };
-                            return { ...f, env };
-                          })
-                        }
-                      />
-                    ),
-                  },
-                  {
-                    title: "值",
-                    dataIndex: "value",
-                    render: (value, _, index) => (
-                      <Input
-                        value={value}
-                        placeholder="VALUE"
-                        onChange={(e) =>
-                          setForm((f) => {
-                            const env = [...f.env];
-                            env[index] = {
-                              ...env[index]!,
-                              value: e.target.value,
-                            };
-                            return { ...f, env };
-                          })
-                        }
-                      />
-                    ),
-                  },
-                  {
-                    title: "",
-                    key: "action",
-                    width: 64,
-                    align: "right",
-                    render: (_, __, index) => (
-                      <Button
-                        type="link"
-                        danger
-                        size="small"
-                        style={{ paddingInline: 0 }}
-                        onClick={() =>
-                          setForm((f) => ({
-                            ...f,
-                            env: f.env.filter((_, i) => i !== index),
-                          }))
-                        }
-                      >
-                        删除
-                      </Button>
-                    ),
-                  },
-                ]}
+              <EnvTextEditor
+                value={form.envText}
+                disabled={saving}
+                onChange={(envText) => setForm((current) => ({ ...current, envText }))}
               />
-              <Button
-                type="dashed"
-                block
-                icon={<PlusOutlined />}
-                onClick={() =>
-                  setForm((f) => ({
-                    ...f,
-                    env: [...f.env, { name: "", value: "" }],
-                  }))
-                }
-              >
-                添加环境变量
-              </Button>
             </TemplateForm>
           ),
         },

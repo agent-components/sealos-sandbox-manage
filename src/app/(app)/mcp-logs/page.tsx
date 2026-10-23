@@ -65,14 +65,9 @@ export default function McpLogsPage() {
   return (
     <ListPage<McpLogRow, McpLogFilters>
       title={
-        <div>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            调用日志
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            记录全部 MCP 工具调用（及 REST 的 exec/read）；结果存在对象存储
-          </Typography.Text>
-        </div>
+        <Typography.Title level={3} style={{ margin: 0 }}>
+          调用日志
+        </Typography.Title>
       }
       extra={(ctx) => (
         <Button onClick={() => ctx.refreshTable()}>刷新</Button>

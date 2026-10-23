@@ -362,6 +362,15 @@
   }
 }
 
+/* 工具权限：芯片不能把表单项撑换行，标题留在切换控件左侧 */
+.apikey-tool-field .ant-form-item-row {
+  flex-wrap: nowrap;
+}
+
+.apikey-tool-field .ant-form-item-control {
+  min-width: 0;
+}
+
 /* 侧栏 logo 与标题间距（覆盖 listpage-components 的 gap: 0） */
 .pro-sidebar-brand {
   gap: 8px;
