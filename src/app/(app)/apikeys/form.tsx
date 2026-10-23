@@ -1,14 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { App, Form, Input, Select } from "antd";
+import { App, Checkbox, Form, Input, Select } from "antd";
 import { FormModal } from "listpage-components/FormModal";
 import { sandboxClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
+import { MCP_TOOLS } from "@/lib/mcp/tools";
 import type { Sandbox } from "@/lib/sandbox/schema";
 import type { Template } from "@/lib/template/schema";
 
-type ApiKeyFormValues = { name: string; sandboxIds?: string[] };
+type ApiKeyFormValues = {
+  name: string;
+  sandboxIds?: string[];
+  allowedTools?: string[];
+};
+
+const toolOptions = MCP_TOOLS.map((item) => ({
+  value: item.name,
+  label: item.name,
+}));
 
 export function ApiKeyFormModal({
   open,
@@ -66,11 +76,23 @@ export function ApiKeyFormModal({
       throw new Error("名称必填");
     }
     const sandboxIds = values.sandboxIds ?? [];
+    const allowedTools =
+      values.allowedTools && values.allowedTools.length > 0
+        ? values.allowedTools
+        : null;
     if (editing) {
-      await sandboxClient.updateApiKey(editing.id, { name: trimmed, sandboxIds });
+      await sandboxClient.updateApiKey(editing.id, {
+        name: trimmed,
+        sandboxIds,
+        allowedTools,
+      });
       message.success("已保存");
     } else {
-      await sandboxClient.createApiKey({ name: trimmed, sandboxIds });
+      await sandboxClient.createApiKey({
+        name: trimmed,
+        sandboxIds,
+        allowedTools,
+      });
       message.success("令牌已创建");
     }
     onClose();
@@ -84,10 +106,11 @@ export function ApiKeyFormModal({
       initialValues={{
         name: editing?.name ?? "",
         sandboxIds: editing?.sandboxIds ?? [],
+        allowedTools: editing?.allowedTools ?? [],
       }}
       onCancel={onClose}
       onOk={save}
-      modalProps={{ centered: true, width: 480, okText: editing ? "保存" : "创建" }}
+      modalProps={{ centered: true, width: 520, okText: editing ? "保存" : "创建" }}
       formProps={{
         layout: "horizontal",
         labelCol: { flex: "72px" },
@@ -108,7 +131,6 @@ export function ApiKeyFormModal({
         label="沙箱"
         name="sandboxIds"
         extra="用这把令牌新建的沙箱会自动加入"
-        style={{ marginBottom: 0 }}
       >
         <Select
           mode="multiple"
@@ -140,6 +162,17 @@ export function ApiKeyFormModal({
               ) : null}
             </div>
           )}
+        />
+      </Form.Item>
+      <Form.Item
+        label="工具"
+        name="allowedTools"
+        extra="不勾选表示不限制（全部可用）；勾选后仅允许选中的工具"
+        style={{ marginBottom: 0 }}
+      >
+        <Checkbox.Group
+          options={toolOptions}
+          style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px" }}
         />
       </Form.Item>
     </FormModal>

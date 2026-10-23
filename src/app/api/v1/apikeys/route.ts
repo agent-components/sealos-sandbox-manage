@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
       username: user.username,
       key: createApiKeySecret(),
       sandboxIds: input.sandboxIds,
+      allowedTools: input.allowedTools,
     });
     return jsonOk({ apiKey }, { status: 201 });
   } catch (error) {

@@ -205,8 +205,33 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   ),
 ];
 
-export const MCP_TOOL_NAMES = MCP_TOOLS.map((item) => item.name);
+/** 稳定顺序，供 API Key `allowedTools` 校验与表单勾选。 */
+export const MCP_TOOL_NAME_LIST = [
+  "read",
+  "write",
+  "edit",
+  "delete",
+  "grep",
+  "glob",
+  "exec",
+] as const;
 
-export function mcpTools(): McpToolDefinition[] {
-  return MCP_TOOLS;
+export type McpToolName = (typeof MCP_TOOL_NAME_LIST)[number];
+
+export const MCP_TOOL_NAMES: string[] = [...MCP_TOOL_NAME_LIST];
+
+/** 未限制（null / 空）时返回全部；否则只返回勾选的工具。 */
+export function mcpTools(allowed?: string[] | null): McpToolDefinition[] {
+  if (allowed == null || allowed.length === 0) return MCP_TOOLS;
+  const set = new Set(allowed);
+  return MCP_TOOLS.filter((item) => set.has(item.name));
+}
+
+/** null / 空 = 全开。 */
+export function isMcpToolAllowed(
+  allowed: string[] | null | undefined,
+  name: string,
+): boolean {
+  if (allowed == null || allowed.length === 0) return true;
+  return allowed.includes(name);
 }

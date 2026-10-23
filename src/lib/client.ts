@@ -265,12 +265,23 @@ export const sandboxClient = {
     const qs = q.toString();
     return request<PageResult<ApiKey>>(`/api/v1/apikeys${qs ? `?${qs}` : ""}`);
   },
-  createApiKey: (body: { name: string; sandboxIds?: string[] }) =>
+  createApiKey: (body: {
+    name: string;
+    sandboxIds?: string[];
+    allowedTools?: string[] | null;
+  }) =>
     request<{ apiKey: ApiKey }>("/api/v1/apikeys", {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  updateApiKey: (id: string, body: { name?: string; sandboxIds?: string[] }) =>
+  updateApiKey: (
+    id: string,
+    body: {
+      name?: string;
+      sandboxIds?: string[];
+      allowedTools?: string[] | null;
+    },
+  ) =>
     request<{ apiKey: ApiKey }>(`/api/v1/apikeys/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(body),

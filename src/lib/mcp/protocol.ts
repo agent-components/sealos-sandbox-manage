@@ -1,4 +1,5 @@
 import { sandboxIdFromRequest } from "@/lib/api/call-context";
+import { optionalUser } from "@/lib/auth/resolve";
 import { openApiDocument } from "@/lib/openapi/document";
 import {
   callDelete,
@@ -9,7 +10,7 @@ import {
 } from "@/lib/mcp/agent-tools";
 import { callSandboxCommand } from "@/lib/mcp/command";
 import { callRead } from "@/lib/mcp/read";
-import { mcpTools } from "@/lib/mcp/tools";
+import { isMcpToolAllowed, mcpTools } from "@/lib/mcp/tools";
 
 export const SUPPORTED_PROTOCOL_VERSIONS = [
   "2025-06-18",
@@ -99,6 +100,17 @@ async function handleRequest(
       ? requested
       : DEFAULT_PROTOCOL_VERSION;
     const info = openApiDocument().info;
+    const user = await optionalUser();
+    const allowed = user?.apiKeyId ? user.allowedTools : null;
+    const tools = mcpTools(allowed);
+    const toolNames = tools.map((item) => item.name).join(" / ");
+    const instructions = [
+      toolNames
+        ? `在沙箱内操作文件与命令：${toolNames}。`
+        : "当前 API Key 未授权任何 MCP 工具。",
+      "路径须为沙箱内绝对路径。读、写、搜文件用专用工具，不要用 exec 代替。",
+      "已有文件优先 edit；write 用于新建或整文件覆盖。",
+    ];
     return {
       kind: "response",
       status: 200,
@@ -106,11 +118,7 @@ async function handleRequest(
         protocolVersion,
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: info.title, version: info.version },
-        instructions: [
-          "在沙箱内操作文件与命令：read / write / edit / delete / grep / glob / exec。",
-          "路径须为沙箱内绝对路径。读、写、搜文件用专用工具，不要用 exec 代替。",
-          "已有文件优先 edit；write 用于新建或整文件覆盖。",
-        ].join("\n"),
+        instructions: instructions.join("\n"),
       }),
     };
   }
@@ -124,11 +132,13 @@ async function handleRequest(
         body: rpcError(id, -32602, "不支持分页 cursor"),
       };
     }
+    const user = await optionalUser();
+    const allowed = user?.apiKeyId ? user.allowedTools : null;
     return {
       kind: "response",
       status: 200,
       body: rpcResult(id, {
-        tools: mcpTools(),
+        tools: mcpTools(allowed),
       }),
     };
   }
@@ -149,6 +159,14 @@ async function handleRequest(
         kind: "response",
         status: 200,
         body: rpcError(id, -32602, "arguments 必须是对象"),
+      };
+    }
+    const user = await optionalUser();
+    if (user?.apiKeyId && !isMcpToolAllowed(user.allowedTools, name)) {
+      return {
+        kind: "response",
+        status: 200,
+        body: rpcResult(id, toolError(`工具未授权：${name}`)),
       };
     }
     const sandboxId = sandboxIdFromRequest(request);

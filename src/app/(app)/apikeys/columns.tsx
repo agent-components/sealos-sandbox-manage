@@ -65,6 +65,32 @@ function SandboxAccess({ ids }: { ids?: string[] }) {
   );
 }
 
+function AllowedToolsAccess({ tools }: { tools?: string[] | null }) {
+  const list = tools ?? [];
+  if (list.length === 0) {
+    return <Typography.Text type="secondary">全部</Typography.Text>;
+  }
+  const [first, ...rest] = list;
+  return (
+    <Space size={6} wrap>
+      <span>{first}</span>
+      {rest.length > 0 ? (
+        <Tooltip
+          title={
+            <div>
+              {rest.map((name) => (
+                <div key={name}>{name}</div>
+              ))}
+            </div>
+          }
+        >
+          <Tag style={{ marginInlineEnd: 0, cursor: "default" }}>+{rest.length}</Tag>
+        </Tooltip>
+      ) : null}
+    </Space>
+  );
+}
+
 function CopySecretButton({ id }: { id: string }) {
   const { message } = App.useApp();
   return (
@@ -171,8 +197,14 @@ export function apiKeyColumns(): ListPageColumnType<ApiKey, ApiKeyFilters>[] {
     {
       title: "可访问沙箱",
       dataIndex: "sandboxIds",
-      width: 240,
+      width: 200,
       render: (ids: string[] = []) => <SandboxAccess ids={ids} />,
+    },
+    {
+      title: "MCP 工具",
+      dataIndex: "allowedTools",
+      width: 180,
+      render: (tools: string[] | null) => <AllowedToolsAccess tools={tools} />,
     },
     {
       title: "创建时间",

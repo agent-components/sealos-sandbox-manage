@@ -8,9 +8,15 @@ type ApiKeyRow = {
   username: string;
   key: string;
   sandbox_ids: string[] | null;
+  allowed_tools: string[] | null;
   created_at: Date;
   last_used_at: Date | null;
 };
+
+function normalizeAllowedTools(tools: string[] | null | undefined): string[] | null {
+  if (tools == null || tools.length === 0) return null;
+  return [...new Set(tools)];
+}
 
 function toApiKey(row: ApiKeyRow): ApiKey {
   return {
@@ -18,14 +24,18 @@ function toApiKey(row: ApiKeyRow): ApiKey {
     name: row.name,
     key: maskApiKeySecret(row.key),
     sandboxIds: row.sandbox_ids ?? [],
+    allowedTools: normalizeAllowedTools(row.allowed_tools),
     createdAt: row.created_at.toISOString(),
     lastUsedAt: row.last_used_at?.toISOString() ?? null,
   };
 }
 
+const API_KEY_COLUMNS =
+  "id, name, username, key, sandbox_ids, allowed_tools, created_at, last_used_at";
+
 export async function listApiKeys(username: string): Promise<ApiKey[]> {
   const result = await query<ApiKeyRow>(
-    `SELECT id, name, username, key, sandbox_ids, created_at, last_used_at
+    `SELECT ${API_KEY_COLUMNS}
      FROM sandbox.api_keys
      WHERE username = $1
      ORDER BY created_at DESC`,
@@ -56,12 +66,21 @@ export async function createApiKey(input: {
   username: string;
   key: string;
   sandboxIds: string[];
+  allowedTools?: string[] | null;
 }): Promise<ApiKey> {
+  const allowedTools = normalizeAllowedTools(input.allowedTools);
   const result = await query<ApiKeyRow>(
-    `INSERT INTO sandbox.api_keys (id, name, username, key, sandbox_ids)
-     VALUES ($1, $2, $3, $4, $5::text[])
-     RETURNING id, name, username, key, sandbox_ids, created_at, last_used_at`,
-    [input.id, input.name, input.username, input.key, input.sandboxIds],
+    `INSERT INTO sandbox.api_keys (id, name, username, key, sandbox_ids, allowed_tools)
+     VALUES ($1, $2, $3, $4, $5::text[], $6::text[])
+     RETURNING ${API_KEY_COLUMNS}`,
+    [
+      input.id,
+      input.name,
+      input.username,
+      input.key,
+      input.sandboxIds,
+      allowedTools,
+    ],
   );
   return toApiKey(result.rows[0]!);
 }
@@ -69,7 +88,11 @@ export async function createApiKey(input: {
 export async function updateApiKey(
   id: string,
   username: string,
-  patch: { name?: string; sandboxIds?: string[] },
+  patch: {
+    name?: string;
+    sandboxIds?: string[];
+    allowedTools?: string[] | null;
+  },
 ): Promise<ApiKey | null> {
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -81,13 +104,17 @@ export async function updateApiKey(
     params.push(patch.sandboxIds);
     sets.push(`sandbox_ids = $${params.length}::text[]`);
   }
+  if (patch.allowedTools !== undefined) {
+    params.push(normalizeAllowedTools(patch.allowedTools));
+    sets.push(`allowed_tools = $${params.length}::text[]`);
+  }
   if (sets.length === 0) return null;
   params.push(id, username);
   const result = await query<ApiKeyRow>(
     `UPDATE sandbox.api_keys
      SET ${sets.join(", ")}
      WHERE id = $${params.length - 1} AND username = $${params.length}
-     RETURNING id, name, username, key, sandbox_ids, created_at, last_used_at`,
+     RETURNING ${API_KEY_COLUMNS}`,
     params,
   );
   const row = result.rows[0];
@@ -154,6 +181,7 @@ export async function authenticateApiKey(secret: string): Promise<{
   apiKeyId: string;
   apiKeyName: string;
   sandboxIds: string[];
+  allowedTools: string[] | null;
 } | null> {
   if (!isApiKeySecret(secret)) return null;
   const result = await query<{
@@ -161,9 +189,10 @@ export async function authenticateApiKey(secret: string): Promise<{
     name: string;
     username: string;
     sandbox_ids: string[] | null;
+    allowed_tools: string[] | null;
     last_used_at: Date | null;
   }>(
-    `SELECT id, name, username, sandbox_ids, last_used_at
+    `SELECT id, name, username, sandbox_ids, allowed_tools, last_used_at
      FROM sandbox.api_keys
      WHERE key = $1`,
     [secret],
@@ -185,5 +214,6 @@ export async function authenticateApiKey(secret: string): Promise<{
     apiKeyId: row.id,
     apiKeyName: row.name,
     sandboxIds: row.sandbox_ids ?? [],
+    allowedTools: normalizeAllowedTools(row.allowed_tools),
   };
 }

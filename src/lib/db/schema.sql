@@ -8,9 +8,14 @@ CREATE TABLE IF NOT EXISTS sandbox.api_keys (
   username text NOT NULL,
   key text NOT NULL UNIQUE,
   sandbox_ids text[] NOT NULL DEFAULT '{}',
+  -- NULL / 空 = 不限制 MCP 工具；非空 = 仅允许列表中的工具
+  allowed_tools text[],
   created_at timestamptz NOT NULL DEFAULT now(),
   last_used_at timestamptz
 );
+
+ALTER TABLE sandbox.api_keys
+  ADD COLUMN IF NOT EXISTS allowed_tools text[];
 
 CREATE INDEX IF NOT EXISTS api_keys_username_idx ON sandbox.api_keys (username);
 

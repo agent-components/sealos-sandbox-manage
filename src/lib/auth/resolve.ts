@@ -28,6 +28,8 @@ export type RequestUser = {
   /** API Key 显示名称（不含密钥明文） */
   apiKeyName?: string;
   sandboxIds?: string[];
+  /** API Key 的 MCP 工具白名单；null / 缺省 = 不限制。会话用户无此字段。 */
+  allowedTools?: string[] | null;
 };
 
 /** 要求已登录的平台用户（会话 cookie）。API Key 管理只走这条路径。 */
@@ -44,6 +46,13 @@ export async function requireSessionUser() {
  * 会话可访问该用户的全部沙箱；API Key 只能访问其授权列表。
  */
 export async function requireUser(): Promise<RequestUser> {
+  const user = await optionalUser();
+  if (user) return user;
+  throw new AuthError("请先登录");
+}
+
+/** 与 requireUser 相同解析规则，未登录时返回 null（供 MCP tools/list 等可选鉴权）。 */
+export async function optionalUser(): Promise<RequestUser | null> {
   const session = await readUserSession();
   if (session) return session;
 
@@ -56,5 +65,5 @@ export async function requireUser(): Promise<RequestUser> {
     if (sessionUser) return sessionUser;
   }
 
-  throw new AuthError("请先登录");
+  return null;
 }
