@@ -68,11 +68,19 @@ export function buildSyncFromTemplateBody(
         )
       : [];
 
+  // Sealos POST Create 用 imageRegistry.serverAddress；
+  // PATCH Update 的 UpdateImageSchema 字段名是 apiUrl（内部再映射回 serverAddress）。
   return {
     image: {
       imageName: template.image,
       ...(template.imageRegistry
-        ? { imageRegistry: template.imageRegistry }
+        ? {
+            imageRegistry: {
+              username: template.imageRegistry.username,
+              password: template.imageRegistry.password,
+              apiUrl: template.imageRegistry.serverAddress,
+            },
+          }
         : { imageRegistry: null }),
     },
     launchCommand: {

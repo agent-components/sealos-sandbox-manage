@@ -80,13 +80,19 @@ function SandboxActions({
 }) {
   const { message } = App.useApp();
 
-  function openIde() {
-    const result = cursorIdeUrl(record);
-    if (!result.ok) {
-      message.error(result.error);
-      return;
+  async function openIde() {
+    try {
+      // 列表项不含 ports；公网地址在详情里
+      const { sandbox } = await sandboxClient.getSandbox(record.id);
+      const result = cursorIdeUrl(sandbox);
+      if (!result.ok) {
+        message.error(result.error);
+        return;
+      }
+      window.location.href = result.url;
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "打开 IDE 失败");
     }
-    window.location.href = result.url;
   }
 
   return (
@@ -112,7 +118,7 @@ function SandboxActions({
         size="small"
         style={{ paddingInline: 2 }}
         disabled={record.state !== "running"}
-        onClick={openIde}
+        onClick={() => void openIde()}
       >
         IDE
       </Button>
