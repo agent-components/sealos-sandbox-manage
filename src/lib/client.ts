@@ -86,13 +86,34 @@ export type CreateTemplateBody = Omit<
 
 export type UpdateTemplateBody = Partial<Omit<CreateTemplateBody, "id">>;
 
+const TOKEN_STORAGE_KEY = "sandbox_user_token";
+
+function storedToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(TOKEN_STORAGE_KEY);
+}
+
+function storeToken(token: string) {
+  window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+}
+
+function clearStoredToken() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const token = storedToken();
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
   const res = await fetch(path, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -103,16 +124,37 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const sandboxClient = {
-  me: () =>
-    request<{ authenticated: boolean; user: SandboxUser | null }>(
-      "/api/auth/me"
-    ),
-  login: (username: string, password: string) =>
-    request<{ user: SandboxUser }>("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ username, password }),
-    }),
-  logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
+  me: async () => {
+    if (!storedToken()) {
+      return { authenticated: false as const, user: null };
+    }
+    const res = await request<{
+      authenticated: boolean;
+      user: SandboxUser | null;
+    }>("/api/auth/me");
+    if (!res.authenticated) clearStoredToken();
+    return res;
+  },
+  login: async (username: string, password: string) => {
+    const res = await request<{ user: SandboxUser; token: string }>(
+      "/api/auth/login",
+      {
+        method: "POST",
+        body: JSON.stringify({ username, password }),
+      },
+    );
+    storeToken(res.token);
+    return res;
+  },
+  logout: async () => {
+    try {
+      return await request<{ ok: true }>("/api/auth/logout", {
+        method: "POST",
+      });
+    } finally {
+      clearStoredToken();
+    }
+  },
 
   listSandboxes: (query?: ListSandboxesQuery) => {
     const q = new URLSearchParams();

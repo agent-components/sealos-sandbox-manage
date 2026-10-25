@@ -20,7 +20,7 @@ function parseInstant(
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await requireSessionUser();
+    const user = await requireSessionUser(req);
     const defaults = defaultBillingRange();
     const fromParsed = parseInstant(req.nextUrl.searchParams.get("from"), "from");
     if (!fromParsed.ok) {

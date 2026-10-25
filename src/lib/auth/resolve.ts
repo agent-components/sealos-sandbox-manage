@@ -1,10 +1,36 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { readFileSync, existsSync } from "fs";
-import { headers } from "next/headers";
 import { authenticateApiKey } from "@/lib/apikey/store";
-import { findUserByToken } from "@/lib/auth/users";
+import { findUserByToken, type PublicUser } from "@/lib/auth/users";
 import { AuthError } from "@/lib/sealos/errors";
 import { getSealosConfig } from "@/lib/sealos/config";
-import { readUserSession } from "@/lib/auth/session";
+
+const authRequest = new AsyncLocalStorage<Request>();
+
+/** 让同一次请求里后续的鉴权调用能读到 Authorization，而不必层层传递 Request。 */
+export function bindAuthRequest(req: Request) {
+  authRequest.enterWith(req);
+}
+
+function requestOf(req?: Request): Request | null {
+  if (req) {
+    bindAuthRequest(req);
+    return req;
+  }
+  return authRequest.getStore() ?? null;
+}
+
+function bearerToken(header: string | null): string | null {
+  if (!header) return null;
+  const match = /^Bearer\s+(\S+)$/i.exec(header.trim());
+  return match?.[1] ?? null;
+}
+
+function tokenFrom(req?: Request): string | null {
+  const current = requestOf(req);
+  if (!current) return null;
+  return bearerToken(current.headers.get("authorization"));
+}
 
 /** 从 SEALOS_KUBECONFIG_PATH 读取服务端 kubeconfig。 */
 export async function resolveKubeconfig(): Promise<string> {
@@ -13,12 +39,6 @@ export async function resolveKubeconfig(): Promise<string> {
     throw new AuthError(`未找到 SEALOS_KUBECONFIG_PATH：${kubeconfigPath}`);
   }
   return readFileSync(kubeconfigPath, "utf8");
-}
-
-function bearerToken(header: string | null): string | null {
-  if (!header) return null;
-  const match = /^Bearer\s+(\S+)$/i.exec(header.trim());
-  return match?.[1] ?? null;
 }
 
 export type RequestUser = {
@@ -32,38 +52,38 @@ export type RequestUser = {
   allowedTools?: string[] | null;
 };
 
-/** 要求已登录的平台用户（会话 cookie）。API Key 管理只走这条路径。 */
-export async function requireSessionUser() {
-  const session = await readUserSession();
-  if (!session) {
-    throw new AuthError("请先登录");
-  }
+/**
+ * 要求已登录的平台用户：`Authorization: Bearer <users.token>`。
+ * 不接受 API Key。令牌、账单、调用日志走这条路径。
+ */
+export async function requireSessionUser(req?: Request): Promise<PublicUser> {
+  const secret = tokenFrom(req);
+  if (!secret) throw new AuthError("请先登录");
+  const session = await findUserByToken(secret);
+  if (!session) throw new AuthError("请先登录");
   return session;
 }
 
 /**
- * 沙箱 / 模板等接口：会话 cookie，或 `Authorization: Bearer sandbox_...`。
- * 会话可访问该用户的全部沙箱；API Key 只能访问其授权列表。
+ * 沙箱 / 模板等接口：`Authorization: Bearer` 可以是登录 token，或 `sandbox_...` API Key。
+ * 登录 token 可访问该用户的全部沙箱；API Key 只能访问其授权列表。
  */
-export async function requireUser(): Promise<RequestUser> {
-  const user = await optionalUser();
+export async function requireUser(req?: Request): Promise<RequestUser> {
+  const user = await optionalUser(req);
   if (user) return user;
   throw new AuthError("请先登录");
 }
 
 /** 与 requireUser 相同解析规则，未登录时返回 null（供 MCP tools/list 等可选鉴权）。 */
-export async function optionalUser(): Promise<RequestUser | null> {
-  const session = await readUserSession();
-  if (session) return session;
+export async function optionalUser(req?: Request): Promise<RequestUser | null> {
+  const secret = tokenFrom(req);
+  if (!secret) return null;
 
-  const headerList = await headers();
-  const secret = bearerToken(headerList.get("authorization"));
-  if (secret) {
-    const user = await authenticateApiKey(secret);
-    if (user) return user;
-    const sessionUser = await findUserByToken(secret);
-    if (sessionUser) return sessionUser;
-  }
+  const apiKeyUser = await authenticateApiKey(secret);
+  if (apiKeyUser) return apiKeyUser;
+
+  const session = await findUserByToken(secret);
+  if (session) return session;
 
   return null;
 }

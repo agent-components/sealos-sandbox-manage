@@ -1,5 +1,5 @@
 import { sandboxIdFromRequest } from "@/lib/api/call-context";
-import { optionalUser } from "@/lib/auth/resolve";
+import { bindAuthRequest, optionalUser } from "@/lib/auth/resolve";
 import { openApiDocument } from "@/lib/openapi/document";
 import {
   callDelete,
@@ -78,6 +78,7 @@ async function handleRequest(
   request: Request,
   message: JsonRpcRequest
 ): Promise<McpDispatch> {
+  bindAuthRequest(request);
   const { id, method, params } = message;
 
   if (method === "ping") {

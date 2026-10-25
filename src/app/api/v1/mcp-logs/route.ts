@@ -13,7 +13,7 @@ function parseTime(value: string | null): Date | undefined {
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await requireSessionUser();
+    const user = await requireSessionUser(req);
     const params = req.nextUrl.searchParams;
     const tool = params.get("tool")?.trim() || undefined;
     const apiKeyId = params.get("apiKeyId")?.trim() || undefined;

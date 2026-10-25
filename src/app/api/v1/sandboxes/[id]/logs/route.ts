@@ -10,7 +10,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(req: NextRequest, ctx: Ctx) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(req);
     const { id } = await ctx.params;
     const kubeconfig = await resolveKubeconfig();
     const client = createLaunchpadClient({ kubeconfig });

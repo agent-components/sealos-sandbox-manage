@@ -8,7 +8,7 @@ type Ctx = { params: Promise<{ id: string }> };
 /** 复制密钥或 MCP 配置时取明文。列表接口只返回打码后的 key。 */
 export async function GET(_req: NextRequest, ctx: Ctx) {
   try {
-    const user = await requireSessionUser();
+    const user = await requireSessionUser(_req);
     const { id } = await ctx.params;
     const key = await getApiKeySecret(id, user.username);
     if (!key) {

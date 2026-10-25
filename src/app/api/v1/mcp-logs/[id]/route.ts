@@ -6,7 +6,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, ctx: Ctx) {
   try {
-    const user = await requireSessionUser();
+    const user = await requireSessionUser(_req);
     const { id } = await ctx.params;
     const log = await getMcpLog(user.username, id);
     if (!log) {

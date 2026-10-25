@@ -84,7 +84,7 @@ npm run start
 
 | 路径         | 作用                                           |
 | ------------ | ---------------------------------------------- |
-| `/sandboxes` | 沙箱列表、创建、详情、日志、启停和删除         |
+| `/sandboxes` | 沙箱列表、创建、详情、日志、启停和删除；「IDE」打开 Cursor Remote-SSH（`root@公网host:port`，需 22/TCP） |
 | `/templates` | 镜像、端口、环境变量、存储、启动命令和默认规格 |
 | `/mcp-logs`  | `exec` 的调用记录                              |
 | `/billing`   | 用量账单：按区间汇总 CPU、内存、存储与公网端口费用 |
@@ -94,10 +94,10 @@ npm run start
 
 两种身份，沙箱数据按用户名隔离：
 
-- **登录会话**：密码校验通过后，把 64 位十六进制 token 写入 `public.users.token`，过期时间写入 `tokenExpiredAt`（30 天）。Cookie 名 `sandbox_user_session`，值就是这枚 token。同一账号只保留一枚。未过期时重新登录会复用原来的 token，过期后才签发新的。可以操作该用户的全部沙箱。`Authorization: Bearer <token>` 同样有效。
+- **登录 token**：密码校验通过后，把 64 位十六进制 token 写入 `public.users.token`，过期时间写入 `tokenExpiredAt`（30 天），并在登录响应里返回。控制台把它放在本地，之后每个请求带 `Authorization: Bearer <token>`。不使用 Cookie。同一账号只保留一枚。未过期时重新登录会复用原来的 token，过期后才签发新的。可以操作该用户的全部沙箱。
 - **API Key**：`Authorization: Bearer sandbox_...`。只能访问这把 Key 授权列表里的沙箱；用它创建的沙箱会自动加入列表。可选 `allowedTools` 限制 MCP 工具（不填 / 空 = 全部可用；非空则 `tools/list` 只返回勾选工具，`tools/call` 拒绝其余）。每个用户最多 20 把 Key，每把最多授权 200 个沙箱。删除沙箱时会从该用户所有 Key 里移除。
 
-令牌、令牌明文和调用日志只接受登录会话，不接受 API Key 调用自身。模板接口两种身份都可以访问，模板在整个实例内共享，不按用户拆分。
+令牌、令牌明文和调用日志只接受登录 token，不接受 API Key 调用自身。模板接口两种身份都可以访问，模板在整个实例内共享，不按用户拆分。
 
 列表里的 Key 会打码（保留前缀和一小段字符）。明文只在创建响应，以及 `GET /api/v1/apikeys/{id}/secret` 中返回。数据库里保存的是完整明文。新密钥前缀是 `sandbox_`。
 
@@ -105,7 +105,7 @@ npm run start
 
 端点为 `POST /api/mcp`，协议是无状态的 MCP Streamable HTTP，不建立会话。支持的协议版本：`2025-06-18`、`2025-03-26`、`2024-11-05`。
 
-`initialize`、`tools/list` 和 `ping` 不需要登录；若请求带了 API Key，则按该 Key 的 `allowedTools` 过滤工具列表与 `initialize` 说明。`tools/call` 与 REST 使用同一套认证：`Authorization: Bearer sandbox_...`，或登录 Cookie；API Key 还会校验工具是否在白名单内。
+`initialize`、`tools/list` 和 `ping` 不需要登录；若请求带了 API Key，则按该 Key 的 `allowedTools` 过滤工具列表与 `initialize` 说明。`tools/call` 与 REST 使用同一套认证：`Authorization: Bearer` 登录 token 或 `sandbox_...`；API Key 还会校验工具是否在白名单内。
 
 MCP 工具与 OpenAPI **相互独立**，对标 Cursor Agent 本地文件操作。沙箱由请求头 `x-sandbox-id` 指定，路径为沙箱内绝对路径：
 

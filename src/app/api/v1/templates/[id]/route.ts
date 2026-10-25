@@ -10,9 +10,9 @@ import {
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_req: NextRequest, ctx: Ctx) {
+export async function GET(req: NextRequest, ctx: Ctx) {
   try {
-    await requireUser();
+    await requireUser(req);
     const { id } = await ctx.params;
     const template = await getTemplate(id);
     if (!template) {
@@ -26,7 +26,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   try {
-    await requireUser();
+    await requireUser(req);
     const { id } = await ctx.params;
     const patch = UpdateTemplateSchema.parse(await req.json());
     const template = await updateTemplate(id, patch);
@@ -39,9 +39,9 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   }
 }
 
-export async function DELETE(_req: NextRequest, ctx: Ctx) {
+export async function DELETE(req: NextRequest, ctx: Ctx) {
   try {
-    await requireUser();
+    await requireUser(req);
     const { id } = await ctx.params;
     const ok = await deleteTemplate(id);
     if (!ok) {

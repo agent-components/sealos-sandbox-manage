@@ -6,7 +6,20 @@ export function jsonOk<T>(data: T, init?: ResponseInit) {
   return NextResponse.json(data, init);
 }
 
+function isPrerenderBailout(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("digest" in error)) {
+    return false;
+  }
+  const digest = (error as { digest?: unknown }).digest;
+  return (
+    digest === "NEXT_PRERENDER_INTERRUPTED" ||
+    digest === "DYNAMIC_SERVER_USAGE" ||
+    digest === "HANGING_PROMISE_REJECTION"
+  );
+}
+
 export function jsonError(error: unknown) {
+  if (isPrerenderBailout(error)) throw error;
   if (error instanceof AuthError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }

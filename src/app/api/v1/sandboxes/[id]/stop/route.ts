@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       path: "/sandboxes/{id}/stop",
       arguments: { id },
       run: async () => {
-        const user = await requireUser();
+        const user = await requireUser(req);
         const kubeconfig = await resolveKubeconfig();
         const client = createLaunchpadClient({ kubeconfig });
         const existing = await client.getApp(id);

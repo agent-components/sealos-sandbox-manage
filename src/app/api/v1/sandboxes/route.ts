@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
       },
       run: async () => {
         const state = stateRaw ? SandboxStateSchema.parse(stateRaw) : undefined;
-        const user = await requireUser();
+        const user = await requireUser(req);
         const tags = tagQuery.length > 0 ? TagsSchema.parse(tagQuery) : [];
 
         const records = await listSandboxRecords({
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
           ? (raw as Record<string, unknown>)
           : {},
       run: async () => {
-        const user = await requireUser();
+        const user = await requireUser(req);
         const kubeconfig = await resolveKubeconfig();
         const input = CreateSandboxSchema.parse(raw);
 

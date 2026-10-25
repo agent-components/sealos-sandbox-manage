@@ -9,7 +9,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   try {
-    const user = await requireSessionUser();
+    const user = await requireSessionUser(req);
     const { id } = await ctx.params;
     const input = UpdateApiKeySchema.parse(await req.json());
     if (input.sandboxIds !== undefined) {
@@ -31,9 +31,9 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   }
 }
 
-export async function DELETE(_req: NextRequest, ctx: Ctx) {
+export async function DELETE(req: NextRequest, ctx: Ctx) {
   try {
-    const user = await requireSessionUser();
+    const user = await requireSessionUser(req);
     const { id } = await ctx.params;
     const ok = await deleteApiKey(id, user.username);
     if (!ok) {

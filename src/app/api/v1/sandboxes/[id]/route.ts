@@ -41,7 +41,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       path: "/sandboxes/{id}",
       arguments: { id },
       run: async () => {
-        const user = await requireUser();
+        const user = await requireUser(req);
         const kubeconfig = await resolveKubeconfig();
         const client = createLaunchpadClient({ kubeconfig });
         const app = await client.getApp(id);
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(req);
     const { id } = await ctx.params;
     const body = UpdateSandboxSchema.parse(await req.json());
     const kubeconfig = await resolveKubeconfig();
@@ -162,7 +162,7 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
       path: "/sandboxes/{id}",
       arguments: { id },
       run: async () => {
-        const user = await requireUser();
+        const user = await requireUser(req);
         const kubeconfig = await resolveKubeconfig();
         const client = createLaunchpadClient({ kubeconfig });
         const existing = await client.getApp(id);

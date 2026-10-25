@@ -1,3 +1,5 @@
+import { bindAuthRequest } from "@/lib/auth/resolve";
+
 /** MCP 请求用此头指定操作的沙箱。 */
 export const SANDBOX_ID_HEADER = "x-sandbox-id";
 
@@ -18,6 +20,7 @@ export async function runSandboxApiCall<T>(opts: {
   arguments: Record<string, unknown>;
   run: () => Promise<{ status: number; result: unknown; value: T }>;
 }): Promise<T> {
+  bindAuthRequest(opts.req);
   const outcome = await opts.run();
   return outcome.value;
 }

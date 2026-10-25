@@ -9,6 +9,7 @@ import type {
 } from "listpage-components/ListPage";
 import { StateBadge } from "@/components/StateBadge";
 import { sandboxClient } from "@/lib/client";
+import { cursorIdeUrl } from "@/lib/sandbox/ide";
 import type { Sandbox } from "@/lib/sandbox/schema";
 import type { SandboxFilters } from "./filters";
 
@@ -77,6 +78,17 @@ function SandboxActions({
   record: Sandbox;
   ctx: ListPageContextValue<Sandbox, SandboxFilters>;
 }) {
+  const { message } = App.useApp();
+
+  function openIde() {
+    const result = cursorIdeUrl(record);
+    if (!result.ok) {
+      message.error(result.error);
+      return;
+    }
+    window.location.href = result.url;
+  }
+
   return (
     <Space size={0}>
       <Button
@@ -94,6 +106,15 @@ function SandboxActions({
         onClick={() => ctx.showFloat("logs", record)}
       >
         日志
+      </Button>
+      <Button
+        type="link"
+        size="small"
+        style={{ paddingInline: 2 }}
+        disabled={record.state !== "running"}
+        onClick={openIde}
+      >
+        IDE
       </Button>
       <Dropdown
         trigger={["click"]}
@@ -228,7 +249,7 @@ export function sandboxColumns(
     {
       title: "操作",
       key: "actions",
-      width: 130,
+      width: 168,
       align: "right",
       fixed: "right",
       component: ({ record, ctx }) => (

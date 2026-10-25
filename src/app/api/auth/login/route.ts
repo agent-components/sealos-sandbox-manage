@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { authenticateUser } from "@/lib/auth/users";
-import { setUserSession } from "@/lib/auth/session";
+import { authenticateUser, issueUserToken } from "@/lib/auth/users";
 import { AuthError } from "@/lib/sealos/errors";
 import { jsonError, jsonOk } from "@/lib/api/response";
 
@@ -17,8 +16,9 @@ export async function POST(req: NextRequest) {
     if (!user) {
       throw new AuthError("用户名或密码错误");
     }
-    await setUserSession(user.username);
+    const token = await issueUserToken(user.username);
     return jsonOk({
+      token,
       user: { username: user.username, displayName: user.displayName },
     });
   } catch (error) {

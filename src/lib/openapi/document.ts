@@ -172,7 +172,7 @@ const sandboxId = {
   description: "沙箱 ID",
 } as const;
 
-const userAuth = [{ bearerAuth: [] }, { sessionCookie: [] }];
+const userAuth = [{ bearerAuth: [] }];
 
 const createSandboxBody = {
   type: "object",
@@ -262,7 +262,7 @@ export function openApiDocument() {
       title: PRODUCT_NAME,
       version: "0.1.0",
       description:
-        "查看、创建、删除沙箱，关机、开机，以及在运行中的沙箱内执行命令。认证为登录会话，或 `Authorization: Bearer sandbox_...`。会话可操作该用户的全部沙箱。API Key 只能访问其授权列表中的沙箱；用该 Key 创建的沙箱会自动加入授权列表。删除后会从各 Key 的授权列表中移除。MCP（POST /api/mcp）为独立的 Agent 文件工具面（read/write/edit/delete/grep/glob/exec），目标沙箱由请求头 `x-sandbox-id` 指定。",
+        "查看、创建、删除沙箱，关机、开机，以及在运行中的沙箱内执行命令。认证为 `Authorization: Bearer`：登录 token，或 `sandbox_...` API Key。登录 token 可操作该用户的全部沙箱。API Key 只能访问其授权列表中的沙箱；用该 Key 创建的沙箱会自动加入授权列表。删除后会从各 Key 的授权列表中移除。MCP（POST /api/mcp）为独立的 Agent 文件工具面（read/write/edit/delete/grep/glob/exec），目标沙箱由请求头 `x-sandbox-id` 指定。",
     },
     servers: [{ url: "/api/v1" }],
     paths: {
@@ -574,8 +574,8 @@ export function openApiDocument() {
           operationId: "getBilling",
           summary: "用量账单",
           description:
-            "按 Sealos 广州可用区口径汇总当前用户的 CPU、内存、存储卷与公网端口用量及费用。仅登录会话可用。不含外网流量；不计功能上线前的历史用量。省略 from/to 时默认本月月初至当前时刻。",
-          security: [{ sessionCookie: [] }],
+            "按 Sealos 广州可用区口径汇总当前用户的 CPU、内存、存储卷与公网端口用量及费用。仅登录 token 可用，不接受 API Key。不含外网流量；不计功能上线前的历史用量。省略 from/to 时默认本月月初至当前时刻。",
+          security: [{ bearerAuth: [] }],
           parameters: [
             {
               name: "from",
@@ -660,12 +660,7 @@ export function openApiDocument() {
           type: "http",
           scheme: "bearer",
           description:
-            "控制台创建的 API Key，形如 sandbox_...。也可以传 public.users.token。",
-        },
-        sessionCookie: {
-          type: "apiKey",
-          in: "cookie",
-          name: "sandbox_user_session",
+            "登录接口返回的用户 token，或控制台创建的 API Key（形如 sandbox_...）。账单、令牌和调用日志只接受用户 token。",
         },
       },
     },

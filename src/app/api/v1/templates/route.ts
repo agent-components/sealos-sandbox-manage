@@ -12,7 +12,7 @@ import {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireUser();
+    await requireUser(req);
     const page = parsePageQuery(req.nextUrl.searchParams);
     const q = req.nextUrl.searchParams.get("q")?.trim() || undefined;
     return jsonOk(
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireUser();
+    await requireUser(req);
     const input = CreateTemplateSchema.parse(await req.json());
 
     let id = input.id?.trim() || createTemplateId();

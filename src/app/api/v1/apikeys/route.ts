@@ -15,7 +15,7 @@ import { findUnownedSandboxIds } from "@/lib/sandbox/owned";
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await requireSessionUser();
+    const user = await requireSessionUser(req);
     const page = parsePageQuery(req.nextUrl.searchParams);
     const keyword = (req.nextUrl.searchParams.get("q") ?? "").trim().toLowerCase();
     let apiKeys = await listApiKeys(user.username);
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireSessionUser();
+    const user = await requireSessionUser(req);
     const input = CreateApiKeySchema.parse(await req.json());
 
     const count = await countApiKeys(user.username);
