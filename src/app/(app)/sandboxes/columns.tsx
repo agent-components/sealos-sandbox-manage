@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { App, Button, Space, Tag, Typography } from "antd";
+import { EllipsisOutlined } from "@ant-design/icons";
+import { App, Button, Dropdown, Space, Switch, Tag, Typography } from "antd";
 import type {
   ListPageColumnType,
   ListPageContextValue,
@@ -26,7 +27,7 @@ export function canStart(state: Sandbox["state"]) {
   return state === "stopped" || state === "error";
 }
 
-function SandboxActions({
+function PowerSwitch({
   record,
   ctx,
 }: {
@@ -35,19 +36,19 @@ function SandboxActions({
 }) {
   const { message } = App.useApp();
   const [busy, setBusy] = useState(false);
-  const powerLabel = canStop(record.state) ? "关机" : "开机";
-  const powerDisabled =
+  const poweredOn = canStop(record.state);
+  const disabled =
     busy || (!canStop(record.state) && !canStart(record.state));
 
-  async function runPower() {
+  async function onChange(checked: boolean) {
     setBusy(true);
     try {
-      if (canStop(record.state)) {
-        await sandboxClient.stopSandbox(record.id);
-        message.success("已关机");
-      } else {
+      if (checked) {
         await sandboxClient.resumeSandbox(record.id);
         message.success("已开机");
+      } else {
+        await sandboxClient.stopSandbox(record.id);
+        message.success("已关机");
       }
       ctx.refreshTable();
     } catch (err) {
@@ -58,6 +59,25 @@ function SandboxActions({
   }
 
   return (
+    <Switch
+      size="small"
+      checked={poweredOn}
+      loading={busy}
+      disabled={disabled && !busy}
+      onChange={(checked) => void onChange(checked)}
+      aria-label={poweredOn ? "关机" : "开机"}
+    />
+  );
+}
+
+function SandboxActions({
+  record,
+  ctx,
+}: {
+  record: Sandbox;
+  ctx: ListPageContextValue<Sandbox, SandboxFilters>;
+}) {
+  return (
     <Space size={0}>
       <Button
         type="link"
@@ -65,7 +85,7 @@ function SandboxActions({
         style={{ paddingInline: 2 }}
         onClick={() => ctx.showFloat("detail", record)}
       >
-        查看
+        编辑
       </Button>
       <Button
         type="link"
@@ -75,26 +95,24 @@ function SandboxActions({
       >
         日志
       </Button>
-      <Button
-        type="link"
-        size="small"
-        style={{ paddingInline: 2 }}
-        loading={busy}
-        disabled={powerDisabled && !busy}
-        onClick={() => void runPower()}
+      <Dropdown
+        trigger={["click"]}
+        placement="bottomRight"
+        menu={{
+          items: [{ key: "delete", danger: true, label: "删除" }],
+          onClick: ({ key }) => {
+            if (key === "delete") ctx.showFloat("delete", record);
+          },
+        }}
       >
-        {powerLabel}
-      </Button>
-      <Button
-        type="link"
-        size="small"
-        danger
-        style={{ paddingInline: 2 }}
-        disabled={busy}
-        onClick={() => ctx.showFloat("delete", record)}
-      >
-        删除
-      </Button>
+        <Button
+          type="link"
+          size="small"
+          style={{ paddingInline: 2 }}
+          icon={<EllipsisOutlined />}
+          aria-label="更多"
+        />
+      </Dropdown>
     </Space>
   );
 }
@@ -103,6 +121,16 @@ export function sandboxColumns(
   templateNameById: Map<string, string>,
 ): ListPageColumnType<Sandbox, SandboxFilters>[] {
   return [
+    {
+      title: "电源",
+      key: "power",
+      width: 72,
+      fixed: "left",
+      align: "center",
+      component: ({ record, ctx }) => (
+        <PowerSwitch record={record} ctx={ctx} />
+      ),
+    },
     {
       title: "名称",
       dataIndex: "id",
@@ -200,7 +228,7 @@ export function sandboxColumns(
     {
       title: "操作",
       key: "actions",
-      width: 160,
+      width: 130,
       align: "right",
       fixed: "right",
       component: ({ record, ctx }) => (

@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["*.sealosgzg.site"],
   cacheComponents: true,
   partialPrefetching: true,
+  async redirects() {
+    return [{ source: "/", destination: "/sandboxes", permanent: false }];
+  },
   turbopack: {
     rules: {
       "*.css": {
