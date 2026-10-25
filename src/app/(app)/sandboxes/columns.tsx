@@ -84,7 +84,18 @@ function SandboxActions({
     try {
       // 列表项不含 ports；公网地址在详情里
       const { sandbox } = await sandboxClient.getSandbox(record.id);
-      const result = cursorIdeUrl(sandbox);
+      // exec 进容器时 cwd 即镜像 WORKDIR
+      let workdir = "/";
+      try {
+        const cmd = await sandboxClient.runSandboxCommand(record.id, "pwd");
+        if (cmd.ok) {
+          const line = cmd.stdout.trim().split(/\r?\n/).filter(Boolean).at(-1);
+          if (line) workdir = line;
+        }
+      } catch {
+        // pwd 失败则退回 /
+      }
+      const result = cursorIdeUrl(sandbox, workdir);
       if (!result.ok) {
         message.error(result.error);
         return;
