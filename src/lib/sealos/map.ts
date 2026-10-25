@@ -27,6 +27,8 @@ export type LaunchpadApp = {
   quota?: { cpu?: number; memory?: number; replicas?: number };
   ports?: Array<{
     number?: number;
+    /** Sealos 内部端口主键；PATCH 更新已有端口时必须带回，否则会被当成新建 */
+    portName?: string;
     protocol?: string;
     isPublic?: boolean;
     publicAddress?: string;

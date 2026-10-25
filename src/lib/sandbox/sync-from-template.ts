@@ -96,13 +96,21 @@ export function buildSyncFromTemplateBody(
       memory: memoryGi,
       replicas,
     },
+    // Sealos PATCH：有 portName → 更新；无 portName → 新建。
+    // 同号已存在却不带 portName 会 CREATE_PORT_CONFLICT。
     ports:
       template.ports.length > 0
-        ? template.ports.map((port) => ({
-            number: port.number,
-            protocol: port.protocol,
-            isPublic: port.isPublic,
-          }))
+        ? template.ports.map((port) => {
+            const existing = (app.ports ?? []).find(
+              (item) => item.number === port.number && item.portName,
+            );
+            return {
+              number: port.number,
+              protocol: port.protocol,
+              isPublic: port.isPublic,
+              ...(existing?.portName ? { portName: existing.portName } : {}),
+            };
+          })
         : [{ number: 80, protocol: "http", isPublic: true }],
     env: opts?.env ?? mergeEnvWithTemplate(app.env, template.env),
     storage,
