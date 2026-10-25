@@ -624,3 +624,25 @@
 .template-drawer-panel > .ant-btn {
   margin-top: 12px;
 }
+
+/*
+ * Ant Design 6 Tabs 语义 DOM 更名：
+ * content-holder → body-holder，content → body，tabpane → content。
+ * listpage-components ProDrawer 仍指向旧类名，导致抽屉内容区无法纵向滚动。
+ */
+.pro-drawer-tabs > .ant-tabs-body-holder {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  background-color: var(--ant-color-bg-container);
+}
+
+.pro-drawer-tabs > .ant-tabs-body-holder > .ant-tabs-body {
+  height: 100%;
+}
+
+.pro-drawer-tabs > .ant-tabs-body-holder > .ant-tabs-body > .ant-tabs-content {
+  height: 100%;
+  overflow-y: auto;
+}

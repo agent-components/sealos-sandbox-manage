@@ -328,28 +328,35 @@ function AddressCell({
   empty: string;
 }) {
   if (!value) return <Typography.Text type="secondary">{empty}</Typography.Text>;
-  const textStyle = { wordBreak: "break-all" as const };
+  const textStyle = { flex: 1, minWidth: 0 };
   return (
     <span
       style={{
         display: "inline-flex",
-        alignItems: "flex-start",
+        alignItems: "center",
         gap: 4,
         maxWidth: "100%",
+        minWidth: 0,
       }}
     >
       {href ? (
         <Typography.Link
           href={value.startsWith("http") ? value : `https://${value}`}
           target="_blank"
+          ellipsis={{ tooltip: value }}
           style={textStyle}
         >
           {value}
         </Typography.Link>
       ) : (
-        <span style={textStyle}>{value}</span>
+        <Typography.Text ellipsis={{ tooltip: value }} style={textStyle}>
+          {value}
+        </Typography.Text>
       )}
-      <Typography.Text copyable={{ text: value, tooltips: ["复制", "已复制"] }} />
+      <Typography.Text
+        style={{ flexShrink: 0 }}
+        copyable={{ text: value, tooltips: ["复制", "已复制"] }}
+      />
     </span>
   );
 }
@@ -912,7 +919,7 @@ export function SandboxDetailModal({
                       {
                         title: "公网地址",
                         dataIndex: "publicAddress",
-                        onCell: () => ({ style: { verticalAlign: "top" } }),
+                        ellipsis: true,
                         render: (value: string | null) => (
                           <AddressCell value={value} href empty="尚未就绪" />
                         ),
@@ -920,7 +927,7 @@ export function SandboxDetailModal({
                       {
                         title: "内网地址",
                         dataIndex: "privateAddress",
-                        onCell: () => ({ style: { verticalAlign: "top" } }),
+                        ellipsis: true,
                         render: (value: string | null) => (
                           <AddressCell value={value} empty="—" />
                         ),
