@@ -343,7 +343,8 @@ function AddressCell({
         <Typography.Link
           href={value.startsWith("http") ? value : `https://${value}`}
           target="_blank"
-          ellipsis={{ tooltip: value }}
+          ellipsis
+          title={value}
           style={textStyle}
         >
           {value}
