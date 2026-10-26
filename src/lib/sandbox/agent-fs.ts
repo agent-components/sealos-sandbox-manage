@@ -4,7 +4,6 @@ import {
   resolveRunningSandbox,
   resolveSandboxForCommand,
 } from "@/lib/sandbox/command";
-import { asSandboxUser } from "@/lib/sandbox/container-user";
 import { SealosApiError } from "@/lib/sealos/errors";
 import { execInPod } from "@/lib/sealos/kube";
 
@@ -212,7 +211,7 @@ export async function sniffSandboxPath(
   const result = await execInPod(target.kubeconfig, {
     pod: target.pod,
     container: target.container,
-    command: asSandboxUser(["head", "-c", String(SNIFF_BYTES), "--", path]),
+    command: ["head", "-c", String(SNIFF_BYTES), "--", path],
     timeoutMs: 60_000,
     maxBytes: SNIFF_BYTES + 1024,
     retainStdout: false,
@@ -240,14 +239,14 @@ export async function readSandboxText(
   const result = await execInPod(target.kubeconfig, {
     pod: target.pod,
     container: target.container,
-    command: asSandboxUser([
+    command: [
       "python3",
       "-c",
       READ_TEXT_SCRIPT,
       path,
       offsetRaw,
       limitRaw,
-    ]),
+    ],
     timeoutMs: 120_000,
     maxBytes: ARTIFACT_MAX_BYTES,
     tooLargeMessage: "文件超过 32MB",
@@ -280,14 +279,14 @@ export async function writeSandboxFile(
   const result = await execInPod(target.kubeconfig, {
     pod: target.pod,
     container: target.container,
-    command: asSandboxUser([
+    command: [
       "sh",
       "-c",
       'mkdir -p -- "$(dirname -- "$2")" && head -c "$1" > "$2"',
       "write",
       String(data.length),
       path,
-    ]),
+    ],
     stdin: data,
     timeoutMs: 120_000,
     signal,
@@ -321,7 +320,7 @@ export async function editSandboxFile(
   const read = await execInPod(target.kubeconfig, {
     pod: target.pod,
     container: target.container,
-    command: asSandboxUser(["cat", "--", path]),
+    command: ["cat", "--", path],
     timeoutMs: 120_000,
     maxBytes: ARTIFACT_MAX_BYTES,
     tooLargeMessage: "文件超过 32MB",
@@ -358,14 +357,14 @@ export async function editSandboxFile(
   const write = await execInPod(target.kubeconfig, {
     pod: target.pod,
     container: target.container,
-    command: asSandboxUser([
+    command: [
       "sh",
       "-c",
       'mkdir -p -- "$(dirname -- "$2")" && head -c "$1" > "$2"',
       "write",
       String(data.length),
       path,
-    ]),
+    ],
     stdin: data,
     timeoutMs: 120_000,
     signal,
@@ -387,13 +386,13 @@ export async function deleteSandboxFile(
   const check = await execInPod(target.kubeconfig, {
     pod: target.pod,
     container: target.container,
-    command: asSandboxUser([
+    command: [
       "sh",
       "-c",
       'if [ -d "$1" ]; then echo DIR; elif [ -f "$1" ]; then echo FILE; elif [ -e "$1" ]; then echo OTHER; else echo MISSING; fi',
       "check",
       path,
-    ]),
+    ],
     timeoutMs: 30_000,
     signal,
   });
@@ -404,7 +403,7 @@ export async function deleteSandboxFile(
   const result = await execInPod(target.kubeconfig, {
     pod: target.pod,
     container: target.container,
-    command: asSandboxUser(["rm", "-f", "--", path]),
+    command: ["rm", "-f", "--", path],
     timeoutMs: 30_000,
     signal,
   });
@@ -438,7 +437,7 @@ export async function grepSandbox(
   const result = await execInPod(target.kubeconfig, {
     pod: target.pod,
     container: target.container,
-    command: asSandboxUser([
+    command: [
       "python3",
       "-c",
       GREP_SCRIPT,
@@ -450,7 +449,7 @@ export async function grepSandbox(
       String(Math.max(0, opts.context ?? 0)),
       String(Math.max(0, opts.headLimit ?? GREP_DEFAULT_HEAD)),
       opts.multiline ? "1" : "0",
-    ]),
+    ],
     timeoutMs: 180_000,
     maxBytes: ARTIFACT_MAX_BYTES,
     signal: opts.signal,
@@ -478,14 +477,14 @@ export async function globSandbox(
   const result = await execInPod(target.kubeconfig, {
     pod: target.pod,
     container: target.container,
-    command: asSandboxUser([
+    command: [
       "python3",
       "-c",
       GLOB_SCRIPT,
       root,
       globPattern,
       String(GLOB_MAX),
-    ]),
+    ],
     timeoutMs: 120_000,
     maxBytes: ARTIFACT_MAX_BYTES,
     signal,

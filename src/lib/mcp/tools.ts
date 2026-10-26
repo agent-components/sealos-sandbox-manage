@@ -184,7 +184,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     "exec",
     "Shell",
     [
-      "在沙箱内以 sandbox 用户执行 shell 命令（非 root）。",
+      "在沙箱内执行 shell 命令。",
       "读/写/搜文件请用 read、write、edit、grep、glob，不要用本工具代替。",
       "可用 working_directory 指定工作目录，避免 cd &&。",
       "沙箱已停止时会先开机。单路输出上限 1MB。",

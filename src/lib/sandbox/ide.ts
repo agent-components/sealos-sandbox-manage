@@ -1,4 +1,3 @@
-import { SANDBOX_CONTAINER_USER } from "@/lib/sandbox/container-user";
 import type { Sandbox } from "@/lib/sandbox/schema";
 
 export type CursorIdeResult =
@@ -14,7 +13,7 @@ export function normalizeRemotePath(raw: string | null | undefined): string {
 
 /**
  * 用沙箱 22 端口映射的公网地址（host:port）拼 Cursor Remote-SSH 深链。
- * 用户见 `SANDBOX_CONTAINER_USER`；`path` 一般为镜像 WORKDIR（可由容器内 `pwd` 得到）。
+ * 用户 `sandbox`；`path` 一般为镜像 WORKDIR（可由容器内 `pwd` 得到）。
  */
 export function cursorIdeUrl(
   sandbox: Sandbox,
@@ -46,6 +45,6 @@ export function cursorIdeUrl(
   // Cursor 不认 =3A；host:port 写在 path 段里，冒号可原样保留
   return {
     ok: true,
-    url: `cursor://vscode-remote/ssh-remote+${SANDBOX_CONTAINER_USER}@${host}:${port}${remotePath}`,
+    url: `cursor://vscode-remote/ssh-remote+sandbox@${host}:${port}${remotePath}`,
   };
 }

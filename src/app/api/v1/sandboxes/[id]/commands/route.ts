@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { runSandboxApiCall } from "@/lib/api/call-context";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { resolveSandboxForCommand } from "@/lib/sandbox/command";
-import { asSandboxUser } from "@/lib/sandbox/container-user";
 import { RunSandboxCommandSchema } from "@/lib/sandbox/schema";
 import { execInPod } from "@/lib/sealos/kube";
 
@@ -24,7 +23,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         const result = await execInPod(target.kubeconfig, {
           pod: target.pod,
           container: target.container,
-          command: asSandboxUser(["/bin/sh", "-c", body.command]),
+          command: ["/bin/sh", "-c", body.command],
         });
         const payload = {
           ok: result.exitCode === 0,

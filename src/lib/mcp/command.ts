@@ -6,7 +6,6 @@ import {
   RunSandboxCommandSchema,
 } from "@/lib/sandbox/schema";
 import { resolveSandboxForCommand } from "@/lib/sandbox/command";
-import { asSandboxUser } from "@/lib/sandbox/container-user";
 import {
   ExecCancelledError,
   execInPod,
@@ -139,18 +138,16 @@ export async function callSandboxCommand(
     };
   }
 
-  const command = asSandboxUser(
-    workingDirectory
-      ? [
-          "/bin/sh",
-          "-c",
-          'cd -- "$1" && /bin/sh -c "$2"',
-          "exec",
-          workingDirectory,
-          parsed.data.command,
-        ]
-      : ["/bin/sh", "-c", parsed.data.command]
-  );
+  const command = workingDirectory
+    ? [
+        "/bin/sh",
+        "-c",
+        'cd -- "$1" && /bin/sh -c "$2"',
+        "exec",
+        workingDirectory,
+        parsed.data.command,
+      ]
+    : ["/bin/sh", "-c", parsed.data.command];
   if (!stream) {
     try {
       const result = await execInPod(target.kubeconfig, {
