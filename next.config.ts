@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["pg"],
+  serverExternalPackages: ["@prisma/client", "prisma"],
   transpilePackages: ["listpage-components"],
   allowedDevOrigins: ["*.sealosgzg.site"],
   cacheComponents: true,

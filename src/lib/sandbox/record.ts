@@ -1,4 +1,5 @@
-import { query } from "@/lib/db/postgres";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/db/prisma";
 import {
   DEFAULT_IDLE_CONFIG,
   SandboxStateSchema,
@@ -20,20 +21,17 @@ export type SandboxRecordDoc = {
 };
 
 type RecordRow = {
-  sandbox_id: string;
+  sandboxId: string;
   owner: string;
-  template_id: string;
-  tags: string[] | null;
+  templateId: string;
+  tags: string[];
   state: string;
-  auto_shutdown: boolean;
-  idle_minutes: number;
+  autoShutdown: boolean;
+  idleMinutes: number;
   inflight: number;
-  last_activity_at: Date;
-  created_at: Date;
+  lastActivityAt: Date;
+  createdAt: Date;
 };
-
-const RECORD_COLUMNS = `sandbox_id, owner, template_id, tags, state,
-  auto_shutdown, idle_minutes, inflight, last_activity_at, created_at`;
 
 export type ListSandboxRecordsOptions = {
   owner: string;
@@ -54,20 +52,20 @@ function asState(value: string | null | undefined): SandboxState {
 
 function toRecord(row: RecordRow): SandboxRecordDoc {
   return {
-    sandboxId: row.sandbox_id,
+    sandboxId: row.sandboxId,
     owner: row.owner,
-    templateId: row.template_id,
+    templateId: row.templateId,
     tags: row.tags ?? [],
     state: asState(row.state),
-    autoShutdown: !!row.auto_shutdown,
+    autoShutdown: !!row.autoShutdown,
     idleMinutes:
-      typeof row.idle_minutes === "number" && row.idle_minutes >= 5
-        ? row.idle_minutes
+      typeof row.idleMinutes === "number" && row.idleMinutes >= 5
+        ? row.idleMinutes
         : DEFAULT_IDLE_CONFIG.idleMinutes,
     inflight:
       typeof row.inflight === "number" && row.inflight >= 0 ? row.inflight : 0,
-    lastActivityAt: row.last_activity_at,
-    createdAt: row.created_at,
+    lastActivityAt: row.lastActivityAt,
+    createdAt: row.createdAt,
   };
 }
 
@@ -79,32 +77,26 @@ export async function saveSandboxRecord(
 ): Promise<void> {
   const config = opts?.idle ?? DEFAULT_IDLE_CONFIG;
   const state = opts?.state ?? "starting";
-  await query(
-    `INSERT INTO sandbox.records (
-       sandbox_id, owner, template_id, state, auto_shutdown, idle_minutes
-     )
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [
+  await prisma.sandboxRecord.create({
+    data: {
       sandboxId,
       owner,
       templateId,
       state,
-      config.autoShutdown,
-      config.idleMinutes,
-    ]
-  );
+      autoShutdown: config.autoShutdown,
+      idleMinutes: config.idleMinutes,
+    },
+  });
 }
 
 export async function setSandboxState(
   sandboxId: string,
   state: SandboxState
 ): Promise<void> {
-  await query(
-    `UPDATE sandbox.records
-     SET state = $2, updated_at = now()
-     WHERE sandbox_id = $1`,
-    [sandboxId, state]
-  );
+  await prisma.sandboxRecord.updateMany({
+    where: { sandboxId },
+    data: { state },
+  });
 }
 
 /**
@@ -118,38 +110,34 @@ export async function syncSandboxStates(
   if (states.size === 0) return;
 
   const ids = [...states.keys()];
-  const values = ids.map((id) => states.get(id)!);
-  await query(
-    `UPDATE sandbox.records AS record
-     SET state = data.state, updated_at = now()
-     FROM unnest($1::text[], $2::text[]) AS data(sandbox_id, state)
-     WHERE record.sandbox_id = data.sandbox_id
-       AND record.state IS DISTINCT FROM data.state`,
-    [ids, values]
-  );
-  await query(
-    `UPDATE sandbox.records
-     SET state = 'error', updated_at = now()
-     WHERE NOT (sandbox_id = ANY($1::text[]))
-       AND state IS DISTINCT FROM 'error'`,
-    [ids]
-  );
+  await prisma.$transaction([
+    ...ids.map((sandboxId) =>
+      prisma.sandboxRecord.updateMany({
+        where: {
+          sandboxId,
+          NOT: { state: states.get(sandboxId)! },
+        },
+        data: { state: states.get(sandboxId)! },
+      })
+    ),
+    prisma.sandboxRecord.updateMany({
+      where: {
+        sandboxId: { notIn: ids },
+        NOT: { state: "error" },
+      },
+      data: { state: "error" },
+    }),
+  ]);
 }
 
 export async function deleteSandboxRecord(sandboxId: string): Promise<void> {
-  await query(`DELETE FROM sandbox.records WHERE sandbox_id = $1`, [sandboxId]);
+  await prisma.sandboxRecord.deleteMany({ where: { sandboxId } });
 }
 
 export async function getSandboxRecord(
   sandboxId: string
 ): Promise<SandboxRecordDoc | null> {
-  const result = await query<RecordRow>(
-    `SELECT ${RECORD_COLUMNS}
-     FROM sandbox.records
-     WHERE sandbox_id = $1`,
-    [sandboxId]
-  );
-  const row = result.rows[0];
+  const row = await prisma.sandboxRecord.findUnique({ where: { sandboxId } });
   return row ? toRecord(row) : null;
 }
 
@@ -157,21 +145,18 @@ export async function findSandboxRecords(
   sandboxIds: string[]
 ): Promise<Map<string, SandboxRecordDoc>> {
   if (sandboxIds.length === 0) return new Map();
-  const result = await query<RecordRow>(
-    `SELECT ${RECORD_COLUMNS}
-     FROM sandbox.records
-     WHERE sandbox_id = ANY($1::text[])`,
-    [sandboxIds]
-  );
-  return new Map(result.rows.map((row) => [row.sandbox_id, toRecord(row)]));
+  const rows = await prisma.sandboxRecord.findMany({
+    where: { sandboxId: { in: sandboxIds } },
+  });
+  return new Map(rows.map((row) => [row.sandboxId, toRecord(row)]));
 }
 
 /** 全部沙箱 ID → 所有者，供用量扫描对齐 Launchpad 列表。 */
 export async function listSandboxOwners(): Promise<Map<string, string>> {
-  const result = await query<{ sandbox_id: string; owner: string }>(
-    `SELECT sandbox_id, owner FROM sandbox.records`,
-  );
-  return new Map(result.rows.map((row) => [row.sandbox_id, row.owner]));
+  const rows = await prisma.sandboxRecord.findMany({
+    select: { sandboxId: true, owner: true },
+  });
+  return new Map(rows.map((row) => [row.sandboxId, row.owner]));
 }
 
 /** 列出当前用户在数据库中的沙箱记录（列表以 DB 为准） */
@@ -188,62 +173,46 @@ export async function listSandboxRecords(
     keyword,
   } = options;
 
-  const conditions = ["r.owner = $1"];
-  const params: unknown[] = [owner];
-  let i = 2;
+  const where: Prisma.SandboxRecordWhereInput = { owner };
+  if (allowedIds) where.sandboxId = { in: allowedIds };
+  if (templateId) where.templateId = templateId;
+  if (state) where.state = state;
+  if (tags.length > 0) where.tags = { hasEvery: tags };
 
-  if (allowedIds) {
-    conditions.push(`r.sandbox_id = ANY($${i}::text[])`);
-    params.push(allowedIds);
-    i += 1;
-  }
-  if (templateId) {
-    conditions.push(`r.template_id = $${i}`);
-    params.push(templateId);
-    i += 1;
-  }
-  if (state) {
-    conditions.push(`r.state = $${i}`);
-    params.push(state);
-    i += 1;
-  }
-  if (tags.length > 0) {
-    conditions.push(`r.tags @> $${i}::text[]`);
-    params.push(tags);
-    i += 1;
-  }
+  let rows = await prisma.sandboxRecord.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+  });
+
   if (tagTerms.length > 0) {
-    conditions.push(`NOT EXISTS (
-      SELECT 1
-      FROM unnest($${i}::text[]) AS term
-      WHERE NOT EXISTS (
-        SELECT 1
-        FROM unnest(r.tags) AS tag
-        WHERE strpos(tag, term) > 0
+    rows = rows.filter((row) =>
+      tagTerms.every((term) =>
+        (row.tags ?? []).some((tag) => tag.includes(term))
       )
-    )`);
-    params.push(tagTerms);
-    i += 1;
-  }
-  if (keyword) {
-    conditions.push(`(
-      strpos(lower(r.sandbox_id), $${i}) > 0
-      OR strpos(lower(coalesce(t.name, '')), $${i}) > 0
-      OR strpos(lower(coalesce(t.image, '')), $${i}) > 0
-    )`);
-    params.push(keyword.toLowerCase());
-    i += 1;
+    );
   }
 
-  const result = await query<RecordRow>(
-    `SELECT r.sandbox_id, r.owner, r.template_id, r.tags, r.state,
-            r.auto_shutdown, r.idle_minutes, r.inflight, r.last_activity_at,
-            r.created_at
-     FROM sandbox.records r
-     LEFT JOIN sandbox.templates t ON t.id = r.template_id
-     WHERE ${conditions.join(" AND ")}
-     ORDER BY r.created_at DESC`,
-    params
-  );
-  return result.rows.map(toRecord);
+  if (keyword) {
+    const kw = keyword.toLowerCase();
+    const templateIds = [...new Set(rows.map((row) => row.templateId))];
+    const templates =
+      templateIds.length === 0
+        ? []
+        : await prisma.template.findMany({
+            where: { id: { in: templateIds } },
+            select: { id: true, name: true, image: true },
+          });
+    const byId = new Map(templates.map((t) => [t.id, t]));
+    rows = rows.filter((row) => {
+      if (row.sandboxId.toLowerCase().includes(kw)) return true;
+      const template = byId.get(row.templateId);
+      if (!template) return false;
+      return (
+        template.name.toLowerCase().includes(kw) ||
+        template.image.toLowerCase().includes(kw)
+      );
+    });
+  }
+
+  return rows.map(toRecord);
 }

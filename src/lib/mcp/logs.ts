@@ -1,4 +1,5 @@
-import { query } from "@/lib/db/postgres";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/db/prisma";
 import { getMinioClient, minioBucket } from "@/lib/minio/client";
 import {
   LOGGED_TOOLS,
@@ -9,42 +10,42 @@ import {
 type LogRow = {
   id: string;
   username: string | null;
-  api_key_id: string | null;
-  api_key_name: string | null;
-  channel: McpCallLog["channel"];
+  apiKeyId: string | null;
+  apiKeyName: string | null;
+  channel: string;
   tool: string;
   method: string;
   path: string;
-  arguments: Record<string, unknown>;
+  arguments: Prisma.JsonValue;
   status: number;
   ok: boolean;
-  result_key: string | null;
-  result_error: string | null;
-  started_at: Date;
-  completed_at: Date;
-  duration_ms: number;
-  created_at: Date;
+  resultKey: string | null;
+  resultError: string | null;
+  startedAt: Date;
+  completedAt: Date;
+  durationMs: number;
+  createdAt: Date;
 };
 
 function toView(row: LogRow): McpCallLogView {
   return {
     id: row.id,
     username: row.username ?? undefined,
-    apiKeyId: row.api_key_id,
-    apiKeyName: row.api_key_name,
-    channel: row.channel ?? "mcp",
+    apiKeyId: row.apiKeyId,
+    apiKeyName: row.apiKeyName,
+    channel: (row.channel as McpCallLog["channel"]) ?? "mcp",
     tool: row.tool,
     method: row.method,
     path: row.path,
-    arguments: row.arguments,
+    arguments: (row.arguments ?? {}) as Record<string, unknown>,
     status: row.status,
     ok: row.ok,
-    resultKey: row.result_key,
-    resultError: row.result_error,
-    startedAt: row.started_at.toISOString(),
-    completedAt: row.completed_at.toISOString(),
-    durationMs: row.duration_ms,
-    createdAt: row.created_at.toISOString(),
+    resultKey: row.resultKey,
+    resultError: row.resultError,
+    startedAt: row.startedAt.toISOString(),
+    completedAt: row.completedAt.toISOString(),
+    durationMs: row.durationMs,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 
@@ -64,31 +65,23 @@ export type ListMcpLogsOpts = {
   to?: Date;
 };
 
-function logFilter(username: string, opts?: ListMcpLogsOpts) {
-  const where = ["(username = $1 OR username IS NULL)"];
-  const params: unknown[] = [username];
-  if (opts?.tool) {
-    params.push(opts.tool);
-    where.push(`tool = $${params.length}`);
-  } else {
-    params.push([...LOGGED_TOOLS]);
-    where.push(`tool = ANY($${params.length}::text[])`);
-  }
+function logWhere(username: string, opts?: ListMcpLogsOpts): Prisma.McpLogWhereInput {
+  const where: Prisma.McpLogWhereInput = {
+    OR: [{ username }, { username: null }],
+    tool: opts?.tool ? opts.tool : { in: [...LOGGED_TOOLS] },
+  };
   if (opts?.apiKeyId === "session") {
-    where.push("api_key_id IS NULL");
+    where.apiKeyId = null;
   } else if (opts?.apiKeyId) {
-    params.push(opts.apiKeyId);
-    where.push(`api_key_id = $${params.length}`);
+    where.apiKeyId = opts.apiKeyId;
   }
-  if (opts?.from) {
-    params.push(opts.from);
-    where.push(`started_at >= $${params.length}`);
+  if (opts?.from || opts?.to) {
+    where.startedAt = {
+      ...(opts.from ? { gte: opts.from } : {}),
+      ...(opts.to ? { lte: opts.to } : {}),
+    };
   }
-  if (opts?.to) {
-    params.push(opts.to);
-    where.push(`started_at <= $${params.length}`);
-  }
-  return { where: where.join(" AND "), params };
+  return where;
 }
 
 export async function listMcpLogs(
@@ -100,25 +93,19 @@ export async function listMcpLogs(
     100,
   );
   const page = Math.max(Math.floor(opts?.page ?? 1), 1);
-  const filter = logFilter(username, opts);
-  const count = await query<{ count: string }>(
-    `SELECT count(*)::text AS count FROM sandbox.mcp_logs WHERE ${filter.where}`,
-    filter.params,
-  );
-  const listed = await query<LogRow>(
-    `SELECT id, username, api_key_id, api_key_name, channel, tool, method, path,
-            arguments, status, ok, result_key, result_error,
-            started_at, completed_at, duration_ms, created_at
-     FROM sandbox.mcp_logs
-     WHERE ${filter.where}
-     ORDER BY started_at DESC, created_at DESC
-     LIMIT $${filter.params.length + 1}
-     OFFSET $${filter.params.length + 2}`,
-    [...filter.params, pageSize, (page - 1) * pageSize],
-  );
+  const where = logWhere(username, opts);
+  const [total, listed] = await Promise.all([
+    prisma.mcpLog.count({ where }),
+    prisma.mcpLog.findMany({
+      where,
+      orderBy: [{ startedAt: "desc" }, { createdAt: "desc" }],
+      take: pageSize,
+      skip: (page - 1) * pageSize,
+    }),
+  ]);
   return {
-    list: listed.rows.map(toView),
-    total: Number(count.rows[0]?.count ?? 0),
+    list: listed.map((row) => toView(row)),
+    total,
   };
 }
 
@@ -126,15 +113,13 @@ export async function getMcpLog(
   username: string,
   id: string,
 ): Promise<McpCallLogView | null> {
-  const result = await query<LogRow>(
-    `SELECT id, username, api_key_id, api_key_name, channel, tool, method, path,
-            arguments, status, ok, result_key, result_error,
-            started_at, completed_at, duration_ms, created_at
-     FROM sandbox.mcp_logs
-     WHERE id = $1 AND tool = ANY($2::text[]) AND (username = $3 OR username IS NULL)`,
-    [id, [...LOGGED_TOOLS], username],
-  );
-  const row = result.rows[0];
+  const row = await prisma.mcpLog.findFirst({
+    where: {
+      id,
+      tool: { in: [...LOGGED_TOOLS] },
+      OR: [{ username }, { username: null }],
+    },
+  });
   return row ? toView(row) : null;
 }
 

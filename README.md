@@ -25,7 +25,7 @@
        │    │    │
        │    │    └── Kubernetes API（Pod exec、日志、读文件）
        │    └─────── Sealos App Launchpad（应用的增删改查、启停、公网域名）
-       └──────────── PostgreSQL（public.users 登录；schema sandbox 存放模板、令牌、标签、空闲状态、调用日志）
+       └──────────── PostgreSQL + Prisma（public.users 登录；schema sandbox 存放模板、令牌、标签、空闲状态、调用日志）
                      对象存储（可选，命令结果 JSON）
 ```
 
@@ -48,7 +48,7 @@ npm run db:init
 npm run dev
 ```
 
-打开 [http://localhost:3000/login](http://localhost:3000/login)。`db:init` 创建 schema `sandbox` 和其中的业务表，不改动 `public.users`。登录名是这张表的 `account`。启动后到「模板管理」里新建模板，再创建沙箱。
+打开 [http://localhost:3000/login](http://localhost:3000/login)。`db:init` 用 Prisma `db push` 同步 schema `sandbox` 业务表，并补齐部分索引，不改动 `public.users`。登录名是这张表的 `account`。启动后到「模板管理」里新建模板，再创建沙箱。
 
 生产构建：
 
@@ -162,18 +162,22 @@ CPU 档位：`0.1 / 0.2 / 0.5 / 1 / 2 / 3 / 4 / 8` 核。
 ## 开发
 
 ```bash
-npm run dev       # 开发服务器
-npm run lint      # ESLint
-npm run build     # 生产构建
-npm run db:init   # 初始化管理员用户
+npm run dev         # 开发服务器
+npm run lint        # ESLint
+npm run build       # 生产构建（含 prisma generate）
+npm run db:init     # Prisma 同步 sandbox 表与额外索引
+npm run db:generate # 仅生成 Prisma Client
+npm run db:push     # 仅 prisma db push
 ```
 
 ```text
+prisma/            Prisma schema 与额外索引 SQL
 src/app/(app)/     控制台页面
 src/app/api/       REST、登录和 MCP
 src/components/    控制台组件
 src/lib/auth/      会话与用户
 src/lib/apikey/    令牌
+src/lib/db/        Prisma 客户端
 src/lib/sandbox/   沙箱模型、命令、文件、空闲关机
 src/lib/billing/   用量段与账单汇总
 src/lib/template/  模板

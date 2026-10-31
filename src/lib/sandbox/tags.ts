@@ -1,4 +1,4 @@
-import { query } from "@/lib/db/postgres";
+import { prisma } from "@/lib/db/prisma";
 import type { Sandbox } from "@/lib/sandbox/schema";
 
 export async function setSandboxTags(
@@ -6,12 +6,10 @@ export async function setSandboxTags(
   sandboxId: string,
   tags: string[]
 ): Promise<void> {
-  await query(
-    `UPDATE sandbox.records
-     SET tags = $3::text[]
-     WHERE owner = $1 AND sandbox_id = $2`,
-    [owner, sandboxId, tags]
-  );
+  await prisma.sandboxRecord.updateMany({
+    where: { owner, sandboxId },
+    data: { tags },
+  });
 }
 
 export async function withSandboxTags(
@@ -19,15 +17,14 @@ export async function withSandboxTags(
   sandboxes: Sandbox[]
 ): Promise<Sandbox[]> {
   if (sandboxes.length === 0) return sandboxes;
-  const result = await query<{ sandbox_id: string; tags: string[] | null }>(
-    `SELECT sandbox_id, tags
-     FROM sandbox.records
-     WHERE owner = $1 AND sandbox_id = ANY($2::text[])`,
-    [owner, sandboxes.map((sandbox) => sandbox.id)]
-  );
-  const byId = new Map(
-    result.rows.map((row) => [row.sandbox_id, row.tags ?? []])
-  );
+  const rows = await prisma.sandboxRecord.findMany({
+    where: {
+      owner,
+      sandboxId: { in: sandboxes.map((sandbox) => sandbox.id) },
+    },
+    select: { sandboxId: true, tags: true },
+  });
+  const byId = new Map(rows.map((row) => [row.sandboxId, row.tags ?? []]));
   return sandboxes.map((sandbox) => ({
     ...sandbox,
     tags: byId.get(sandbox.id) ?? [],
@@ -40,13 +37,11 @@ export async function findSandboxIdsByTags(
   tags: string[]
 ): Promise<string[]> {
   if (tags.length === 0) return [];
-  const result = await query<{ sandbox_id: string }>(
-    `SELECT sandbox_id
-     FROM sandbox.records
-     WHERE owner = $1 AND tags @> $2::text[]`,
-    [owner, tags]
-  );
-  return result.rows.map((row) => row.sandbox_id);
+  const rows = await prisma.sandboxRecord.findMany({
+    where: { owner, tags: { hasEvery: tags } },
+    select: { sandboxId: true },
+  });
+  return rows.map((row) => row.sandboxId);
 }
 
 /** 每个关键词都能在某个标签里找到的沙箱 ID */
@@ -55,20 +50,15 @@ export async function findSandboxIdsByTagQuery(
   terms: string[]
 ): Promise<string[]> {
   if (terms.length === 0) return [];
-  const result = await query<{ sandbox_id: string }>(
-    `SELECT sandbox_id
-     FROM sandbox.records
-     WHERE owner = $1
-       AND NOT EXISTS (
-         SELECT 1
-         FROM unnest($2::text[]) AS term
-         WHERE NOT EXISTS (
-           SELECT 1
-           FROM unnest(tags) AS tag
-           WHERE strpos(tag, term) > 0
-         )
-       )`,
-    [owner, terms]
-  );
-  return result.rows.map((row) => row.sandbox_id);
+  const rows = await prisma.sandboxRecord.findMany({
+    where: { owner },
+    select: { sandboxId: true, tags: true },
+  });
+  return rows
+    .filter((row) =>
+      terms.every((term) =>
+        (row.tags ?? []).some((tag) => tag.includes(term))
+      )
+    )
+    .map((row) => row.sandboxId);
 }

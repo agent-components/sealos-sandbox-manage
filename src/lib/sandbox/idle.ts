@@ -1,4 +1,4 @@
-import { query } from "@/lib/db/postgres";
+import { prisma } from "@/lib/db/prisma";
 import {
   DEFAULT_IDLE_CONFIG,
   type IdleConfig,
@@ -6,21 +6,21 @@ import {
 } from "@/lib/sandbox/schema";
 
 type IdleRow = {
-  sandbox_id: string;
-  auto_shutdown: boolean;
-  idle_minutes: number;
-  last_activity_at: Date | null;
+  sandboxId: string;
+  autoShutdown: boolean;
+  idleMinutes: number;
+  lastActivityAt: Date | null;
 };
 
 function asConfig(
-  row: Pick<IdleRow, "auto_shutdown" | "idle_minutes"> | null
+  row: Pick<IdleRow, "autoShutdown" | "idleMinutes"> | null
 ): IdleConfig {
   if (!row) return { ...DEFAULT_IDLE_CONFIG };
   return {
-    autoShutdown: !!row.auto_shutdown,
+    autoShutdown: !!row.autoShutdown,
     idleMinutes:
-      typeof row.idle_minutes === "number" && row.idle_minutes >= 5
-        ? row.idle_minutes
+      typeof row.idleMinutes === "number" && row.idleMinutes >= 5
+        ? row.idleMinutes
         : DEFAULT_IDLE_CONFIG.idleMinutes,
   };
 }
@@ -30,14 +30,13 @@ export async function setSandboxIdleConfig(
   sandboxId: string,
   config: IdleConfig
 ): Promise<void> {
-  await query(
-    `UPDATE sandbox.records
-     SET auto_shutdown = $3,
-         idle_minutes = $4,
-         updated_at = now()
-     WHERE owner = $1 AND sandbox_id = $2`,
-    [owner, sandboxId, config.autoShutdown, config.idleMinutes]
-  );
+  await prisma.sandboxRecord.updateMany({
+    where: { owner, sandboxId },
+    data: {
+      autoShutdown: config.autoShutdown,
+      idleMinutes: config.idleMinutes,
+    },
+  });
 }
 
 export async function withSandboxIdle(
@@ -45,13 +44,19 @@ export async function withSandboxIdle(
   sandboxes: Sandbox[]
 ): Promise<Sandbox[]> {
   if (sandboxes.length === 0) return sandboxes;
-  const result = await query<IdleRow>(
-    `SELECT sandbox_id, auto_shutdown, idle_minutes, last_activity_at
-     FROM sandbox.records
-     WHERE owner = $1 AND sandbox_id = ANY($2::text[])`,
-    [owner, sandboxes.map((sandbox) => sandbox.id)]
-  );
-  const byId = new Map(result.rows.map((row) => [row.sandbox_id, row]));
+  const rows = await prisma.sandboxRecord.findMany({
+    where: {
+      owner,
+      sandboxId: { in: sandboxes.map((sandbox) => sandbox.id) },
+    },
+    select: {
+      sandboxId: true,
+      autoShutdown: true,
+      idleMinutes: true,
+      lastActivityAt: true,
+    },
+  });
+  const byId = new Map(rows.map((row) => [row.sandboxId, row]));
   return sandboxes.map((sandbox) => {
     const row = byId.get(sandbox.id);
     const config = asConfig(row ?? null);
@@ -59,8 +64,8 @@ export async function withSandboxIdle(
       ...sandbox,
       autoShutdown: config.autoShutdown,
       idleMinutes: config.idleMinutes,
-      lastActivityAt: row?.last_activity_at
-        ? row.last_activity_at.toISOString()
+      lastActivityAt: row?.lastActivityAt
+        ? row.lastActivityAt.toISOString()
         : sandbox.lastActivityAt,
     };
   });
@@ -69,12 +74,10 @@ export async function withSandboxIdle(
 /** MCP 工具调用开始：有记录的沙箱才增加 inflight。 */
 export async function beginMcpActivity(sandboxId: string): Promise<void> {
   try {
-    await query(
-      `UPDATE sandbox.records
-       SET inflight = inflight + 1, updated_at = now()
-       WHERE sandbox_id = $1`,
-      [sandboxId]
-    );
+    await prisma.$executeRaw`
+      UPDATE sandbox.records
+      SET inflight = inflight + 1, updated_at = now()
+      WHERE sandbox_id = ${sandboxId}`;
   } catch (error) {
     console.error("空闲 inflight 增加失败", error);
   }
@@ -91,14 +94,12 @@ export async function endMcpActivity(
 ): Promise<void> {
   const touch = opts?.touch !== false;
   try {
-    await query(
-      `UPDATE sandbox.records
-       SET inflight = GREATEST(0, inflight - 1),
-           last_activity_at = CASE WHEN $2::boolean THEN now() ELSE last_activity_at END,
-           updated_at = now()
-       WHERE sandbox_id = $1`,
-      [sandboxId, touch]
-    );
+    await prisma.$executeRaw`
+      UPDATE sandbox.records
+      SET inflight = GREATEST(0, inflight - 1),
+          last_activity_at = CASE WHEN ${touch}::boolean THEN now() ELSE last_activity_at END,
+          updated_at = now()
+      WHERE sandbox_id = ${sandboxId}`;
   } catch (error) {
     console.error("空闲活动结束失败", error);
   }
@@ -106,12 +107,10 @@ export async function endMcpActivity(
 
 /** 开机时刷新活跃时间，避免沿用关机前的时间戳被立刻再次空闲关机。 */
 export async function touchSandboxActivity(sandboxId: string): Promise<void> {
-  await query(
-    `UPDATE sandbox.records
-     SET last_activity_at = now(), updated_at = now()
-     WHERE sandbox_id = $1`,
-    [sandboxId],
-  );
+  await prisma.sandboxRecord.updateMany({
+    where: { sandboxId },
+    data: { lastActivityAt: new Date() },
+  });
 }
 
 export type IdleCandidate = {
@@ -125,21 +124,21 @@ export type IdleCandidate = {
 export async function listIdleShutdownCandidates(
   now = new Date()
 ): Promise<IdleCandidate[]> {
-  const result = await query<{
-    sandbox_id: string;
-    owner: string;
-    idle_minutes: number;
-    last_activity_at: Date;
-  }>(
-    `SELECT sandbox_id, owner, GREATEST(idle_minutes, 5) AS idle_minutes, last_activity_at
-     FROM sandbox.records
-     WHERE auto_shutdown = true
-       AND state = 'running'
-       AND inflight <= 0
-       AND last_activity_at <= $1::timestamptz - (GREATEST(idle_minutes, 5) * interval '1 minute')`,
-    [now]
-  );
-  return result.rows.map((row) => ({
+  const rows = await prisma.$queryRaw<
+    {
+      sandbox_id: string;
+      owner: string;
+      idle_minutes: number;
+      last_activity_at: Date;
+    }[]
+  >`
+    SELECT sandbox_id, owner, GREATEST(idle_minutes, 5) AS idle_minutes, last_activity_at
+    FROM sandbox.records
+    WHERE auto_shutdown = true
+      AND state = 'running'
+      AND inflight <= 0
+      AND last_activity_at <= ${now}::timestamptz - (GREATEST(idle_minutes, 5) * interval '1 minute')`;
+  return rows.map((row) => ({
     sandboxId: row.sandbox_id,
     owner: row.owner,
     idleMinutes: row.idle_minutes,

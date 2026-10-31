@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { query } from "@/lib/db/postgres";
+import { prisma } from "@/lib/db/prisma";
 
 export type PublicUser = {
   username: string;
@@ -30,46 +30,38 @@ export async function authenticateUser(
   username: string,
   password: string,
 ): Promise<PublicUser | null> {
-  const result = await query<UserRow>(
-    `SELECT account, "displayName"
-     FROM public.users
-     WHERE account = $1 AND password = $2 AND status = 'ACTIVE'`,
-    [username, password],
-  );
-  return toPublicUser(result.rows[0]);
+  const rows = await prisma.$queryRaw<UserRow[]>`
+    SELECT account, "displayName"
+    FROM public.users
+    WHERE account = ${username} AND password = ${password} AND status = 'ACTIVE'`;
+  return toPublicUser(rows[0]);
 }
 
 export async function findUser(username: string): Promise<PublicUser | null> {
-  const result = await query<UserRow>(
-    `SELECT account, "displayName" FROM public.users WHERE account = $1`,
-    [username],
-  );
-  return toPublicUser(result.rows[0]);
+  const rows = await prisma.$queryRaw<UserRow[]>`
+    SELECT account, "displayName" FROM public.users WHERE account = ${username}`;
+  return toPublicUser(rows[0]);
 }
 
 /** 未过期则复用 public.users.token，否则签发一枚新的。 */
 export async function issueUserToken(username: string): Promise<string> {
-  const existing = await query<{ token: string }>(
-    `SELECT token
-     FROM public.users
-     WHERE account = $1
-       AND status = 'ACTIVE'
-       AND token IS NOT NULL
-       AND "tokenExpiredAt" > now()`,
-    [username],
-  );
-  const current = existing.rows[0]?.token;
+  const existing = await prisma.$queryRaw<{ token: string }[]>`
+    SELECT token
+    FROM public.users
+    WHERE account = ${username}
+      AND status = 'ACTIVE'
+      AND token IS NOT NULL
+      AND "tokenExpiredAt" > now()`;
+  const current = existing[0]?.token;
   if (current && isUserToken(current)) return current;
 
   const token = randomBytes(32).toString("hex");
   const expiredAt = new Date(Date.now() + TOKEN_TTL_MS);
-  const result = await query(
-    `UPDATE public.users
-     SET token = $2, "tokenExpiredAt" = $3, "updatedAt" = now()
-     WHERE account = $1 AND status = 'ACTIVE'`,
-    [username, token, expiredAt],
-  );
-  if ((result.rowCount ?? 0) === 0) {
+  const updated = await prisma.$executeRaw`
+    UPDATE public.users
+    SET token = ${token}, "tokenExpiredAt" = ${expiredAt}, "updatedAt" = now()
+    WHERE account = ${username} AND status = 'ACTIVE'`;
+  if (updated === 0) {
     throw new Error("无法写入登录 token");
   }
   return token;
@@ -77,23 +69,19 @@ export async function issueUserToken(username: string): Promise<string> {
 
 export async function findUserByToken(token: string): Promise<PublicUser | null> {
   if (!isUserToken(token)) return null;
-  const result = await query<UserRow>(
-    `SELECT account, "displayName"
-     FROM public.users
-     WHERE token = $1
-       AND status = 'ACTIVE'
-       AND "tokenExpiredAt" > now()`,
-    [token],
-  );
-  return toPublicUser(result.rows[0]);
+  const rows = await prisma.$queryRaw<UserRow[]>`
+    SELECT account, "displayName"
+    FROM public.users
+    WHERE token = ${token}
+      AND status = 'ACTIVE'
+      AND "tokenExpiredAt" > now()`;
+  return toPublicUser(rows[0]);
 }
 
 export async function clearUserToken(token: string): Promise<void> {
   if (!isUserToken(token)) return;
-  await query(
-    `UPDATE public.users
-     SET token = NULL, "tokenExpiredAt" = NULL, "updatedAt" = now()
-     WHERE token = $1`,
-    [token],
-  );
+  await prisma.$executeRaw`
+    UPDATE public.users
+    SET token = NULL, "tokenExpiredAt" = NULL, "updatedAt" = now()
+    WHERE token = ${token}`;
 }

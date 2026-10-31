@@ -1,0 +1,119 @@
+// 业务表在 schema sandbox。登录复用 public.users，不在此建用户表。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["sandbox"]
+}
+
+model ApiKey {
+  id           String    @id
+  name         String
+  username     String
+  key          String    @unique
+  sandboxIds   String[]  @default([]) @map("sandbox_ids")
+  /// 空数组 = 不限制 MCP 工具；非空 = 仅允许列表中的工具
+  allowedTools String[]  @default([]) @map("allowed_tools")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt   DateTime? @map("last_used_at") @db.Timestamptz(6)
+
+  @@index([username], map: "api_keys_username_idx")
+  @@map("api_keys")
+  @@schema("sandbox")
+}
+
+model Template {
+  id            String   @id
+  name          String
+  description   String?
+  image         String
+  imageRegistry Json?    @map("image_registry")
+  launchCommand Json?    @map("launch_command")
+  cpu           Float
+  memoryGi      Float    @map("memory_gi")
+  replicas      Int      @default(1)
+  autoShutdown  Boolean  @default(false) @map("auto_shutdown")
+  idleMinutes   Int      @default(5) @map("idle_minutes")
+  ports         Json     @default("[]")
+  env           Json     @default("[]")
+  storage       Json     @default("[]")
+  configMap     Json     @default("[]") @map("config_map")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("templates")
+  @@schema("sandbox")
+}
+
+model SandboxRecord {
+  sandboxId      String   @id @map("sandbox_id")
+  owner          String
+  templateId     String   @map("template_id")
+  tags           String[] @default([])
+  state          String   @default("starting")
+  autoShutdown   Boolean  @default(false) @map("auto_shutdown")
+  idleMinutes    Int      @default(5) @map("idle_minutes")
+  lastActivityAt DateTime @default(now()) @map("last_activity_at") @db.Timestamptz(6)
+  inflight       Int      @default(0)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([owner], map: "records_owner_idx")
+  @@index([tags], type: Gin, map: "records_tags_idx")
+  @@map("records")
+  @@schema("sandbox")
+}
+
+model McpLog {
+  id          String   @id
+  username    String?
+  apiKeyId    String?  @map("api_key_id")
+  apiKeyName  String?  @map("api_key_name")
+  channel     String   @default("mcp")
+  tool        String
+  method      String
+  path        String
+  arguments   Json
+  status      Int
+  ok          Boolean
+  resultKey   String?  @map("result_key")
+  resultError String?  @map("result_error")
+  startedAt   DateTime @map("started_at") @db.Timestamptz(6)
+  completedAt DateTime @map("completed_at") @db.Timestamptz(6)
+  durationMs  Int      @map("duration_ms")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([startedAt(sort: Desc)], map: "mcp_logs_started_idx")
+  @@index([tool, startedAt(sort: Desc)], map: "mcp_logs_tool_started_idx")
+  @@index([username, startedAt(sort: Desc)], map: "mcp_logs_username_started_idx")
+  @@index([apiKeyId, startedAt(sort: Desc)], map: "mcp_logs_api_key_started_idx")
+  @@map("mcp_logs")
+  @@schema("sandbox")
+}
+
+/// 用量段：规格或运行状态变化时切段；endedAt 为空表示当前段仍在进行。
+model UsageSegment {
+  id            BigInt    @id @default(autoincrement())
+  sandboxId     String    @map("sandbox_id")
+  owner         String
+  computeActive Boolean   @map("compute_active")
+  cpu           Float
+  memoryGi      Float     @map("memory_gi")
+  diskGi        Float     @map("disk_gi")
+  publicPorts   Int       @map("public_ports")
+  priceCpu      Float     @map("price_cpu")
+  priceMemory   Float     @map("price_memory")
+  priceStorage  Float     @map("price_storage")
+  pricePort     Float     @map("price_port")
+  startedAt     DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  endedAt       DateTime? @map("ended_at") @db.Timestamptz(6)
+
+  @@index([owner, startedAt(sort: Desc)], map: "usage_segments_owner_started_idx")
+  @@index([sandboxId, startedAt(sort: Desc)], map: "usage_segments_sandbox_started_idx")
+  @@map("usage_segments")
+  @@schema("sandbox")
+}

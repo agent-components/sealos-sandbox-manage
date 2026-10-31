@@ -1,4 +1,4 @@
-import { query } from "@/lib/db/postgres";
+import { prisma } from "@/lib/db/prisma";
 
 export type BillingUsage = {
   cpuCoreHours: number;
@@ -24,18 +24,18 @@ export type BillingReport = {
 };
 
 type SegmentRow = {
-  sandbox_id: string;
-  compute_active: boolean;
+  sandboxId: string;
+  computeActive: boolean;
   cpu: number;
-  memory_gi: number;
-  disk_gi: number;
-  public_ports: number;
-  price_cpu: number;
-  price_memory: number;
-  price_storage: number;
-  price_port: number;
-  started_at: Date;
-  ended_at: Date | null;
+  memoryGi: number;
+  diskGi: number;
+  publicPorts: number;
+  priceCpu: number;
+  priceMemory: number;
+  priceStorage: number;
+  pricePort: number;
+  startedAt: Date;
+  endedAt: Date | null;
 };
 
 function round4(value: number): number {
@@ -76,23 +76,23 @@ function addSegment(
   from: Date,
   to: Date,
 ): void {
-  const start = row.started_at > from ? row.started_at : from;
-  const endRaw = row.ended_at ?? to;
+  const start = row.startedAt > from ? row.startedAt : from;
+  const endRaw = row.endedAt ?? to;
   const end = endRaw < to ? endRaw : to;
   const ms = end.getTime() - start.getTime();
   if (ms <= 0) return;
   const hours = ms / 3_600_000;
 
-  usage.storageGiHours += row.disk_gi * hours;
-  usage.storageCost += row.disk_gi * hours * row.price_storage;
+  usage.storageGiHours += row.diskGi * hours;
+  usage.storageCost += row.diskGi * hours * row.priceStorage;
 
-  if (row.compute_active) {
+  if (row.computeActive) {
     usage.cpuCoreHours += row.cpu * hours;
-    usage.memoryGiHours += row.memory_gi * hours;
-    usage.portHours += row.public_ports * hours;
-    usage.cpuCost += row.cpu * hours * row.price_cpu;
-    usage.memoryCost += row.memory_gi * hours * row.price_memory;
-    usage.portCost += row.public_ports * hours * row.price_port;
+    usage.memoryGiHours += row.memoryGi * hours;
+    usage.portHours += row.publicPorts * hours;
+    usage.cpuCost += row.cpu * hours * row.priceCpu;
+    usage.memoryCost += row.memoryGi * hours * row.priceMemory;
+    usage.portCost += row.publicPorts * hours * row.pricePort;
   }
 
   usage.totalCost =
@@ -114,26 +114,23 @@ export async function getBillingReport(
     };
   }
 
-  const result = await query<SegmentRow>(
-    `SELECT sandbox_id, compute_active, cpu, memory_gi, disk_gi, public_ports,
-            price_cpu, price_memory, price_storage, price_port,
-            started_at, ended_at
-     FROM sandbox.usage_segments
-     WHERE owner = $1
-       AND started_at < $3
-       AND (ended_at IS NULL OR ended_at > $2)
-     ORDER BY sandbox_id, started_at`,
-    [owner, from, to],
-  );
+  const rows = await prisma.usageSegment.findMany({
+    where: {
+      owner,
+      startedAt: { lt: to },
+      OR: [{ endedAt: null }, { endedAt: { gt: from } }],
+    },
+    orderBy: [{ sandboxId: "asc" }, { startedAt: "asc" }],
+  });
 
   const bySandbox = new Map<string, BillingUsage>();
   const total = emptyUsage();
 
-  for (const row of result.rows) {
-    let usage = bySandbox.get(row.sandbox_id);
+  for (const row of rows) {
+    let usage = bySandbox.get(row.sandboxId);
     if (!usage) {
       usage = emptyUsage();
-      bySandbox.set(row.sandbox_id, usage);
+      bySandbox.set(row.sandboxId, usage);
     }
     addSegment(usage, row, from, to);
     addSegment(total, row, from, to);

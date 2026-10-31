@@ -1,4 +1,5 @@
-import { query } from "@/lib/db/postgres";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/db/prisma";
 import type {
   Template,
   TemplateConfigMap,
@@ -12,59 +13,57 @@ type TemplateRow = {
   name: string;
   description: string | null;
   image: string;
-  image_registry: Template["imageRegistry"] | null;
-  launch_command: Template["launchCommand"] | null;
+  imageRegistry: Prisma.JsonValue | null;
+  launchCommand: Prisma.JsonValue | null;
   cpu: number;
-  memory_gi: number;
+  memoryGi: number;
   replicas: number;
-  auto_shutdown: boolean;
-  idle_minutes: number;
-  ports: TemplatePort[] | null;
-  env: TemplateEnv[] | null;
-  storage: TemplateStorage[] | null;
-  config_map: TemplateConfigMap[] | null;
-  created_at: Date;
-  updated_at: Date;
+  autoShutdown: boolean;
+  idleMinutes: number;
+  ports: Prisma.JsonValue;
+  env: Prisma.JsonValue;
+  storage: Prisma.JsonValue;
+  configMap: Prisma.JsonValue;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
-const SELECT_COLUMNS = `id, name, description, image, image_registry, launch_command,
-  cpu, memory_gi, replicas, auto_shutdown, idle_minutes,
-  ports, env, storage, config_map, created_at, updated_at`;
+function asJsonArray<T>(value: Prisma.JsonValue | null | undefined): T[] {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value as T[];
+  return [];
+}
 
 function toTemplate(row: TemplateRow): Template {
+  const ports = asJsonArray<TemplatePort>(row.ports);
   return {
     id: row.id,
     name: row.name,
     description: row.description ?? undefined,
     image: row.image,
-    imageRegistry: row.image_registry ?? null,
-    launchCommand: row.launch_command ?? undefined,
+    imageRegistry: (row.imageRegistry as Template["imageRegistry"]) ?? null,
+    launchCommand: (row.launchCommand as Template["launchCommand"]) ?? undefined,
     cpu: row.cpu,
-    memoryGi: row.memory_gi,
+    memoryGi: row.memoryGi,
     replicas: row.replicas ?? 1,
-    autoShutdown: row.auto_shutdown ?? false,
+    autoShutdown: row.autoShutdown ?? false,
     idleMinutes:
-      typeof row.idle_minutes === "number" && row.idle_minutes >= 5
-        ? row.idle_minutes
+      typeof row.idleMinutes === "number" && row.idleMinutes >= 5
+        ? row.idleMinutes
         : 5,
-    ports: row.ports?.length
-      ? row.ports
+    ports: ports.length
+      ? ports
       : [{ number: 80, protocol: "http", isPublic: true }],
-    env: row.env ?? [],
-    storage: row.storage ?? [],
-    configMap: row.config_map ?? [],
-    createdAt: row.created_at.toISOString(),
-    updatedAt: row.updated_at.toISOString(),
+    env: asJsonArray<TemplateEnv>(row.env),
+    storage: asJsonArray<TemplateStorage>(row.storage),
+    configMap: asJsonArray<TemplateConfigMap>(row.configMap),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
-function jsonb(value: unknown): string | null {
-  if (value === undefined || value === null) return null;
-  return JSON.stringify(value);
-}
-
-function containsPattern(value: string): string {
-  return `%${value.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+function toJson(value: unknown): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue;
 }
 
 export async function listTemplates(): Promise<Template[]> {
@@ -78,117 +77,113 @@ export async function listTemplatesPage(opts?: {
   pageSize?: number | null;
 }): Promise<{ list: Template[]; total: number }> {
   const keyword = opts?.q?.trim();
-  const where = keyword
-    ? `WHERE id ILIKE $1 ESCAPE '\\' OR name ILIKE $1 ESCAPE '\\' OR image ILIKE $1 ESCAPE '\\'`
-    : "";
-  const params: unknown[] = keyword ? [containsPattern(keyword)] : [];
-  const count = await query<{ count: string }>(
-    `SELECT count(*)::text AS count FROM sandbox.templates ${where}`,
-    params,
-  );
-  let sql = `SELECT ${SELECT_COLUMNS} FROM sandbox.templates ${where} ORDER BY created_at ASC`;
-  if (opts?.pageSize != null) {
-    const pageSize = opts.pageSize;
-    const current = Math.max(opts.current ?? 1, 1);
-    params.push(pageSize, (current - 1) * pageSize);
-    sql += ` LIMIT $${params.length - 1} OFFSET $${params.length}`;
-  }
-  const result = await query<TemplateRow>(sql, params);
+  const where: Prisma.TemplateWhereInput = keyword
+    ? {
+        OR: [
+          { id: { contains: keyword, mode: "insensitive" } },
+          { name: { contains: keyword, mode: "insensitive" } },
+          { image: { contains: keyword, mode: "insensitive" } },
+        ],
+      }
+    : {};
+
+  const total = await prisma.template.count({ where });
+  const rows = await prisma.template.findMany({
+    where,
+    orderBy: { createdAt: "asc" },
+    ...(opts?.pageSize != null
+      ? {
+          take: opts.pageSize,
+          skip: (Math.max(opts.current ?? 1, 1) - 1) * opts.pageSize,
+        }
+      : {}),
+  });
   return {
-    list: result.rows.map(toTemplate),
-    total: Number(count.rows[0]?.count ?? 0),
+    list: rows.map((row) => toTemplate(row)),
+    total,
   };
 }
 
 export async function getTemplate(id: string): Promise<Template | null> {
-  const result = await query<TemplateRow>(
-    `SELECT ${SELECT_COLUMNS} FROM sandbox.templates WHERE id = $1`,
-    [id],
-  );
-  const row = result.rows[0];
+  const row = await prisma.template.findUnique({ where: { id } });
   return row ? toTemplate(row) : null;
 }
 
 export async function createTemplate(
   input: Omit<Template, "createdAt" | "updatedAt">,
 ): Promise<Template> {
-  const result = await query<TemplateRow>(
-    `INSERT INTO sandbox.templates (
-       id, name, description, image, image_registry, launch_command,
-       cpu, memory_gi, replicas, auto_shutdown, idle_minutes,
-       ports, env, storage, config_map
-     )
-     VALUES (
-       $1, $2, $3, $4, $5::jsonb, $6::jsonb,
-       $7, $8, $9, $10, $11,
-       $12::jsonb, $13::jsonb, $14::jsonb, $15::jsonb
-     )
-     RETURNING ${SELECT_COLUMNS}`,
-    [
-      input.id,
-      input.name,
-      input.description ?? null,
-      input.image,
-      jsonb(input.imageRegistry ?? null),
-      jsonb(input.launchCommand ?? null),
-      input.cpu,
-      input.memoryGi,
-      input.replicas ?? 1,
-      input.autoShutdown ?? false,
-      input.idleMinutes ?? 5,
-      JSON.stringify(input.ports),
-      JSON.stringify(input.env ?? []),
-      JSON.stringify(input.storage ?? []),
-      JSON.stringify(input.configMap ?? []),
-    ],
-  );
-  return toTemplate(result.rows[0]!);
+  const row = await prisma.template.create({
+    data: {
+      id: input.id,
+      name: input.name,
+      description: input.description ?? null,
+      image: input.image,
+      imageRegistry: input.imageRegistry
+        ? toJson(input.imageRegistry)
+        : Prisma.JsonNull,
+      launchCommand: input.launchCommand
+        ? toJson(input.launchCommand)
+        : Prisma.JsonNull,
+      cpu: input.cpu,
+      memoryGi: input.memoryGi,
+      replicas: input.replicas ?? 1,
+      autoShutdown: input.autoShutdown ?? false,
+      idleMinutes: input.idleMinutes ?? 5,
+      ports: toJson(input.ports),
+      env: toJson(input.env ?? []),
+      storage: toJson(input.storage ?? []),
+      configMap: toJson(input.configMap ?? []),
+    },
+  });
+  return toTemplate(row);
 }
-
-const PATCH_COLUMNS: Record<string, { column: string; jsonb?: boolean }> = {
-  name: { column: "name" },
-  description: { column: "description" },
-  image: { column: "image" },
-  imageRegistry: { column: "image_registry", jsonb: true },
-  launchCommand: { column: "launch_command", jsonb: true },
-  cpu: { column: "cpu" },
-  memoryGi: { column: "memory_gi" },
-  replicas: { column: "replicas" },
-  autoShutdown: { column: "auto_shutdown" },
-  idleMinutes: { column: "idle_minutes" },
-  ports: { column: "ports", jsonb: true },
-  env: { column: "env", jsonb: true },
-  storage: { column: "storage", jsonb: true },
-  configMap: { column: "config_map", jsonb: true },
-};
 
 export async function updateTemplate(
   id: string,
   patch: Partial<Omit<Template, "id" | "createdAt" | "updatedAt">>,
 ): Promise<Template | null> {
-  const sets = ["updated_at = now()"];
-  const params: unknown[] = [];
-  for (const [key, spec] of Object.entries(PATCH_COLUMNS)) {
-    if (!(key in patch)) continue;
-    const value = patch[key as keyof typeof patch];
-    if (value === undefined) continue;
-    params.push(spec.jsonb ? jsonb(value) : value);
-    const cast = spec.jsonb ? "::jsonb" : "";
-    sets.push(`${spec.column} = $${params.length}${cast}`);
+  const data: Prisma.TemplateUpdateInput = {};
+  if (patch.name !== undefined) data.name = patch.name;
+  if (patch.description !== undefined) data.description = patch.description;
+  if (patch.image !== undefined) data.image = patch.image;
+  if (patch.imageRegistry !== undefined) {
+    data.imageRegistry =
+      patch.imageRegistry == null ? Prisma.JsonNull : toJson(patch.imageRegistry);
   }
-  params.push(id);
-  const result = await query<TemplateRow>(
-    `UPDATE sandbox.templates
-     SET ${sets.join(", ")}
-     WHERE id = $${params.length}
-     RETURNING ${SELECT_COLUMNS}`,
-    params,
-  );
-  const row = result.rows[0];
-  return row ? toTemplate(row) : null;
+  if (patch.launchCommand !== undefined) {
+    data.launchCommand =
+      patch.launchCommand == null ? Prisma.JsonNull : toJson(patch.launchCommand);
+  }
+  if (patch.cpu !== undefined) data.cpu = patch.cpu;
+  if (patch.memoryGi !== undefined) data.memoryGi = patch.memoryGi;
+  if (patch.replicas !== undefined) data.replicas = patch.replicas;
+  if (patch.autoShutdown !== undefined) data.autoShutdown = patch.autoShutdown;
+  if (patch.idleMinutes !== undefined) data.idleMinutes = patch.idleMinutes;
+  if (patch.ports !== undefined) data.ports = toJson(patch.ports);
+  if (patch.env !== undefined) data.env = toJson(patch.env);
+  if (patch.storage !== undefined) data.storage = toJson(patch.storage);
+  if (patch.configMap !== undefined) data.configMap = toJson(patch.configMap);
+
+  if (Object.keys(data).length === 0) {
+    const existing = await prisma.template.findUnique({ where: { id } });
+    return existing ? toTemplate(existing) : null;
+  }
+
+  try {
+    const row = await prisma.template.update({ where: { id }, data });
+    return toTemplate(row);
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function deleteTemplate(id: string): Promise<boolean> {
-  const result = await query(`DELETE FROM sandbox.templates WHERE id = $1`, [id]);
-  return (result.rowCount ?? 0) > 0;
+  const result = await prisma.template.deleteMany({ where: { id } });
+  return result.count > 0;
 }

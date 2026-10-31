@@ -1,5 +1,5 @@
 import { getBillingPrices } from "@/lib/billing/prices";
-import { query } from "@/lib/db/postgres";
+import { prisma } from "@/lib/db/prisma";
 import type { LaunchpadApp } from "@/lib/sealos/map";
 import { toSandbox } from "@/lib/sealos/map";
 
@@ -15,21 +15,21 @@ export type UsageSnapshot = {
 };
 
 type OpenSegmentRow = {
-  id: string;
-  compute_active: boolean;
+  id: bigint;
+  computeActive: boolean;
   cpu: number;
-  memory_gi: number;
-  disk_gi: number;
-  public_ports: number;
+  memoryGi: number;
+  diskGi: number;
+  publicPorts: number;
 };
 
 function sameSnapshot(open: OpenSegmentRow, snap: UsageSnapshot): boolean {
   return (
-    open.compute_active === snap.computeActive &&
+    open.computeActive === snap.computeActive &&
     open.cpu === snap.cpu &&
-    open.memory_gi === snap.memoryGi &&
-    open.disk_gi === snap.diskGi &&
-    open.public_ports === snap.publicPorts
+    open.memoryGi === snap.memoryGi &&
+    open.diskGi === snap.diskGi &&
+    open.publicPorts === snap.publicPorts
   );
 }
 
@@ -55,48 +55,44 @@ export function snapshotFromApp(
 async function getOpenSegment(
   sandboxId: string,
 ): Promise<OpenSegmentRow | null> {
-  const result = await query<OpenSegmentRow>(
-    `SELECT id::text, compute_active, cpu, memory_gi, disk_gi, public_ports
-     FROM sandbox.usage_segments
-     WHERE sandbox_id = $1 AND ended_at IS NULL
-     LIMIT 1`,
-    [sandboxId],
-  );
-  return result.rows[0] ?? null;
+  return prisma.usageSegment.findFirst({
+    where: { sandboxId, endedAt: null },
+    select: {
+      id: true,
+      computeActive: true,
+      cpu: true,
+      memoryGi: true,
+      diskGi: true,
+      publicPorts: true,
+    },
+  });
 }
 
 async function closeOpenSegment(sandboxId: string, at: Date): Promise<void> {
-  await query(
-    `UPDATE sandbox.usage_segments
-     SET ended_at = $2
-     WHERE sandbox_id = $1 AND ended_at IS NULL`,
-    [sandboxId, at],
-  );
+  await prisma.usageSegment.updateMany({
+    where: { sandboxId, endedAt: null },
+    data: { endedAt: at },
+  });
 }
 
 async function openSegment(snap: UsageSnapshot, at: Date): Promise<void> {
   const prices = getBillingPrices();
-  await query(
-    `INSERT INTO sandbox.usage_segments (
-       sandbox_id, owner, compute_active, cpu, memory_gi, disk_gi, public_ports,
-       price_cpu, price_memory, price_storage, price_port, started_at
-     )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-    [
-      snap.sandboxId,
-      snap.owner,
-      snap.computeActive,
-      snap.cpu,
-      snap.memoryGi,
-      snap.diskGi,
-      snap.publicPorts,
-      prices.cpu,
-      prices.memory,
-      prices.storage,
-      prices.port,
-      at,
-    ],
-  );
+  await prisma.usageSegment.create({
+    data: {
+      sandboxId: snap.sandboxId,
+      owner: snap.owner,
+      computeActive: snap.computeActive,
+      cpu: snap.cpu,
+      memoryGi: snap.memoryGi,
+      diskGi: snap.diskGi,
+      publicPorts: snap.publicPorts,
+      priceCpu: prices.cpu,
+      priceMemory: prices.memory,
+      priceStorage: prices.storage,
+      pricePort: prices.port,
+      startedAt: at,
+    },
+  });
 }
 
 /**
@@ -144,18 +140,16 @@ export async function reconcileUsageFromLaunchpad(
     }
   }
 
-  const missing = await query<{ sandbox_id: string }>(
-    `SELECT sandbox_id
-     FROM sandbox.usage_segments
-     WHERE ended_at IS NULL
-       AND NOT (sandbox_id = ANY($1::text[]))`,
-    [[...present]],
-  );
-  for (const row of missing.rows) {
+  const openRows = await prisma.usageSegment.findMany({
+    where: { endedAt: null },
+    select: { sandboxId: true },
+  });
+  for (const row of openRows) {
+    if (present.has(row.sandboxId)) continue;
     try {
-      await reconcileSandboxUsage({ sandboxId: row.sandbox_id, end: true });
+      await reconcileSandboxUsage({ sandboxId: row.sandboxId, end: true });
     } catch (error) {
-      console.error(`结束用量失败：${row.sandbox_id}`, error);
+      console.error(`结束用量失败：${row.sandboxId}`, error);
     }
   }
 }

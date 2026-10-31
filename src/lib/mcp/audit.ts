@@ -1,8 +1,9 @@
 import { randomBytes } from "crypto";
 
-import { query } from "@/lib/db/postgres";
+import { prisma } from "@/lib/db/prisma";
 import { getMinioClient, minioBucket } from "@/lib/minio/client";
 import { MCP_TOOL_NAMES } from "@/lib/mcp/tools";
+import { Prisma } from "@prisma/client";
 
 /** 写入调用日志的工具名。 */
 export const LOGGED_TOOLS = MCP_TOOL_NAMES;
@@ -107,37 +108,27 @@ export async function recordMcpCall(input: {
   }
 
   try {
-    await query(
-      `INSERT INTO sandbox.mcp_logs (
-         id, username, api_key_id, api_key_name, channel, tool, method, path,
-         arguments, status, ok, result_key, result_error,
-         started_at, completed_at, duration_ms, created_at
-       )
-       VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8,
-         $9::jsonb, $10, $11, $12, $13,
-         $14, $15, $16, $17
-       )`,
-      [
+    await prisma.mcpLog.create({
+      data: {
         id,
-        username ?? null,
-        apiKeyId ?? null,
-        apiKeyName ?? null,
-        input.channel ?? "mcp",
-        input.tool,
-        input.method,
-        concretePath(input.path, input.arguments),
-        JSON.stringify(sanitizeArgs(input.arguments)),
-        input.status,
-        input.status >= 200 && input.status < 400,
+        username: username ?? null,
+        apiKeyId: apiKeyId ?? null,
+        apiKeyName: apiKeyName ?? null,
+        channel: input.channel ?? "mcp",
+        tool: input.tool,
+        method: input.method,
+        path: concretePath(input.path, input.arguments),
+        arguments: sanitizeArgs(input.arguments) as Prisma.InputJsonValue,
+        status: input.status,
+        ok: input.status >= 200 && input.status < 400,
         resultKey,
         resultError,
         startedAt,
         completedAt,
         durationMs,
-        completedAt,
-      ]
-    );
+        createdAt: completedAt,
+      },
+    });
   } catch (error) {
     console.error("MCP 调用日志写入数据库失败", error);
   }
