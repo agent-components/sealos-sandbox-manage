@@ -8,9 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
-    "db:init": "node --env-file=.env.local scripts/init-db.mjs",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push"
+    "db:generate": "node --env-file=.env.local node_modules/prisma/build/index.js generate",
+    "db:push": "node --env-file=.env.local node_modules/prisma/build/index.js db push",
+    "db:indexes": "node --env-file=.env.local node_modules/prisma/build/index.js db execute --schema prisma/schema.prisma --file prisma/extra-indexes.sql",
+    "db:init": "npm run db:generate && npm run db:push -- --skip-generate && npm run db:indexes"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.4",

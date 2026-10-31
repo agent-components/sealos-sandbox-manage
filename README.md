@@ -48,7 +48,7 @@ npm run db:init
 npm run dev
 ```
 
-打开 [http://localhost:3000/login](http://localhost:3000/login)。`db:init` 用 Prisma `db push` 同步 schema `sandbox` 业务表，并补齐部分索引，不改动 `public.users`；会把历史沙箱的 `region_id` 回填为广州 `gzg`。登录名是 `public.users.account`。`role = ADMIN` 的账号须在侧栏左下角「集群设置」配置至少一个区域后，才能创建/操作沙箱。启动后到「模板管理」里新建模板，再创建沙箱。
+打开 [http://localhost:3000/login](http://localhost:3000/login)。`db:init` 用 Prisma `db push` 同步 schema `sandbox` 业务表，并补齐部分索引，不改动 `public.users`。登录名是 `public.users.account`。`role = ADMIN` 的账号须在侧栏左下角「集群设置」配置至少一个区域后，才能创建/操作沙箱。启动后到「模板管理」里新建模板，再创建沙箱。
 
 生产构建：
 
@@ -160,9 +160,10 @@ CPU 档位：`0.1 / 0.2 / 0.5 / 1 / 2 / 3 / 4 / 8` 核。
 npm run dev         # 开发服务器
 npm run lint        # ESLint
 npm run build       # 生产构建（含 prisma generate）
-npm run db:init     # Prisma 同步 sandbox 表与额外索引
+npm run db:init     # generate + db push + 额外索引
 npm run db:generate # 仅生成 Prisma Client
 npm run db:push     # 仅 prisma db push
+npm run db:indexes  # 仅补齐 prisma/extra-indexes.sql
 ```
 
 ```text
@@ -179,7 +180,6 @@ src/lib/template/  模板
 src/lib/mcp/       MCP 协议与调用日志
 src/lib/sealos/    Launchpad 与 Kubernetes
 src/lib/openapi/   OpenAPI 文档
-scripts/init-db.mjs
 ```
 
 ## 安全
