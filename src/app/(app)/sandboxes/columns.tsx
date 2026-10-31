@@ -200,6 +200,17 @@ export function sandboxColumns(
       },
     },
     {
+      title: "区域",
+      dataIndex: "regionName",
+      key: "region",
+      width: 88,
+      render: (_: string | undefined, row: Sandbox) => (
+        <Typography.Text type="secondary" style={{ whiteSpace: "nowrap" }}>
+          {row.regionName || row.regionId || "—"}
+        </Typography.Text>
+      ),
+    },
+    {
       title: "标签",
       dataIndex: "tags",
       key: "tags",

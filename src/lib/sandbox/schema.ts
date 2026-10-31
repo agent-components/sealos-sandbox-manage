@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RegionIdSchema } from "@/lib/sealos/region-catalog";
 import { CPU_OPTIONS, MEMORY_OPTIONS } from "@/lib/sealos/resources";
 
 export const SandboxStateSchema = z.enum([
@@ -128,6 +129,8 @@ export const SandboxSchema = z.object({
   image: z.string().optional(),
   imageRegistry: SandboxImageRegistrySchema.nullable().optional(),
   templateId: z.string().optional(),
+  regionId: RegionIdSchema.optional(),
+  regionName: z.string().optional(),
   tags: z.array(z.string()).default([]),
   autoShutdown: z.boolean().default(false),
   idleMinutes: IdleMinutesSchema.default(5),
@@ -146,6 +149,7 @@ export const CreateSandboxEnvSchema = z.object({
 
 export const CreateSandboxSchema = z.object({
   templateId: z.string().min(1, "请选择模板"),
+  regionId: RegionIdSchema.optional(),
   cpu: ResourceSpecSchema.shape.cpu.optional(),
   memoryGi: ResourceSpecSchema.shape.memoryGi.optional(),
   diskGi: ResourceSpecSchema.shape.diskGi.optional(),

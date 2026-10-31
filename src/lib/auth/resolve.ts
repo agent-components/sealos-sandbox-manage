@@ -1,9 +1,12 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { readFileSync, existsSync } from "fs";
 import { authenticateApiKey } from "@/lib/apikey/store";
 import { findUserByToken, type PublicUser } from "@/lib/auth/users";
 import { AuthError } from "@/lib/sealos/errors";
-import { getSealosConfig } from "@/lib/sealos/config";
+import {
+  getDefaultRegion,
+  resolveRegionForSandbox,
+  type RegionCredentials,
+} from "@/lib/sealos/regions";
 
 const authRequest = new AsyncLocalStorage<Request>();
 
@@ -32,13 +35,20 @@ function tokenFrom(req?: Request): string | null {
   return bearerToken(current.headers.get("authorization"));
 }
 
-/** 从 SEALOS_KUBECONFIG_PATH 读取服务端 kubeconfig。 */
+/** 默认区域的 kubeconfig（兼容旧调用）。优先 DB，空库回退 env。 */
 export async function resolveKubeconfig(): Promise<string> {
-  const { kubeconfigPath } = getSealosConfig();
-  if (!existsSync(kubeconfigPath)) {
-    throw new AuthError(`未找到 SEALOS_KUBECONFIG_PATH：${kubeconfigPath}`);
-  }
-  return readFileSync(kubeconfigPath, "utf8");
+  const region = await getDefaultRegion();
+  return region.kubeconfig;
+}
+
+export async function resolveDefaultRegion(): Promise<RegionCredentials> {
+  return getDefaultRegion();
+}
+
+export async function resolveSandboxRegion(
+  sandboxId: string,
+): Promise<RegionCredentials> {
+  return resolveRegionForSandbox(sandboxId);
 }
 
 export type RequestUser = {
@@ -61,6 +71,15 @@ export async function requireSessionUser(req?: Request): Promise<PublicUser> {
   if (!secret) throw new AuthError("请先登录");
   const session = await findUserByToken(secret);
   if (!session) throw new AuthError("请先登录");
+  return session;
+}
+
+/** 要求系统管理员（public.users.role = ADMIN）。不接受 API Key。 */
+export async function requireAdmin(req?: Request): Promise<PublicUser> {
+  const session = await requireSessionUser(req);
+  if (session.role !== "ADMIN") {
+    throw new AuthError("需要系统管理员权限", 403);
+  }
   return session;
 }
 

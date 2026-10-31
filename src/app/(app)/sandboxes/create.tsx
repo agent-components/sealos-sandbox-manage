@@ -15,7 +15,7 @@ import {
 import { EnvTextEditor } from "@/components/EnvTextEditor";
 import { IdleShutdownConfig } from "@/components/IdleShutdownConfig";
 import { ResourceConfig } from "@/components/ResourceConfig";
-import { sandboxClient } from "@/lib/client";
+import { sandboxClient, type RegionPublic } from "@/lib/client";
 import { formatEnvText, parseEnvText } from "@/lib/env-text";
 import { TagsSchema } from "@/lib/sandbox/schema";
 import {
@@ -39,6 +39,8 @@ export function CreateSandboxModal({
   const { message } = App.useApp();
   const router = useRouter();
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [regions, setRegions] = useState<RegionPublic[]>([]);
+  const [regionId, setRegionId] = useState<RegionPublic["id"] | null>(null);
   const [resources, setResources] = useState<ResourceSpec>(DEFAULT_RESOURCES);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [createName, setCreateName] = useState("");
@@ -68,22 +70,33 @@ export function CreateSandboxModal({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    void sandboxClient
-      .listTemplates()
-      .then((res) => {
+    void Promise.all([
+      sandboxClient.listTemplates(),
+      sandboxClient.listRegions(),
+    ])
+      .then(([tplRes, regionRes]) => {
         if (cancelled) return;
-        if (res.list.length === 0) {
+        if (tplRes.list.length === 0) {
           message.warning("请先创建模板，再创建沙箱");
           onClose();
           router.push("/templates");
           return;
         }
-        setTemplates(res.list);
-        applyTemplate(res.list[0]!);
+        if (regionRes.list.length === 0) {
+          message.error("尚未配置 Sealos 区域，请联系管理员在「集群设置」中填写");
+          onClose();
+          return;
+        }
+        setTemplates(tplRes.list);
+        setRegions(regionRes.list);
+        const preferred =
+          regionRes.list.find((r) => r.isDefault) ?? regionRes.list[0]!;
+        setRegionId(preferred.id);
+        applyTemplate(tplRes.list[0]!);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        message.error(err instanceof Error ? err.message : "加载模板失败");
+        message.error(err instanceof Error ? err.message : "加载失败");
         onClose();
       });
     return () => {
@@ -101,6 +114,10 @@ export function CreateSandboxModal({
   async function create() {
     if (!templateId) {
       message.error("请选择模板");
+      return;
+    }
+    if (!regionId) {
+      message.error("请选择区域");
       return;
     }
     const name = createName.trim();
@@ -127,6 +144,7 @@ export function CreateSandboxModal({
     try {
       await sandboxClient.createSandbox({
         templateId,
+        regionId,
         cpu: resources.cpu,
         memoryGi: resources.memoryGi,
         diskGi: resources.diskGi,
@@ -159,7 +177,7 @@ export function CreateSandboxModal({
       confirmLoading={creating}
       okText="创建"
       cancelText="取消"
-      okButtonProps={{ disabled: !templateId }}
+      okButtonProps={{ disabled: !templateId || !regionId }}
       cancelButtonProps={{ disabled: creating }}
       onOk={() => void create()}
     >
@@ -171,6 +189,17 @@ export function CreateSandboxModal({
         labelAlign="right"
         colon={false}
       >
+        <Form.Item label="区域" required>
+          <Select
+            value={regionId}
+            placeholder="请选择区域"
+            options={regions.map((r) => ({
+              value: r.id,
+              label: r.isDefault ? `${r.name}（默认）` : r.name,
+            }))}
+            onChange={setRegionId}
+          />
+        </Form.Item>
         <Form.Item label="模板" required>
           <Select
             value={templateId}

@@ -1,5 +1,6 @@
 import type { Sandbox } from "@/lib/sandbox/schema";
 import type { SandboxRecordDoc } from "@/lib/sandbox/record";
+import { isRegionId, regionName } from "@/lib/sealos/region-catalog";
 import { DEFAULT_RESOURCES } from "@/lib/sealos/resources";
 import { primaryDiskGi, type Template } from "@/lib/template/schema";
 
@@ -8,6 +9,7 @@ export function sandboxFromRecord(
   record: SandboxRecordDoc,
   template?: Template | null
 ): Sandbox {
+  const regionId = isRegionId(record.regionId) ? record.regionId : undefined;
   return {
     id: record.sandboxId,
     name: record.sandboxId,
@@ -25,6 +27,8 @@ export function sandboxFromRecord(
     configMap: [],
     image: template?.image,
     templateId: record.templateId || undefined,
+    regionId,
+    regionName: regionId ? regionName(regionId) : undefined,
     tags: record.tags,
     autoShutdown: record.autoShutdown,
     idleMinutes: record.idleMinutes,

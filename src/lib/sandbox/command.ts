@@ -1,4 +1,7 @@
-import { requireUser, resolveKubeconfig } from "@/lib/auth/resolve";
+import {
+  requireUser,
+  resolveSandboxRegion,
+} from "@/lib/auth/resolve";
 import { assertSandboxAllowed } from "@/lib/apikey/access";
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
 import { setSandboxState } from "@/lib/sandbox/record";
@@ -35,8 +38,12 @@ function sleep(ms: number, signal?: AbortSignal) {
 /** 确认当前用户可以在这台运行中的沙箱里执行命令。 */
 export async function resolveRunningSandbox(id: string) {
   const user = await requireUser();
-  const kubeconfig = await resolveKubeconfig();
-  const client = createLaunchpadClient({ kubeconfig });
+  const region = await resolveSandboxRegion(id);
+  const kubeconfig = region.kubeconfig;
+  const client = createLaunchpadClient({
+    kubeconfig,
+    baseUrl: region.launchpadBase,
+  });
   const app = await client.getApp(id);
   await assertOwnedBy(app, user.username);
   assertSandboxAllowed(user, id);
@@ -60,8 +67,12 @@ export async function resolveSandboxForCommand(
   signal?: AbortSignal
 ) {
   const user = await requireUser();
-  const kubeconfig = await resolveKubeconfig();
-  const client = createLaunchpadClient({ kubeconfig });
+  const region = await resolveSandboxRegion(id);
+  const kubeconfig = region.kubeconfig;
+  const client = createLaunchpadClient({
+    kubeconfig,
+    baseUrl: region.launchpadBase,
+  });
   let app = await client.getApp(id);
   await assertOwnedBy(app, user.username);
   assertSandboxAllowed(user, id);

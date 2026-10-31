@@ -11,6 +11,7 @@ export type SandboxRecordDoc = {
   sandboxId: string;
   owner: string;
   templateId: string;
+  regionId: string;
   tags: string[];
   state: SandboxState;
   autoShutdown: boolean;
@@ -24,6 +25,7 @@ type RecordRow = {
   sandboxId: string;
   owner: string;
   templateId: string;
+  regionId: string;
   tags: string[];
   state: string;
   autoShutdown: boolean;
@@ -55,6 +57,7 @@ function toRecord(row: RecordRow): SandboxRecordDoc {
     sandboxId: row.sandboxId,
     owner: row.owner,
     templateId: row.templateId,
+    regionId: row.regionId || "gzg",
     tags: row.tags ?? [],
     state: asState(row.state),
     autoShutdown: !!row.autoShutdown,
@@ -73,7 +76,7 @@ export async function saveSandboxRecord(
   owner: string,
   sandboxId: string,
   templateId: string,
-  opts?: { idle?: IdleConfig; state?: SandboxState }
+  opts?: { idle?: IdleConfig; state?: SandboxState; regionId?: string }
 ): Promise<void> {
   const config = opts?.idle ?? DEFAULT_IDLE_CONFIG;
   const state = opts?.state ?? "starting";
@@ -82,6 +85,7 @@ export async function saveSandboxRecord(
       sandboxId,
       owner,
       templateId,
+      regionId: opts?.regionId ?? "gzg",
       state,
       autoShutdown: config.autoShutdown,
       idleMinutes: config.idleMinutes,
@@ -103,18 +107,22 @@ export async function setSandboxState(
  * 按 Sealos 返回的状态批量写回。
  * 空列表不写（避免接口异常时把全部打成 error）；
  * 非空时：对齐已有项，库里有而 Sealos 没有的标为 error。
+ * 传入 regionId 时只影响该区域的记录（多区域同步）。
  */
 export async function syncSandboxStates(
-  states: Map<string, SandboxState>
+  states: Map<string, SandboxState>,
+  opts?: { regionId?: string },
 ): Promise<void> {
   if (states.size === 0) return;
 
   const ids = [...states.keys()];
+  const regionFilter = opts?.regionId ? { regionId: opts.regionId } : {};
   await prisma.$transaction([
     ...ids.map((sandboxId) =>
       prisma.sandboxRecord.updateMany({
         where: {
           sandboxId,
+          ...regionFilter,
           NOT: { state: states.get(sandboxId)! },
         },
         data: { state: states.get(sandboxId)! },
@@ -122,6 +130,7 @@ export async function syncSandboxStates(
     ),
     prisma.sandboxRecord.updateMany({
       where: {
+        ...regionFilter,
         sandboxId: { notIn: ids },
         NOT: { state: "error" },
       },

@@ -19,7 +19,11 @@ export async function POST(req: NextRequest) {
     const token = await issueUserToken(user.username);
     return jsonOk({
       token,
-      user: { username: user.username, displayName: user.displayName },
+      user: {
+        username: user.username,
+        displayName: user.displayName,
+        role: user.role,
+      },
     });
   } catch (error) {
     return jsonError(error);

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { requireUser, resolveKubeconfig } from "@/lib/auth/resolve";
+import { requireUser, resolveSandboxRegion } from "@/lib/auth/resolve";
 import { assertSandboxAllowed } from "@/lib/apikey/access";
 import { revokeSandboxFromApiKeys } from "@/lib/apikey/store";
 import { runSandboxApiCall } from "@/lib/api/call-context";
@@ -7,6 +7,10 @@ import { jsonError, jsonOk } from "@/lib/api/response";
 import { setSandboxIdleConfig, withSandboxIdle } from "@/lib/sandbox/idle";
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
 import { deleteSandboxRecord, setSandboxState } from "@/lib/sandbox/record";
+import {
+  attachRegion,
+  launchpadClientFor,
+} from "@/lib/sandbox/region-fields";
 import { DEFAULT_IDLE_CONFIG, UpdateSandboxSchema } from "@/lib/sandbox/schema";
 import { setSandboxTags, withSandboxTags } from "@/lib/sandbox/tags";
 import {
@@ -14,17 +18,17 @@ import {
   snapshotFromApp,
 } from "@/lib/billing/meter";
 import { AuthError } from "@/lib/sealos/errors";
-import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { mapLaunchpadStatus, toSandbox } from "@/lib/sealos/map";
 import { getTemplate } from "@/lib/template/store";
 
 async function withSandboxExtras(
   owner: string,
-  sandbox: ReturnType<typeof toSandbox>
+  sandbox: ReturnType<typeof toSandbox>,
+  regionId: string,
 ) {
   const [enriched] = await withSandboxIdle(
     owner,
-    await withSandboxTags(owner, [sandbox])
+    await withSandboxTags(owner, [attachRegion(sandbox, regionId)]),
   );
   return enriched!;
 }
@@ -42,8 +46,8 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       arguments: { id },
       run: async () => {
         const user = await requireUser(req);
-        const kubeconfig = await resolveKubeconfig();
-        const client = createLaunchpadClient({ kubeconfig });
+        const region = await resolveSandboxRegion(id);
+        const client = launchpadClientFor(region);
         const app = await client.getApp(id);
         const templateId = await assertOwnedBy(app, user.username);
         assertSandboxAllowed(user, id);
@@ -51,7 +55,8 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         const body = {
           sandbox: await withSandboxExtras(
             user.username,
-            toSandbox(app, templateId)
+            toSandbox(app, templateId),
+            region.id,
           ),
         };
         return { status: 200, result: body, value: jsonOk(body) };
@@ -67,8 +72,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     const user = await requireUser(req);
     const { id } = await ctx.params;
     const body = UpdateSandboxSchema.parse(await req.json());
-    const kubeconfig = await resolveKubeconfig();
-    const client = createLaunchpadClient({ kubeconfig });
+    const region = await resolveSandboxRegion(id);
+    const client = launchpadClientFor(region);
     const existing = await client.getApp(id);
     const templateId = await assertOwnedBy(existing, user.username);
     assertSandboxAllowed(user, id);
@@ -126,7 +131,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     if (body.autoShutdown !== undefined || body.idleMinutes !== undefined) {
       const current = await withSandboxExtras(
         user.username,
-        toSandbox(existing, templateId)
+        toSandbox(existing, templateId),
+        region.id,
       );
       await setSandboxIdleConfig(user.username, id, {
         autoShutdown:
@@ -144,7 +150,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     return jsonOk({
       sandbox: await withSandboxExtras(
         user.username,
-        toSandbox(app, templateId)
+        toSandbox(app, templateId),
+        region.id,
       ),
     });
   } catch (error) {
@@ -163,8 +170,8 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
       arguments: { id },
       run: async () => {
         const user = await requireUser(req);
-        const kubeconfig = await resolveKubeconfig();
-        const client = createLaunchpadClient({ kubeconfig });
+        const region = await resolveSandboxRegion(id);
+        const client = launchpadClientFor(region);
         const existing = await client.getApp(id);
         await assertOwnedBy(existing, user.username);
         assertSandboxAllowed(user, id);

@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
       user: {
         username: session.username,
         displayName: session.displayName,
+        role: session.role,
       },
     });
   } catch (error) {

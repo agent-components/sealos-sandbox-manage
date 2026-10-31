@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { requireUser, resolveKubeconfig } from "@/lib/auth/resolve";
+import { requireUser, resolveSandboxRegion } from "@/lib/auth/resolve";
 import { assertSandboxAllowed } from "@/lib/apikey/access";
 import { jsonError, jsonOk } from "@/lib/api/response";
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
-import { createLaunchpadClient } from "@/lib/sealos/launchpad";
+import { launchpadClientFor } from "@/lib/sandbox/region-fields";
 import { getPodLogs, listAppPods } from "@/lib/sealos/kube";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -12,8 +12,9 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   try {
     const user = await requireUser(req);
     const { id } = await ctx.params;
-    const kubeconfig = await resolveKubeconfig();
-    const client = createLaunchpadClient({ kubeconfig });
+    const region = await resolveSandboxRegion(id);
+    const kubeconfig = region.kubeconfig;
+    const client = launchpadClientFor(region);
     const app = await client.getApp(id);
     await assertOwnedBy(app, user.username);
     assertSandboxAllowed(user, id);

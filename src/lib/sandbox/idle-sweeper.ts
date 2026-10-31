@@ -1,6 +1,5 @@
 import cron, { type ScheduledTask } from "node-cron";
 
-import { resolveKubeconfig } from "@/lib/auth/resolve";
 import {
   reconcileSandboxUsage,
   reconcileUsageFromLaunchpad,
@@ -14,6 +13,11 @@ import {
 } from "@/lib/sandbox/record";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { mapLaunchpadStatus, type LaunchpadApp } from "@/lib/sealos/map";
+import { isRegionId } from "@/lib/sealos/region-catalog";
+import {
+  listConfiguredRegions,
+  type RegionCredentials,
+} from "@/lib/sealos/regions";
 import type { SandboxState } from "@/lib/sandbox/schema";
 
 declare global {
@@ -34,15 +38,22 @@ export function startIdleSweeper() {
   });
 }
 
+function clientOf(region: RegionCredentials) {
+  return createLaunchpadClient({
+    kubeconfig: region.kubeconfig,
+    baseUrl: region.launchpadBase,
+  });
+}
+
 async function syncStatesAndUsageFromSealos(
-  kubeconfig: string,
+  region: RegionCredentials,
 ): Promise<LaunchpadApp[] | null> {
-  const client = createLaunchpadClient({ kubeconfig });
+  const client = clientOf(region);
   const apps = await client.listApps();
   const states = new Map<string, SandboxState>(
     apps.map((app) => [app.name, mapLaunchpadStatus(app.status)]),
   );
-  await syncSandboxStates(states);
+  await syncSandboxStates(states, { regionId: region.id });
   const owners = await listSandboxOwners();
   await reconcileUsageFromLaunchpad(apps, owners);
   return apps;
@@ -52,20 +63,34 @@ async function sweepIdleSandboxes() {
   if (global._idleSweeping) return;
   global._idleSweeping = true;
   try {
-    const kubeconfig = await resolveKubeconfig();
-    try {
-      await syncStatesAndUsageFromSealos(kubeconfig);
-    } catch (error) {
-      console.error("同步沙箱状态失败", error);
+    const regions = await listConfiguredRegions();
+    const regionById = new Map(regions.map((r) => [r.id, r]));
+
+    for (const region of regions) {
+      try {
+        await syncStatesAndUsageFromSealos(region);
+      } catch (error) {
+        console.error(`同步沙箱状态失败（${region.id}）`, error);
+      }
     }
 
     const candidates = await listIdleShutdownCandidates();
     if (candidates.length === 0) return;
 
-    const client = createLaunchpadClient({ kubeconfig });
     const owners = await listSandboxOwners();
 
     for (const candidate of candidates) {
+      const region = isRegionId(candidate.regionId)
+        ? regionById.get(candidate.regionId)
+        : undefined;
+      if (!region) {
+        console.error(
+          `空闲关机跳过：区域未配置 ${candidate.regionId}（${candidate.sandboxId}）`,
+        );
+        continue;
+      }
+
+      const client = clientOf(region);
       try {
         await client.pauseApp(candidate.sandboxId);
         const app = await client.getApp(candidate.sandboxId);
@@ -78,7 +103,7 @@ async function sweepIdleSandboxes() {
           await reconcileSandboxUsage(snapshotFromApp(app, owner));
         }
         console.info(
-          `空闲关机：${candidate.sandboxId}（等待 ${candidate.idleMinutes} 分钟）`,
+          `空闲关机：${candidate.sandboxId}（${candidate.regionId}，等待 ${candidate.idleMinutes} 分钟）`,
         );
       } catch (error) {
         console.error(`空闲关机失败：${candidate.sandboxId}`, error);

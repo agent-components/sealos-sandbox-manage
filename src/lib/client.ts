@@ -5,10 +5,39 @@ import type { Template } from "@/lib/template/schema";
 
 export type ApiError = { error: string; details?: unknown };
 
-export type SandboxUser = { username: string; displayName: string };
+export type SandboxUser = {
+  username: string;
+  displayName: string;
+  role: "ADMIN" | "USER";
+};
+
+export type RegionPublic = {
+  id: "gzg" | "hzh" | "bja";
+  name: string;
+  isDefault: boolean;
+};
+
+export type BillingPrices = {
+  cpu: number;
+  memory: number;
+  storage: number;
+  port: number;
+};
+
+export type RegionAdmin = {
+  id: "gzg" | "hzh" | "bja";
+  name: string;
+  launchpadBase: string | null;
+  configured: boolean;
+  enabled: boolean;
+  isDefault: boolean;
+  prices: BillingPrices;
+  updatedAt: string | null;
+};
 
 export type CreateSandboxBody = {
   templateId: string;
+  regionId?: "gzg" | "hzh" | "bja";
   name?: string;
   cpu?: number;
   memoryGi?: number;
@@ -367,4 +396,35 @@ export const sandboxClient = {
     request<{ ok: true }>(`/api/v1/apikeys/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
+
+  listRegions: () =>
+    request<{ list: RegionPublic[] }>("/api/v1/regions"),
+
+  listAdminRegions: () =>
+    request<{ list: RegionAdmin[] }>("/api/v1/admin/regions"),
+
+  upsertAdminRegion: (
+    id: string,
+    body: {
+      launchpadBase: string;
+      kubeconfig?: string | null;
+      prices?: BillingPrices;
+    },
+  ) =>
+    request<{ region: RegionAdmin }>(
+      `/api/v1/admin/regions/${encodeURIComponent(id)}`,
+      { method: "PUT", body: JSON.stringify(body) },
+    ),
+
+  clearAdminRegion: (id: string) =>
+    request<{ region: RegionAdmin }>(
+      `/api/v1/admin/regions/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    ),
+
+  setDefaultAdminRegion: (id: string) =>
+    request<{ region: RegionAdmin }>(
+      `/api/v1/admin/regions/${encodeURIComponent(id)}/default`,
+      { method: "POST" },
+    ),
 };

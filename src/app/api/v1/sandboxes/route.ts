@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { requireUser, resolveKubeconfig } from "@/lib/auth/resolve";
+import { requireUser } from "@/lib/auth/resolve";
 import { grantApiKeySandbox } from "@/lib/apikey/store";
 import { runSandboxApiCall } from "@/lib/api/call-context";
 import { parsePageQuery, slicePage } from "@/lib/api/page";
@@ -7,6 +7,10 @@ import { jsonError, jsonOk } from "@/lib/api/response";
 import { createSandboxId } from "@/lib/sandbox/id";
 import { withSandboxIdle } from "@/lib/sandbox/idle";
 import { sandboxFromRecord } from "@/lib/sandbox/from-record";
+import {
+  attachRegion,
+  launchpadClientFor,
+} from "@/lib/sandbox/region-fields";
 import {
   CreateSandboxSchema,
   IdleConfigSchema,
@@ -23,8 +27,8 @@ import {
   reconcileSandboxUsage,
   snapshotFromApp,
 } from "@/lib/billing/meter";
-import { createLaunchpadClient } from "@/lib/sealos/launchpad";
 import { mapLaunchpadStatus, toSandbox } from "@/lib/sealos/map";
+import { getDefaultRegion, getRegion } from "@/lib/sealos/regions";
 import { getTemplate, listTemplates } from "@/lib/template/store";
 
 export async function GET(req: NextRequest) {
@@ -106,8 +110,10 @@ export async function POST(req: NextRequest) {
           : {},
       run: async () => {
         const user = await requireUser(req);
-        const kubeconfig = await resolveKubeconfig();
         const input = CreateSandboxSchema.parse(raw);
+        const region = input.regionId
+          ? await getRegion(input.regionId)
+          : await getDefaultRegion();
 
         const template = await getTemplate(input.templateId);
         if (!template) {
@@ -126,7 +132,7 @@ export async function POST(req: NextRequest) {
           idleMinutes: input.idleMinutes ?? template.idleMinutes ?? 5,
         });
 
-        const client = createLaunchpadClient({ kubeconfig });
+        const client = launchpadClientFor(region);
         const id = input.name ?? createSandboxId();
         const app = await client.createAppFromTemplate({
           name: id,
@@ -142,6 +148,7 @@ export async function POST(req: NextRequest) {
           await saveSandboxRecord(user.username, id, template.id, {
             idle: idleConfig,
             state: mapLaunchpadStatus(app.status),
+            regionId: region.id,
           });
           await setSandboxTags(user.username, id, input.tags);
           await reconcileSandboxUsage(snapshotFromApp(app, user.username));
@@ -165,7 +172,9 @@ export async function POST(req: NextRequest) {
         }
         const [sandbox] = await withSandboxIdle(
           user.username,
-          await withSandboxTags(user.username, [toSandbox(app, template.id)])
+          await withSandboxTags(user.username, [
+            attachRegion(toSandbox(app, template.id), region.id),
+          ])
         );
         const body = { sandbox };
         return {

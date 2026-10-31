@@ -116,6 +116,7 @@ export async function touchSandboxActivity(sandboxId: string): Promise<void> {
 export type IdleCandidate = {
   sandboxId: string;
   owner: string;
+  regionId: string;
   idleMinutes: number;
   lastActivityAt: Date;
 };
@@ -128,11 +129,12 @@ export async function listIdleShutdownCandidates(
     {
       sandbox_id: string;
       owner: string;
+      region_id: string;
       idle_minutes: number;
       last_activity_at: Date;
     }[]
   >`
-    SELECT sandbox_id, owner, GREATEST(idle_minutes, 5) AS idle_minutes, last_activity_at
+    SELECT sandbox_id, owner, region_id, GREATEST(idle_minutes, 5) AS idle_minutes, last_activity_at
     FROM sandbox.records
     WHERE auto_shutdown = true
       AND state = 'running'
@@ -141,6 +143,7 @@ export async function listIdleShutdownCandidates(
   return rows.map((row) => ({
     sandboxId: row.sandbox_id,
     owner: row.owner,
+    regionId: row.region_id || "gzg",
     idleMinutes: row.idle_minutes,
     lastActivityAt: row.last_activity_at,
   }));

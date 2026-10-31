@@ -2,7 +2,6 @@ import {
   buildSyncFromTemplateBody,
   type SyncFromTemplateOptions,
 } from "@/lib/sandbox/sync-from-template";
-import { getSealosConfig } from "@/lib/sealos/config";
 import { SealosApiError } from "@/lib/sealos/errors";
 import type { LaunchpadApp } from "@/lib/sealos/map";
 import type { ResourceSpec } from "@/lib/sealos/resources";
@@ -11,7 +10,8 @@ import { primaryDiskGi } from "@/lib/template/schema";
 
 export type LaunchpadClientOptions = {
   kubeconfig: string;
-  baseUrl?: string;
+  /** 区域 Launchpad 根地址，必填 */
+  baseUrl: string;
 };
 
 async function launchpadFetch<T>(
@@ -20,8 +20,10 @@ async function launchpadFetch<T>(
   init: RequestInit = {},
   baseUrl?: string,
 ): Promise<T> {
-  const config = getSealosConfig();
-  const url = `${(baseUrl ?? config.launchpadBase).replace(/\/$/, "")}${path}`;
+  if (!baseUrl?.trim()) {
+    throw new SealosApiError("缺少 Launchpad 地址", 500);
+  }
+  const url = `${baseUrl.replace(/\/$/, "")}${path}`;
   const headers = new Headers(init.headers);
   headers.set("Authorization", encodeURIComponent(kubeconfig));
   if (init.body && !headers.has("Content-Type")) {

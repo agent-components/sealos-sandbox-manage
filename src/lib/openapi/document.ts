@@ -179,6 +179,12 @@ const createSandboxBody = {
   required: ["templateId"],
   properties: {
     templateId: { type: "string", minLength: 1, description: "模板 ID" },
+    regionId: {
+      type: "string",
+      enum: ["gzg", "hzh", "bja"],
+      description:
+        "可选。区域 ID（gzg 广州 / hzh 杭州 / bja 北京）。省略时使用「集群设置」中的默认区域",
+    },
     name: {
       type: "string",
       minLength: 1,

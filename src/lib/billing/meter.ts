@@ -1,4 +1,4 @@
-import { getBillingPrices } from "@/lib/billing/prices";
+import { getBillingPricesForSandbox } from "@/lib/billing/prices";
 import { prisma } from "@/lib/db/prisma";
 import type { LaunchpadApp } from "@/lib/sealos/map";
 import { toSandbox } from "@/lib/sealos/map";
@@ -76,7 +76,7 @@ async function closeOpenSegment(sandboxId: string, at: Date): Promise<void> {
 }
 
 async function openSegment(snap: UsageSnapshot, at: Date): Promise<void> {
-  const prices = getBillingPrices();
+  const prices = await getBillingPricesForSandbox(snap.sandboxId);
   await prisma.usageSegment.create({
     data: {
       sandboxId: snap.sandboxId,
