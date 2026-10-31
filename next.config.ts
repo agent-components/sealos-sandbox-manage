@@ -7,7 +7,10 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   async redirects() {
-    return [{ source: "/", destination: "/sandboxes", permanent: false }];
+    return [
+      { source: "/", destination: "/sandboxes", permanent: false },
+      { source: "/billing", destination: "/sandboxes", permanent: false },
+    ];
   },
   turbopack: {
     rules: {

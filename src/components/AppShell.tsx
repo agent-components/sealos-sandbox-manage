@@ -3,7 +3,6 @@
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import {
-  AccountBookOutlined,
   CloudServerOutlined,
   FileSearchOutlined,
   KeyOutlined,
@@ -11,6 +10,7 @@ import {
 } from "@ant-design/icons";
 import { Layout, useLayoutTabs } from "listpage-components/Layout";
 import { useSandboxTheme } from "@/components/AntdProvider";
+import { BillingModal } from "@/components/BillingModal";
 import { ClusterSettingsModal } from "@/components/ClusterSettingsModal";
 import { sandboxClient, type SandboxUser } from "@/lib/client";
 import { PRODUCT_NAME } from "@/lib/product";
@@ -36,12 +36,6 @@ const ROUTES = [
     icon: <FileSearchOutlined />,
   },
   {
-    key: "billing",
-    path: "/billing",
-    label: "用量账单",
-    icon: <AccountBookOutlined />,
-  },
-  {
     key: "apikeys",
     path: "/apikeys",
     label: "令牌管理",
@@ -59,6 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const theme = useSandboxTheme();
   const [user, setUser] = useState<SandboxUser | null>(null);
   const [clusterOpen, setClusterOpen] = useState(false);
+  const [billingOpen, setBillingOpen] = useState(false);
   const tabPath = tabPathOf(pathname);
 
   const { tabs, activeKey, activateTab, closeTab, reorderTabs } = useLayoutTabs({
@@ -97,13 +92,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     () => [
       {
         key: "main",
-        items: ROUTES.filter((route) => route.key !== "billing").map(
-          (route) => ({
-            key: route.key,
-            label: route.label,
-            icon: route.icon,
-          }),
-        ),
+        items: ROUTES.map((route) => ({
+          key: route.key,
+          label: route.label,
+          icon: route.icon,
+        })),
       },
     ],
     [],
@@ -117,7 +110,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {
         key: "billing",
         label: "用量账单",
-        onClick: () => router.push("/billing"),
+        onClick: () => setBillingOpen(true),
       },
       theme.themeUserProfileItem,
     ];
@@ -129,7 +122,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       });
     }
     return items;
-  }, [theme.themeUserProfileItem, user?.role, router]);
+  }, [theme.themeUserProfileItem, user?.role]);
 
   return (
     <>
@@ -185,6 +178,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </Suspense>
       </Layout>
+      <BillingModal open={billingOpen} onClose={() => setBillingOpen(false)} />
       {user?.role === "ADMIN" ? (
         <ClusterSettingsModal
           open={clusterOpen}

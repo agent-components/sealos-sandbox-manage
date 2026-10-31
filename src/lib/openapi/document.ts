@@ -598,26 +598,60 @@ export function openApiDocument() {
           ],
           responses: {
             "200": {
-              description: "区间合计与按沙箱明细",
+              description: "区间合计；先按区域、再按沙箱明细",
               content: {
                 "application/json": {
                   schema: {
                     type: "object",
-                    required: ["from", "to", "total", "sandboxes"],
+                    required: ["from", "to", "total", "regions"],
                     properties: {
                       from: { type: "string", format: "date-time" },
                       to: { type: "string", format: "date-time" },
                       total: { $ref: "#/components/schemas/BillingUsage" },
-                      sandboxes: {
+                      regions: {
                         type: "array",
                         items: {
                           allOf: [
                             { $ref: "#/components/schemas/BillingUsage" },
                             {
                               type: "object",
-                              required: ["sandboxId"],
+                              required: [
+                                "regionId",
+                                "regionName",
+                                "sandboxes",
+                              ],
                               properties: {
-                                sandboxId: { type: "string" },
+                                regionId: {
+                                  type: "string",
+                                  enum: ["gzg", "hzh", "bja"],
+                                },
+                                regionName: { type: "string" },
+                                sandboxes: {
+                                  type: "array",
+                                  items: {
+                                    allOf: [
+                                      {
+                                        $ref: "#/components/schemas/BillingUsage",
+                                      },
+                                      {
+                                        type: "object",
+                                        required: [
+                                          "sandboxId",
+                                          "regionId",
+                                          "regionName",
+                                        ],
+                                        properties: {
+                                          sandboxId: { type: "string" },
+                                          regionId: {
+                                            type: "string",
+                                            enum: ["gzg", "hzh", "bja"],
+                                          },
+                                          regionName: { type: "string" },
+                                        },
+                                      },
+                                    ],
+                                  },
+                                },
                               },
                             },
                           ],

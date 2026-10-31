@@ -1,4 +1,10 @@
 import { prisma } from "@/lib/db/prisma";
+import {
+  DEFAULT_REGION_ID,
+  isRegionId,
+  regionName,
+  type RegionId,
+} from "@/lib/sealos/region-catalog";
 
 export type BillingUsage = {
   cpuCoreHours: number;
@@ -14,13 +20,21 @@ export type BillingUsage = {
 
 export type SandboxBillingRow = BillingUsage & {
   sandboxId: string;
+  regionId: RegionId;
+  regionName: string;
+};
+
+export type RegionBillingGroup = BillingUsage & {
+  regionId: RegionId;
+  regionName: string;
+  sandboxes: SandboxBillingRow[];
 };
 
 export type BillingReport = {
   from: string;
   to: string;
   total: BillingUsage;
-  sandboxes: SandboxBillingRow[];
+  regions: RegionBillingGroup[];
 };
 
 type SegmentRow = {
@@ -99,7 +113,19 @@ function addSegment(
     usage.cpuCost + usage.memoryCost + usage.storageCost + usage.portCost;
 }
 
-/** 当前用户在 [from, to] 内的用量与费用。未结束段算到 to。 */
+function mergeUsage(target: BillingUsage, source: BillingUsage): void {
+  target.cpuCoreHours += source.cpuCoreHours;
+  target.memoryGiHours += source.memoryGiHours;
+  target.storageGiHours += source.storageGiHours;
+  target.portHours += source.portHours;
+  target.cpuCost += source.cpuCost;
+  target.memoryCost += source.memoryCost;
+  target.storageCost += source.storageCost;
+  target.portCost += source.portCost;
+  target.totalCost += source.totalCost;
+}
+
+/** 当前用户在 [from, to] 内的用量与费用。未结束段算到 to。按区域再按沙箱汇总。 */
 export async function getBillingReport(
   owner: string,
   from: Date,
@@ -110,7 +136,7 @@ export async function getBillingReport(
       from: from.toISOString(),
       to: to.toISOString(),
       total: emptyUsage(),
-      sandboxes: [],
+      regions: [],
     };
   }
 
@@ -124,8 +150,6 @@ export async function getBillingReport(
   });
 
   const bySandbox = new Map<string, BillingUsage>();
-  const total = emptyUsage();
-
   for (const row of rows) {
     let usage = bySandbox.get(row.sandboxId);
     if (!usage) {
@@ -133,21 +157,69 @@ export async function getBillingReport(
       bySandbox.set(row.sandboxId, usage);
     }
     addSegment(usage, row, from, to);
-    addSegment(total, row, from, to);
   }
 
-  const sandboxes: SandboxBillingRow[] = [...bySandbox.entries()]
-    .map(([sandboxId, usage]) => ({
+  const sandboxIds = [...bySandbox.keys()];
+  const records =
+    sandboxIds.length === 0
+      ? []
+      : await prisma.sandboxRecord.findMany({
+          where: { sandboxId: { in: sandboxIds } },
+          select: { sandboxId: true, regionId: true },
+        });
+  const regionBySandbox = new Map(
+    records.map((row) => [row.sandboxId, row.regionId]),
+  );
+
+  const byRegion = new Map<
+    RegionId,
+    { usage: BillingUsage; sandboxes: SandboxBillingRow[] }
+  >();
+
+  for (const [sandboxId, usage] of bySandbox) {
+    const rawRegion = regionBySandbox.get(sandboxId) ?? DEFAULT_REGION_ID;
+    const regionId = isRegionId(rawRegion) ? rawRegion : DEFAULT_REGION_ID;
+    const finalized = finalizeUsage(usage);
+    const row: SandboxBillingRow = {
       sandboxId,
-      ...finalizeUsage(usage),
-    }))
-    .sort((a, b) => b.totalCost - a.totalCost || a.sandboxId.localeCompare(b.sandboxId));
+      regionId,
+      regionName: regionName(regionId),
+      ...finalized,
+    };
+    let group = byRegion.get(regionId);
+    if (!group) {
+      group = { usage: emptyUsage(), sandboxes: [] };
+      byRegion.set(regionId, group);
+    }
+    group.sandboxes.push(row);
+    mergeUsage(group.usage, finalized);
+  }
+
+  const total = emptyUsage();
+  const regions: RegionBillingGroup[] = [...byRegion.entries()]
+    .map(([regionId, group]) => {
+      group.sandboxes.sort(
+        (a, b) => b.totalCost - a.totalCost || a.sandboxId.localeCompare(b.sandboxId),
+      );
+      const regionTotal = finalizeUsage(group.usage);
+      mergeUsage(total, regionTotal);
+      return {
+        regionId,
+        regionName: regionName(regionId),
+        ...regionTotal,
+        sandboxes: group.sandboxes,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.totalCost - a.totalCost || a.regionId.localeCompare(b.regionId),
+    );
 
   return {
     from: from.toISOString(),
     to: to.toISOString(),
     total: finalizeUsage(total),
-    sandboxes,
+    regions,
   };
 }
 

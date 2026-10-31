@@ -83,13 +83,21 @@ export type BillingUsage = {
 
 export type SandboxBillingRow = BillingUsage & {
   sandboxId: string;
+  regionId: "gzg" | "hzh" | "bja";
+  regionName: string;
+};
+
+export type RegionBillingGroup = BillingUsage & {
+  regionId: "gzg" | "hzh" | "bja";
+  regionName: string;
+  sandboxes: SandboxBillingRow[];
 };
 
 export type BillingReport = {
   from: string;
   to: string;
   total: BillingUsage;
-  sandboxes: SandboxBillingRow[];
+  regions: RegionBillingGroup[];
 };
 
 export type ListSandboxesQuery = PageQuery & {
