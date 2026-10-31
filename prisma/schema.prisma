@@ -53,6 +53,8 @@ model SandboxRecord {
   sandboxId      String   @id @map("sandbox_id")
   owner          String
   templateId     String   @map("template_id")
+  /// 区域枚举：gzg | hzh | bja
+  regionId       String   @default("gzg") @map("region_id")
   tags           String[] @default([])
   state          String   @default("starting")
   autoShutdown   Boolean  @default(false) @map("auto_shutdown")
@@ -63,8 +65,29 @@ model SandboxRecord {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([owner], map: "records_owner_idx")
+  @@index([regionId], map: "records_region_idx")
   @@index([tags], type: Gin, map: "records_tags_idx")
   @@map("records")
+  @@schema("sandbox")
+}
+
+/// Sealos 区域凭证。id 仅允许目录中的 gzg / hzh / bja。
+model SealosRegion {
+  id            String   @id
+  launchpadBase String   @map("launchpad_base")
+  kubeconfig    String   @db.Text
+  isDefault     Boolean  @default(false) @map("is_default")
+  /// 清空凭证后为 false；创建与 sweeper 只用 enabled 且已配置的区域
+  enabled       Boolean  @default(true)
+  /// 用量单价（元）；写入 usage_segments 时快照
+  priceCpu      Float    @default(0.01742) @map("price_cpu")
+  priceMemory   Float    @default(0.008786) @map("price_memory")
+  priceStorage  Float    @default(0.000532) @map("price_storage")
+  pricePort     Float    @default(0.007) @map("price_port")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("sealos_regions")
   @@schema("sandbox")
 }
 
