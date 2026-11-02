@@ -4,6 +4,7 @@ import {
   nearestCpu,
   nearestMemoryGi,
 } from "@/lib/sealos/resources";
+import { assignStorageNames } from "@/lib/sealos/storage-name";
 import type { Template } from "@/lib/template/schema";
 
 function currentDiskGi(app: LaunchpadApp): number {
@@ -61,12 +62,11 @@ export function buildSyncFromTemplateBody(
     opts?.resources?.replicas ??
     Math.max(1, Math.round(app.quota?.replicas ?? 1));
 
-  const storage =
-    (template.storage ?? []).length > 0
-      ? template.storage.map((item, index) =>
-          index === 0 ? { ...item, size: `${diskGi}Gi` } : item,
-        )
-      : [];
+  const storage = assignStorageNames(
+    (template.storage ?? []).map((item, index) =>
+      index === 0 ? { ...item, size: `${diskGi}Gi` } : item,
+    ),
+  );
 
   // Sealos POST Create 用 imageRegistry.serverAddress；
   // PATCH Update 的 UpdateImageSchema 字段名是 apiUrl（内部再映射回 serverAddress）。

@@ -92,7 +92,11 @@ const sandboxSchema = {
         type: "object",
         required: ["path"],
         properties: {
-          name: { type: "string" },
+          name: {
+            type: "string",
+            description:
+              "卷名。由挂载路径生成，例如 /home/workspace → vn-homevn-workspace",
+          },
           path: { type: "string" },
           size: { type: "string", description: "如 3Gi" },
         },

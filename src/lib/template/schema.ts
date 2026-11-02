@@ -3,6 +3,7 @@ import {
   IdleMinutesSchema,
   ResourceSpecSchema,
 } from "@/lib/sandbox/schema";
+import { sealosStorageName } from "@/lib/sealos/storage-name";
 
 const slugSchema = z
   .string()
@@ -25,14 +26,20 @@ export const TemplateEnvSchema = z.object({
   value: z.string().max(4096).default(""),
 });
 
-/** 对齐 Sealos StorageSchema */
-export const TemplateStorageSchema = z.object({
-  name: z.string().min(1).max(63),
-  path: z.string().min(1).max(256),
-  size: z.string().regex(/^\d+(\.\d+)?(Gi|Ti)$/i, {
-    message: "容量格式如 3Gi、1Ti",
-  }),
-});
+/** 对齐 Sealos StorageSchema。name 由挂载路径生成，请求里的 name 会被覆盖。 */
+export const TemplateStorageSchema = z
+  .object({
+    name: z.string().max(63).optional(),
+    path: z.string().min(1).max(256),
+    size: z.string().regex(/^\d+(\.\d+)?(Gi|Ti)$/i, {
+      message: "容量格式如 3Gi、1Ti",
+    }),
+  })
+  .transform((item) => ({
+    path: item.path.trim(),
+    size: item.size,
+    name: sealosStorageName(item.path),
+  }));
 
 /** 对齐 Sealos CreateLaunchpadRequest.configMap（path + value） */
 export const TemplateConfigMapSchema = z.object({
@@ -112,7 +119,7 @@ export function defaultTemplatePorts(): TemplatePort[] {
 }
 
 export function defaultTemplateStorage(): TemplateStorage[] {
-  return [{ name: "data", path: "/data", size: "3Gi" }];
+  return [{ name: sealosStorageName("/data"), path: "/data", size: "3Gi" }];
 }
 
 /** 解析 Sealos size 字符串（如 3Gi、1Ti）为 Gi 数值 */

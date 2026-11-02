@@ -27,6 +27,7 @@ import {
   type SandboxEnv,
 } from "@/lib/sandbox/schema";
 import { mergeEnvWithTemplate } from "@/lib/sandbox/sync-from-template";
+import { assignStorageNames } from "@/lib/sealos/storage-name";
 import { memoryLabel, type ResourceSpec } from "@/lib/sealos/resources";
 import type { Template } from "@/lib/template/schema";
 import { z } from "zod";
@@ -50,12 +51,11 @@ function draftFromTemplate(
   template: Template,
   diskGi: number,
 ): TemplateDraft {
-  const storage =
-    (template.storage ?? []).length > 0
-      ? template.storage.map((item, index) =>
-        index === 0 ? { ...item, size: `${diskGi}Gi` } : item,
-      )
-      : [];
+  const storage = assignStorageNames(
+    (template.storage ?? []).map((item, index) =>
+      index === 0 ? { ...item, size: `${diskGi}Gi` } : item,
+    ),
+  );
   return {
     image: template.image,
     imageRegistry: template.imageRegistry
@@ -105,13 +105,15 @@ function formatRegistry(value: Sandbox["imageRegistry"]) {
 
 function formatPorts(ports: Sandbox["ports"]) {
   if (!ports.length) return "（无）";
-  // Sealos 回读时常缺 isPublic；与模板默认 true 对齐，避免假 diff
+  // Sealos 回读时常缺 isPublic；与模板默认 true 对齐，避免假 diff。
+  // 端口集合相同、只是顺序不同，不算变更。
   return ports
     .map((port) => {
       const protocol = (port.protocol || "http").toUpperCase();
       const pub = port.isPublic === false ? "内网" : "公网";
       return `${port.number}/${protocol}/${pub}`;
     })
+    .sort((a, b) => a.localeCompare(b, "en"))
     .join("，");
 }
 
@@ -122,6 +124,7 @@ function formatStorage(storage: Sandbox["storage"]) {
       const name = item.name?.trim() || "unnamed";
       return `${name}:${item.path}${item.size ? `(${item.size})` : ""}`;
     })
+    .sort((a, b) => a.localeCompare(b, "en"))
     .join("，");
 }
 

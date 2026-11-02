@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { assignStorageNames } from "@/lib/sealos/storage-name";
 import type {
   Template,
   TemplateConfigMap,
@@ -55,7 +56,7 @@ function toTemplate(row: TemplateRow): Template {
       ? ports
       : [{ number: 80, protocol: "http", isPublic: true }],
     env: asJsonArray<TemplateEnv>(row.env),
-    storage: asJsonArray<TemplateStorage>(row.storage),
+    storage: assignStorageNames(asJsonArray<TemplateStorage>(row.storage)),
     configMap: asJsonArray<TemplateConfigMap>(row.configMap),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

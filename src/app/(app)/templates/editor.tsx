@@ -27,6 +27,7 @@ import {
   nearestMemoryGi,
   type ResourceSpec,
 } from "@/lib/sealos/resources";
+import { sealosStorageName } from "@/lib/sealos/storage-name";
 import type {
   Template,
   TemplatePort,
@@ -56,6 +57,10 @@ function freshPortDraft(port: TemplatePort): PortDraft {
 
 function freshStorageDraft(item: TemplateStorage): StorageDraft {
   return { ...item, key: `storage-${crypto.randomUUID()}` };
+}
+
+function nextStoragePath(count: number): string {
+  return count === 0 ? "/data" : `/data${count + 1}`;
 }
 
 type FormState = {
@@ -154,8 +159,12 @@ function toPayload(form: FormState) {
     idleMinutes: form.idleMinutes,
     ports: form.ports.map(({ key: _key, ...port }) => port),
     storage: form.storage
-      .filter((s) => s.name.trim() && s.path.trim())
-      .map(({ key: _key, ...item }) => item),
+      .filter((item) => item.path.trim())
+      .map(({ key: _key, path, size }) => ({
+        path: path.trim(),
+        size,
+        name: sealosStorageName(path),
+      })),
     configMap: form.configMap
       .filter((c) => c.path.trim())
       .map((c) => ({ path: c.path.trim(), value: c.value ?? "" })),
@@ -645,26 +654,6 @@ export function TemplateEditor({
                 dataSource={form.storage}
                 columns={[
                   {
-                    title: "名称",
-                    dataIndex: "name",
-                    width: 140,
-                    render: (value, _, index) => (
-                      <Input
-                        value={value}
-                        onChange={(e) =>
-                          setForm((f) => {
-                            const storage = [...f.storage];
-                            storage[index] = {
-                              ...storage[index]!,
-                              name: e.target.value,
-                            };
-                            return { ...f, storage };
-                          })
-                        }
-                      />
-                    ),
-                  },
-                  {
                     title: "挂载路径",
                     dataIndex: "path",
                     render: (value, _, index) => (
@@ -677,6 +666,7 @@ export function TemplateEditor({
                             storage[index] = {
                               ...storage[index]!,
                               path: e.target.value,
+                              name: sealosStorageName(e.target.value),
                             };
                             return { ...f, storage };
                           })
@@ -742,23 +732,20 @@ export function TemplateEditor({
                 block
                 icon={<PlusOutlined />}
                 onClick={() =>
-                  setForm((f) => ({
-                    ...f,
-                    storage: [
-                      ...f.storage,
-                      freshStorageDraft({
-                        name:
-                          f.storage.length === 0
-                            ? "data"
-                            : `data-${f.storage.length + 1}`,
-                        path:
-                          f.storage.length === 0
-                            ? "/data"
-                            : `/data${f.storage.length + 1}`,
-                        size: "1Gi",
-                      }),
-                    ],
-                  }))
+                  setForm((f) => {
+                    const path = nextStoragePath(f.storage.length);
+                    return {
+                      ...f,
+                      storage: [
+                        ...f.storage,
+                        freshStorageDraft({
+                          path,
+                          size: "1Gi",
+                          name: sealosStorageName(path),
+                        }),
+                      ],
+                    };
+                  })
                 }
               >
                 添加存储

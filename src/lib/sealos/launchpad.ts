@@ -6,6 +6,7 @@ import { SealosApiError } from "@/lib/sealos/errors";
 import type { LaunchpadApp } from "@/lib/sealos/map";
 import type { ResourceSpec } from "@/lib/sealos/resources";
 import type { Template } from "@/lib/template/schema";
+import { assignStorageNames } from "@/lib/sealos/storage-name";
 import { primaryDiskGi } from "@/lib/template/schema";
 
 export type LaunchpadClientOptions = {
@@ -94,14 +95,13 @@ export function createLaunchpadClient(opts: LaunchpadClientOptions) {
       const diskGi =
         input.resources?.diskGi ?? primaryDiskGi(template.storage);
 
-      const storage =
-        (template.storage ?? []).length > 0
-          ? template.storage.map((s, i) =>
-              i === 0 && input.resources?.diskGi
-                ? { ...s, size: `${diskGi}Gi` }
-                : s,
-            )
-          : [];
+      const storage = assignStorageNames(
+        (template.storage ?? []).map((item, index) =>
+          index === 0 && input.resources?.diskGi
+            ? { ...item, size: `${diskGi}Gi` }
+            : item,
+        ),
+      );
 
       const envMap = new Map<string, string>();
       for (const e of [...(template.env ?? []), ...(input.env ?? [])]) {
