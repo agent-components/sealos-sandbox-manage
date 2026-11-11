@@ -5,6 +5,17 @@ import type { Template } from "@/lib/template/schema";
 
 export type ApiError = { error: string; details?: unknown };
 
+export type EphemeralDiskReport = {
+  limitBytes: number;
+  usedBytes: number;
+  writableBytes: number | null;
+  logBytes: number | null;
+  usageSource: "kubelet" | "files";
+  directories: { path: string; bytes: number }[];
+  checkedAt: string;
+  detail: string | null;
+};
+
 export type SandboxUser = {
   username: string;
   displayName: string;
@@ -241,6 +252,10 @@ export const sandboxClient = {
     request<{ sandbox: Sandbox }>(
       `/api/v1/sandboxes/${encodeURIComponent(id)}/resume`,
       { method: "POST" }
+    ),
+  getEphemeralDisk: (id: string) =>
+    request<EphemeralDiskReport>(
+      `/api/v1/sandboxes/${encodeURIComponent(id)}/ephemeral-disk`,
     ),
   runSandboxCommand: (id: string, command: string) =>
     request<{ ok: boolean; exitCode: number; stdout: string; stderr: string }>(

@@ -12,6 +12,7 @@ import {
 import { AutoRefreshList } from "@/components/list-page";
 import { SandboxDesktopModal } from "@/components/SandboxDesktopModal";
 import { SandboxDetailModal } from "@/components/SandboxDetailModal";
+import { SandboxDiskUsageModal } from "@/components/SandboxDiskUsageModal";
 import { SandboxLogsModal } from "@/components/SandboxLogsModal";
 import { sandboxClient } from "@/lib/client";
 import type { Sandbox } from "@/lib/sandbox/schema";
@@ -58,6 +59,16 @@ function LogsFloat({ record, onClose }: FloatComponentProps<Sandbox>) {
 function DesktopFloat({ record, onClose }: FloatComponentProps<Sandbox>) {
   return (
     <SandboxDesktopModal
+      sandboxId={record?.id ?? ""}
+      open
+      onClose={() => onClose()}
+    />
+  );
+}
+
+function DiskFloat({ record, onClose }: FloatComponentProps<Sandbox>) {
+  return (
+    <SandboxDiskUsageModal
       sandboxId={record?.id ?? ""}
       open
       onClose={() => onClose()}
@@ -173,6 +184,12 @@ export default function SandboxesPage() {
         key: "desktop",
         render: (props: FloatComponentProps<Sandbox>) => (
           <DesktopFloat {...props} />
+        ),
+      },
+      {
+        key: "disk",
+        render: (props: FloatComponentProps<Sandbox>) => (
+          <DiskFloat {...props} />
         ),
       },
       {

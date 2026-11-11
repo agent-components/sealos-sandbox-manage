@@ -133,6 +133,66 @@ export async function listAppPods(
   return [];
 }
 
+/** kubelet 统计的容器可写层和日志占用。节点接口无权限时返回 null。 */
+export async function readContainerEphemeralUsage(
+  kubeconfigYaml: string,
+  podName: string,
+  containerName: string,
+): Promise<{ writableBytes: number; logBytes: number } | null> {
+  const ctx = loadKubeContext(kubeconfigYaml);
+  const podPath = `/api/v1/namespaces/${encodeURIComponent(
+    ctx.namespace,
+  )}/pods/${encodeURIComponent(podName)}`;
+  const podRes = await k8sRequest(ctx, podPath);
+  if (podRes.status !== 200) return null;
+  let nodeName = "";
+  try {
+    const pod = JSON.parse(podRes.body) as { spec?: { nodeName?: string } };
+    nodeName = pod.spec?.nodeName ?? "";
+  } catch {
+    return null;
+  }
+  if (!nodeName) return null;
+
+  const statsPath = `/api/v1/nodes/${encodeURIComponent(
+    nodeName,
+  )}/proxy/stats/summary`;
+  const statsRes = await k8sRequest(ctx, statsPath);
+  if (statsRes.status !== 200) return null;
+  try {
+    const summary = JSON.parse(statsRes.body) as {
+      pods?: Array<{
+        podRef?: { name?: string; namespace?: string };
+        containers?: Array<{
+          name?: string;
+          rootfs?: { usedBytes?: number };
+          logs?: { usedBytes?: number };
+        }>;
+      }>;
+    };
+    const pod = summary.pods?.find(
+      (item) =>
+        item.podRef?.name === podName &&
+        item.podRef?.namespace === ctx.namespace,
+    );
+    const container =
+      pod?.containers?.find((item) => item.name === containerName) ??
+      pod?.containers?.[0];
+    if (!container?.rootfs || typeof container.rootfs.usedBytes !== "number") {
+      return null;
+    }
+    return {
+      writableBytes: container.rootfs.usedBytes,
+      logBytes:
+        typeof container.logs?.usedBytes === "number"
+          ? container.logs.usedBytes
+          : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function getPodLogs(
   kubeconfigYaml: string,
   opts: {

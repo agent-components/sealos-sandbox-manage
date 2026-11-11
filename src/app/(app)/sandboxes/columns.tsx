@@ -107,6 +107,8 @@ function SandboxActions({
   }
 
   const running = record.state === "running";
+  const logsAvailable =
+    record.state === "starting" || record.state === "running";
 
   return (
     <Space size={8}>
@@ -125,14 +127,16 @@ function SandboxActions({
           items: [
             { key: "ide", label: "IDE", disabled: !running },
             { key: "desktop", label: "桌面", disabled: !running },
-            { key: "logs", label: "日志" },
+            { key: "logs", label: "日志", disabled: !logsAvailable },
+            { key: "disk", label: "占用检查", disabled: !running },
             { type: "divider" },
             { key: "delete", danger: true, label: "删除" },
           ],
           onClick: ({ key }) => {
             if (key === "ide") void openIde();
             if (key === "desktop") ctx.showFloat("desktop", record);
-            if (key === "logs") ctx.showFloat("logs", record);
+            if (key === "logs" && logsAvailable) ctx.showFloat("logs", record);
+            if (key === "disk") ctx.showFloat("disk", record);
             if (key === "delete") ctx.showFloat("delete", record);
           },
         }}
