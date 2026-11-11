@@ -23,17 +23,28 @@ export type EphemeralDiskReport = {
 };
 
 /**
- * 只统计容器启动之后写入或改动的普通文件，并停在根文件系统上。
- * 镜像里原有的文件时间更早，挂载的持久磁盘是别的文件系统，两者都不会进来。
- * 改动镜像里的文件会整文件复制到可写层，修改时间也会更新，因此会计入。
+ * 镜像里原有的文件不计入。从 entrypoint（1 号进程）启动开始，
+ * 可写层里新增或整份复制上来的文件都计入，之后别的程序写的也计入。
+ * 挂载卷不计入。用状态变更时间而不是修改时间：整份复制到可写层时，修改时间仍是镜像里的旧值。
  */
 const SCAN_COMMAND = `
 start=$(stat -c %Y /proc/1 2>/dev/null || echo 0)
-if ! find / -maxdepth 0 -printf . >/dev/null 2>&1; then
+if ! find / -maxdepth 0 -printf . >/dev/null 2>&1 \\
+  || ! find / -maxdepth 0 -newerct @0 -printf . >/dev/null 2>&1; then
   echo UNSUPPORTED
   exit 0
 fi
-find / -xdev -type f -newermt "@$((start - 1))" -printf '%s\\t%p\\n' 2>/dev/null | awk -F '\\t' '
+
+set -- / -xdev '('
+while IFS= read -r mp; do
+  [ -n "$mp" ] || continue
+  set -- "$@" -path "$mp" -prune -o
+done <<EOF
+$(awk '$5 != "/" { mp = $5; gsub(/\\\\040/, " ", mp); if (!seen[mp]++) print mp }' /proc/self/mountinfo)
+EOF
+set -- "$@" -type f -newerct "@$((start - 1))" -printf '%s\\t%p\\n' ')'
+
+find "$@" 2>/dev/null | awk -F '\\t' '
 function bucket(path,   n, a, i, dirs, b) {
   n = split(path, a, "/")
   dirs = n - 2
@@ -120,7 +131,7 @@ export async function inspectEphemeralDisk(
   let detail: string | null = null;
   if (parsed.unsupported) {
     detail =
-      "沙箱里的 find 无法按修改时间筛选，暂时列不出目录。上方数字仍是节点统计的可写层占用。";
+      "沙箱里的 find 无法按状态变更时间筛选，暂时列不出目录。上方数字仍是节点统计的可写层占用。";
   } else if (
     scan.exitCode !== 0 &&
     parsed.directories.length === 0 &&
@@ -133,7 +144,7 @@ export async function inspectEphemeralDisk(
     parsed.total * 2 < kubeletWritable
   ) {
     detail =
-      "目录合计明显小于可写层。表里只列出启动后改过修改时间的文件，按旧时间写入的文件不会出现。";
+      "目录合计明显小于可写层。容器日志不在这些目录里，被进程占着的已删除文件也不会出现。";
   }
 
   return {
