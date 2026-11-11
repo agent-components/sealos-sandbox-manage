@@ -25,16 +25,31 @@ function asConfig(
   };
 }
 
+/**
+ * 写入自动关机配置。开关或等待时长相对当前记录有变化时，
+ * 同时把上次活跃时间刷新为现在，避免沿用旧时间被立刻空闲关机。
+ */
 export async function setSandboxIdleConfig(
   owner: string,
   sandboxId: string,
   config: IdleConfig
 ): Promise<void> {
+  const current = await prisma.sandboxRecord.findFirst({
+    where: { owner, sandboxId },
+    select: { autoShutdown: true, idleMinutes: true },
+  });
+  const previous = asConfig(current);
+  const changed =
+    current !== null &&
+    (previous.autoShutdown !== config.autoShutdown ||
+      previous.idleMinutes !== config.idleMinutes);
+
   await prisma.sandboxRecord.updateMany({
     where: { owner, sandboxId },
     data: {
       autoShutdown: config.autoShutdown,
       idleMinutes: config.idleMinutes,
+      ...(changed ? { lastActivityAt: new Date() } : {}),
     },
   });
 }

@@ -25,7 +25,7 @@ export function SandboxTable({
       columns={columns}
       widthKey="sandbox-sandboxes-width"
       columnKey="sandbox-sandboxes-columns"
-      scroll={{ x: 1480 }}
+      scroll={{ x: 1532 }}
       loadingWhenEmpty
       tableProps={{
         locale: {

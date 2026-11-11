@@ -6,9 +6,49 @@ import { ProDrawer } from "listpage-components/ProDrawer";
 import { sandboxClient } from "@/lib/client";
 import { formatTime, sandboxIdOf } from "./types";
 
-function commandOf(args: Record<string, unknown> | undefined) {
+const ARG_ORDER = [
+  "pattern",
+  "path",
+  "glob",
+  "glob_pattern",
+  "target_directory",
+  "output_mode",
+  "case_insensitive",
+  "context",
+  "head_limit",
+  "multiline",
+  "offset",
+  "limit",
+  "old_string",
+  "new_string",
+  "replace_all",
+  "contents",
+  "working_directory",
+];
+
+function formatArg(key: string, value: unknown) {
+  if (value === undefined || value === null || value === "" || value === false) return "";
+  if (typeof value === "string") {
+    return value.includes("\n") ? `${key}:\n${value}` : `${key}: ${value}`;
+  }
+  if (typeof value === "number" || typeof value === "boolean") return `${key}: ${String(value)}`;
+  return `${key}: ${JSON.stringify(value)}`;
+}
+
+/** exec 显示命令；grep / read 等显示工具参数（沙箱 id 已在标题）。 */
+function argumentView(args: Record<string, unknown> | undefined) {
   const command = args?.command;
-  return typeof command === "string" ? command : "";
+  if (typeof command === "string" && command) {
+    return { kind: "command" as const, text: command };
+  }
+  if (!args) return { kind: "text" as const, text: "" };
+  const ranked = new Map(ARG_ORDER.map((key, index) => [key, index]));
+  const lines = Object.entries(args)
+    .filter(([key]) => key !== "id")
+    .sort(([a], [b]) => (ranked.get(a) ?? 100) - (ranked.get(b) ?? 100) || a.localeCompare(b))
+    .map(([key, value]) => formatArg(key, value))
+    .filter(Boolean);
+  return { kind: "text" as const, text: lines.join("\n") };
 }
 
 function commandResultOf(value: unknown) {
@@ -53,18 +93,56 @@ function errorTextOf(value: unknown) {
 
 type McpLogDetail = NonNullable<Awaited<ReturnType<typeof sandboxClient.getMcpLog>>>;
 
+function asRecord(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+/** grep 的结果是匹配文本；read 的结果在 data 里。 */
+function fileResultOf(value: unknown, args: Record<string, unknown>) {
+  if (typeof value === "string") return { failed: false, text: value };
+  const record = asRecord(value);
+  if (!record) return null;
+  const nested = asRecord(record.structuredContent);
+  const body = nested ?? record;
+  const errorText = typeof body.error === "string" ? body.error : "";
+  if (errorText) return { failed: true, text: errorText };
+  if (typeof body.data === "string") {
+    if (body.encoding === "base64") {
+      const media = typeof body.mediaType === "string" ? body.mediaType : "二进制";
+      const bytes = typeof body.bytes === "number" ? `，${body.bytes} 字节` : "";
+      return { failed: false, text: `${media}${bytes}` };
+    }
+    const wholeFile =
+      args.offset === undefined &&
+      args.limit === undefined &&
+      typeof body.totalLines === "number" &&
+      body.totalLines > 0;
+    const note = wholeFile ? `\n\n(共 ${body.totalLines} 行)` : "";
+    return { failed: false, text: `${body.data}${note}` };
+  }
+  if (typeof body.text === "string" && body.text) return { failed: false, text: body.text };
+  return { failed: false, text: JSON.stringify(body, null, 2) };
+}
+
 function resultView(detail: McpLogDetail) {
   if (detail.resultLoadError) {
     return { failed: true, text: detail.resultLoadError };
   }
-  const command = commandResultOf(detail.result);
-  if (command) {
-    if (command.ok) return { failed: false, text: command.stdout };
-    const errorText = command.stderr.trim() ? command.stderr : command.stdout;
-    if (errorText.trim()) return { failed: true, text: errorText };
-    const code = command.exitCode == null ? "" : `，退出码 ${command.exitCode}`;
-    return { failed: true, text: `命令失败${code}` };
+  const isExec =
+    detail.log.tool === "exec" || typeof detail.log.arguments.command === "string";
+  if (isExec) {
+    const command = commandResultOf(detail.result);
+    if (command) {
+      if (command.ok) return { failed: false, text: command.stdout };
+      const errorText = command.stderr.trim() ? command.stderr : command.stdout;
+      if (errorText.trim()) return { failed: true, text: errorText };
+      const code = command.exitCode == null ? "" : `，退出码 ${command.exitCode}`;
+      return { failed: true, text: `命令失败${code}` };
+    }
   }
+  const file = fileResultOf(detail.result, detail.log.arguments);
+  if (file) return file;
   const errorText = errorTextOf(detail.result);
   if (errorText) return { failed: true, text: errorText };
   if (detail.log.resultError) return { failed: true, text: detail.log.resultError };
@@ -73,20 +151,23 @@ function resultView(detail: McpLogDetail) {
 }
 
 function LogBody({ detail }: { detail: McpLogDetail }) {
-  const command = commandOf(detail.log.arguments);
+  const args = argumentView(detail.log.arguments);
   const result = resultView(detail);
+  const emptyArgs = detail.log.tool === "exec" ? "无命令" : "无参数";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, padding: "16px 20px 24px" }}>
       <div>
         <Typography.Text type="secondary">参数</Typography.Text>
-        {command ? (
+        {args.kind === "command" ? (
           <pre className="sandbox-shell-block">
             <span className="sandbox-shell-prompt">$ </span>
-            {command}
+            {args.text}
           </pre>
+        ) : args.text ? (
+          <pre className="sandbox-shell-block">{args.text}</pre>
         ) : (
           <Typography.Paragraph type="secondary" style={{ margin: "8px 0 0" }}>
-            无命令
+            {emptyArgs}
           </Typography.Paragraph>
         )}
       </div>

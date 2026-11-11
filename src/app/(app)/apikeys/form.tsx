@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { App, Form, Input, Select, theme } from "antd";
+import { SearchOutlined } from "@ant-design/icons";
+import { App, Button, Checkbox, Form, Input, Spin, theme } from "antd";
 import { FormModal } from "listpage-components/FormModal";
 import { sandboxClient } from "@/lib/client";
 import type { ApiKey } from "@/lib/apikey/schema";
-import { MCP_TOOL_NAME_LIST, type McpToolName } from "@/lib/mcp/tools";
+import { MCP_TOOL_LABEL, MCP_TOOL_NAME_LIST, type McpToolName } from "@/lib/mcp/tools";
 import type { Sandbox } from "@/lib/sandbox/schema";
 import type { Template } from "@/lib/template/schema";
 
@@ -18,18 +19,186 @@ type ApiKeyFormValues = {
   allowedTools?: string[];
 };
 
-const TOOL_LABEL: Record<McpToolName, string> = {
-  read: "读文件",
-  write: "写文件",
-  edit: "编辑",
-  delete: "删除",
-  grep: "搜索",
-  glob: "匹配路径",
-  exec: "执行命令",
-};
-
 function toolAccessOf(tools: string[] | null | undefined): ToolAccess {
   return tools && tools.length > 0 ? "custom" : "all";
+}
+
+type SandboxChoice = {
+  id: string;
+  templateName: string;
+};
+
+function SandboxPicker({
+  id,
+  value,
+  onChange,
+  choices,
+  loading,
+}: {
+  id?: string;
+  value?: string[];
+  onChange?: (next: string[]) => void;
+  choices: SandboxChoice[];
+  loading: boolean;
+}) {
+  const { token } = theme.useToken();
+  const [keyword, setKeyword] = useState("");
+  const selected = value ?? [];
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+  const visible = useMemo(() => {
+    const query = keyword.trim().toLowerCase();
+    if (!query) return choices;
+    return choices.filter(
+      (item) =>
+        item.id.toLowerCase().includes(query) ||
+        item.templateName.toLowerCase().includes(query),
+    );
+  }, [choices, keyword]);
+  const allVisibleSelected =
+    visible.length > 0 && visible.every((item) => selectedSet.has(item.id));
+
+  function toggle(id: string) {
+    if (selectedSet.has(id)) {
+      onChange?.(selected.filter((item) => item !== id));
+      return;
+    }
+    onChange?.([...selected, id]);
+  }
+
+  function selectVisible() {
+    const next = [...selected];
+    const have = new Set(selected);
+    for (const item of visible) {
+      if (have.has(item.id)) continue;
+      have.add(item.id);
+      next.push(item.id);
+    }
+    onChange?.(next);
+  }
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${token.colorBorder}`,
+        borderRadius: token.borderRadius,
+        background: token.colorBgContainer,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "2px 8px 2px 4px",
+          borderBottom: `1px solid ${token.colorSplit}`,
+        }}
+      >
+        <Input
+          id={id}
+          allowClear
+          variant="borderless"
+          placeholder="搜索沙箱或模板"
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+          prefix={<SearchOutlined style={{ color: token.colorTextQuaternary }} />}
+        />
+        <span
+          style={{
+            flex: "none",
+            fontSize: 12,
+            color: token.colorTextSecondary,
+            whiteSpace: "nowrap",
+          }}
+        >
+          已选 {selected.length}
+        </span>
+      </div>
+      <div style={{ maxHeight: 240, overflow: "auto" }}>
+        {loading ? (
+          <div style={{ padding: 24, textAlign: "center" }}>
+            <Spin size="small" />
+          </div>
+        ) : visible.length === 0 ? (
+          <div
+            style={{
+              padding: "20px 12px",
+              textAlign: "center",
+              color: token.colorTextSecondary,
+              fontSize: 13,
+            }}
+          >
+            {choices.length === 0 ? "还没有沙箱" : "没有匹配的沙箱"}
+          </div>
+        ) : (
+          visible.map((item) => {
+            const checked = selectedSet.has(item.id);
+            return (
+              <label
+                key={item.id}
+                className={
+                  checked ? "apikey-sandbox-row is-selected" : "apikey-sandbox-row"
+                }
+              >
+                <Checkbox checked={checked} onChange={() => toggle(item.id)} />
+                <span style={{ minWidth: 0 }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 13,
+                      lineHeight: "20px",
+                    }}
+                  >
+                    {item.id}
+                  </span>
+                  {item.templateName ? (
+                    <span
+                      style={{
+                        display: "block",
+                        marginTop: 2,
+                        fontSize: 12,
+                        lineHeight: "18px",
+                        color: token.colorTextSecondary,
+                      }}
+                    >
+                      {item.templateName}
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+            );
+          })
+        )}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          padding: "4px 12px",
+          borderTop: `1px solid ${token.colorSplit}`,
+        }}
+      >
+        <Button
+          type="link"
+          size="small"
+          disabled={loading || allVisibleSelected || visible.length === 0}
+          onClick={selectVisible}
+          style={{ padding: 0, height: "auto" }}
+        >
+          全选
+        </Button>
+        <Button
+          type="link"
+          size="small"
+          disabled={selected.length === 0}
+          onClick={() => onChange?.([])}
+          style={{ padding: 0, height: "auto" }}
+        >
+          清空
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 const TOOL_ACCESS_OPTIONS: { value: ToolAccess; label: string }[] = [
@@ -138,7 +307,7 @@ function ToolChips({
           >
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{name}</span>
             <span style={{ fontSize: 13, color: token.colorTextSecondary }}>
-              {TOOL_LABEL[name]}
+              {MCP_TOOL_LABEL[name]}
             </span>
           </button>
         );
@@ -190,18 +359,22 @@ export function ApiKeyFormModal({
     if (open) void loadSandboxes();
   }, [loadSandboxes, open]);
 
-  const sandboxOptions = useMemo(() => {
+  const sandboxChoices = useMemo(() => {
     const templateNameById = new Map(
       templates.map((item) => [item.id, item.name || item.id]),
     );
-    return sandboxes.map((item) => ({
-      value: item.id,
-      label: item.id,
+    const known = sandboxes.map((item) => ({
+      id: item.id,
       templateName: item.templateId
         ? templateNameById.get(item.templateId) || item.templateId
         : "",
     }));
-  }, [sandboxes, templates]);
+    const knownIds = new Set(known.map((item) => item.id));
+    const missing = (editing?.sandboxIds ?? [])
+      .filter((id) => !knownIds.has(id))
+      .map((id) => ({ id, templateName: "当前列表中已没有" }));
+    return [...missing, ...known];
+  }, [editing, sandboxes, templates]);
 
   async function save(values: ApiKeyFormValues) {
     const trimmed = values.name.trim();
@@ -255,9 +428,10 @@ export function ApiKeyFormModal({
       }}
       formProps={{
         form,
+        className: "apikey-form",
         layout: "horizontal",
         labelCol: { flex: "88px" },
-        wrapperCol: { flex: 1 },
+        wrapperCol: { flex: "1 1 0", style: { minWidth: 0, maxWidth: "100%" } },
         labelAlign: "right",
         colon: false,
         style: { marginTop: 16 },
@@ -274,36 +448,9 @@ export function ApiKeyFormModal({
         label="沙箱"
         name="sandboxIds"
       >
-        <Select
-          mode="multiple"
-          allowClear
-          showSearch
-          placeholder="选择允许访问的沙箱"
+        <SandboxPicker
+          choices={sandboxChoices}
           loading={sandboxesLoading}
-          options={sandboxOptions}
-          filterOption={(input, option) => {
-            const keyword = input.trim().toLowerCase();
-            if (!keyword) return true;
-            const label = String(option?.label ?? "").toLowerCase();
-            const templateName = String(option?.templateName ?? "").toLowerCase();
-            return label.includes(keyword) || templateName.includes(keyword);
-          }}
-          optionRender={(option) => (
-            <div style={{ padding: "2px 0", lineHeight: 1.35 }}>
-              <div>{option.label}</div>
-              {option.data.templateName ? (
-                <div
-                  style={{
-                    marginTop: 2,
-                    fontSize: 12,
-                    color: "var(--ant-color-text-secondary)",
-                  }}
-                >
-                  {option.data.templateName}
-                </div>
-              ) : null}
-            </div>
-          )}
         />
       </Form.Item>
       <Form.Item

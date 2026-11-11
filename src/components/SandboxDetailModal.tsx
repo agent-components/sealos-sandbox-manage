@@ -712,7 +712,6 @@ export function SandboxDetailModal({
       title={sandboxId}
       open={open}
       size="large"
-      closable={false}
       key={open ? sandboxId : "closed"}
       defaultActiveTab="info"
       onClose={() => {
@@ -720,9 +719,6 @@ export function SandboxDetailModal({
       }}
       extra={
         <Space>
-          <Button onClick={onClose} disabled={busy !== null}>
-            关闭
-          </Button>
           <Button
             loading={busy === "sync"}
             disabled={busy !== null || !sandbox?.templateId}

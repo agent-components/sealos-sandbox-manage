@@ -146,7 +146,8 @@ const sandboxSchema = {
     },
     lastActivityAt: {
       type: "string",
-      description: "上次活跃时间（ISO 8601）；仅 MCP 工具调用成功时更新",
+      description:
+        "上次活跃时间（ISO 8601）。MCP 工具调用成功、开机，以及修改自动关机配置时更新",
     },
     createdAt: { type: "string" },
     upTime: { type: "string" },

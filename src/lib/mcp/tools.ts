@@ -220,6 +220,24 @@ export type McpToolName = (typeof MCP_TOOL_NAME_LIST)[number];
 
 export const MCP_TOOL_NAMES: string[] = [...MCP_TOOL_NAME_LIST];
 
+/** 界面上的中文名。存储和协议仍用英文工具名。 */
+export const MCP_TOOL_LABEL: Record<McpToolName, string> = {
+  read: "读文件",
+  write: "写文件",
+  edit: "编辑",
+  delete: "删除",
+  grep: "搜索",
+  glob: "匹配路径",
+  exec: "执行命令",
+};
+
+export function mcpToolLabel(name: string) {
+  if ((MCP_TOOL_NAME_LIST as readonly string[]).includes(name)) {
+    return MCP_TOOL_LABEL[name as McpToolName];
+  }
+  return name;
+}
+
 /** 未限制（null / 空）时返回全部；否则只返回勾选的工具。 */
 export function mcpTools(allowed?: string[] | null): McpToolDefinition[] {
   if (allowed == null || allowed.length === 0) return MCP_TOOLS;

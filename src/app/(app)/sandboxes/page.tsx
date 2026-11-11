@@ -10,6 +10,7 @@ import {
   type FloatComponentProps,
 } from "listpage-components/ListPage";
 import { AutoRefreshList } from "@/components/list-page";
+import { SandboxDesktopModal } from "@/components/SandboxDesktopModal";
 import { SandboxDetailModal } from "@/components/SandboxDetailModal";
 import { SandboxLogsModal } from "@/components/SandboxLogsModal";
 import { sandboxClient } from "@/lib/client";
@@ -47,6 +48,16 @@ function DetailFloat({ record, onClose }: FloatComponentProps<Sandbox>) {
 function LogsFloat({ record, onClose }: FloatComponentProps<Sandbox>) {
   return (
     <SandboxLogsModal
+      sandboxId={record?.id ?? ""}
+      open
+      onClose={() => onClose()}
+    />
+  );
+}
+
+function DesktopFloat({ record, onClose }: FloatComponentProps<Sandbox>) {
+  return (
+    <SandboxDesktopModal
       sandboxId={record?.id ?? ""}
       open
       onClose={() => onClose()}
@@ -157,6 +168,12 @@ export default function SandboxesPage() {
       {
         key: "logs",
         render: (props: FloatComponentProps<Sandbox>) => <LogsFloat {...props} />,
+      },
+      {
+        key: "desktop",
+        render: (props: FloatComponentProps<Sandbox>) => (
+          <DesktopFloat {...props} />
+        ),
       },
       {
         key: "delete",

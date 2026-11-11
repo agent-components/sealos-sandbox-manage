@@ -362,16 +362,52 @@
   }
 }
 
-/* 工具权限：选「自定义」后芯片不能把整行挤到标题下面 */
+/* 令牌表单：工具芯片不能把标题挤到下一行 */
+.apikey-form .ant-form-item-row,
 .apikey-tool-field > .ant-form-item-row {
   flex-wrap: nowrap !important;
+  align-items: flex-start;
 }
 
+.apikey-form .ant-form-item-label,
+.apikey-tool-field .ant-form-item-label {
+  flex: 0 0 88px !important;
+  max-width: 88px;
+}
+
+.apikey-form .ant-form-item-control,
+.apikey-form .ant-form-item-control-input,
+.apikey-form .ant-form-item-control-input-content,
 .apikey-tool-field .ant-form-item-control,
 .apikey-tool-field .ant-form-item-control-input,
 .apikey-tool-field .ant-form-item-control-input-content {
   min-width: 0;
   max-width: 100%;
+}
+
+.apikey-sandbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.apikey-sandbox-row + .apikey-sandbox-row {
+  border-top: 1px solid var(--ant-color-split);
+}
+
+.apikey-sandbox-row:hover {
+  background: var(--ant-color-fill-tertiary);
+}
+
+.apikey-sandbox-row.is-selected {
+  background: var(--ant-color-primary-bg);
+}
+
+.apikey-sandbox-row .ant-checkbox {
+  margin-top: 3px;
 }
 
 /* 侧栏 logo 与标题间距（覆盖 listpage-components 的 gap: 0） */

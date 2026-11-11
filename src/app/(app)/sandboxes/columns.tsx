@@ -106,39 +106,33 @@ function SandboxActions({
     }
   }
 
+  const running = record.state === "running";
+
   return (
-    <Space size={0}>
+    <Space size={8}>
       <Button
         type="link"
         size="small"
-        style={{ paddingInline: 2 }}
+        style={{ paddingInline: 0 }}
         onClick={() => ctx.showFloat("detail", record)}
       >
         编辑
-      </Button>
-      <Button
-        type="link"
-        size="small"
-        style={{ paddingInline: 2 }}
-        onClick={() => ctx.showFloat("logs", record)}
-      >
-        日志
-      </Button>
-      <Button
-        type="link"
-        size="small"
-        style={{ paddingInline: 2 }}
-        disabled={record.state !== "running"}
-        onClick={() => void openIde()}
-      >
-        IDE
       </Button>
       <Dropdown
         trigger={["click"]}
         placement="bottomRight"
         menu={{
-          items: [{ key: "delete", danger: true, label: "删除" }],
+          items: [
+            { key: "ide", label: "IDE", disabled: !running },
+            { key: "desktop", label: "桌面", disabled: !running },
+            { key: "logs", label: "日志" },
+            { type: "divider" },
+            { key: "delete", danger: true, label: "删除" },
+          ],
           onClick: ({ key }) => {
+            if (key === "ide") void openIde();
+            if (key === "desktop") ctx.showFloat("desktop", record);
+            if (key === "logs") ctx.showFloat("logs", record);
             if (key === "delete") ctx.showFloat("delete", record);
           },
         }}
@@ -146,7 +140,7 @@ function SandboxActions({
         <Button
           type="link"
           size="small"
-          style={{ paddingInline: 2 }}
+          style={{ paddingInline: 0 }}
           icon={<EllipsisOutlined />}
           aria-label="更多"
         />
@@ -175,10 +169,12 @@ export function sandboxColumns(
       key: "id",
       width: 160,
       fixed: "left",
+      ellipsis: { showTitle: false },
       render: (id: string) => (
         <Typography.Text
           strong
-          style={{ fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}
+          ellipsis={{ tooltip: id }}
+          style={{ fontFamily: "var(--font-mono)", width: "100%" }}
         >
           {id}
         </Typography.Text>
@@ -277,7 +273,7 @@ export function sandboxColumns(
     {
       title: "操作",
       key: "actions",
-      width: 168,
+      width: 104,
       align: "right",
       fixed: "right",
       component: ({ record, ctx }) => (

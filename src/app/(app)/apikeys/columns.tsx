@@ -7,6 +7,7 @@ import type {
   ListPageContextValue,
 } from "listpage-components/ListPage";
 import { sandboxClient } from "@/lib/client";
+import { mcpToolLabel } from "@/lib/mcp/tools";
 import type { ApiKey } from "@/lib/apikey/schema";
 
 export type ApiKeyFilters = { q?: string };
@@ -73,13 +74,13 @@ function AllowedToolsAccess({ tools }: { tools?: string[] | null }) {
   const [first, ...rest] = list;
   return (
     <Space size={6} wrap>
-      <span>{first}</span>
+      <span>{mcpToolLabel(first)}</span>
       {rest.length > 0 ? (
         <Tooltip
           title={
             <div>
               {rest.map((name) => (
-                <div key={name}>{name}</div>
+                <div key={name}>{mcpToolLabel(name)}</div>
               ))}
             </div>
           }

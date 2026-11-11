@@ -78,7 +78,7 @@ npm run start
 
 | 路径         | 作用                                           |
 | ------------ | ---------------------------------------------- |
-| `/sandboxes` | 沙箱列表、创建（选区域）、详情、日志、启停和删除；「IDE」打开 Cursor Remote-SSH（`sandbox@公网host:port`，需 22/TCP） |
+| `/sandboxes` | 沙箱列表、创建（选区域）、详情、日志、启停和删除；「IDE」打开 Cursor Remote-SSH（`root@公网host:port`，需 22/TCP） |
 | `/templates` | 镜像、端口、环境变量、存储、启动命令和默认规格 |
 | `/mcp-logs`  | `exec` 的调用记录                              |
 | `/apikeys`   | 令牌名称、授权沙箱、MCP 工具白名单，以及复制明文和 MCP 配置 |

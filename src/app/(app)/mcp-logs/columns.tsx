@@ -2,6 +2,7 @@
 
 import { Button, Tag, Typography } from "antd";
 import type { ListPageColumnType } from "listpage-components/ListPage";
+import { mcpToolLabel } from "@/lib/mcp/tools";
 import {
   formatDuration,
   formatTime,
@@ -78,7 +79,7 @@ export function mcpLogColumns(): ListPageColumnType<McpLogRow, McpLogFilters>[] 
       width: 150,
       render: (value: string) => (
         <Typography.Text code style={{ fontSize: 12 }}>
-          {value}
+          {mcpToolLabel(value)}
         </Typography.Text>
       ),
     },
