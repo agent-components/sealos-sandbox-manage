@@ -97,7 +97,7 @@ export default function TemplatesPage() {
             title="模板列表"
             widthKey="sandbox-templates-width"
             columnKey="sandbox-templates-columns"
-            scroll={{ x: 1070 }}
+            scroll={{ x: 1120 }}
           />
         ),
       }}
