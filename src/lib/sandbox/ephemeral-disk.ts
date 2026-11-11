@@ -23,14 +23,16 @@ export type EphemeralDiskReport = {
 };
 
 /**
- * 镜像里原有的文件不计入。从 entrypoint（1 号进程）启动开始，
- * 可写层里新增或整份复制上来的文件都计入，之后别的程序写的也计入。
- * 挂载卷不计入。用状态变更时间而不是修改时间：整份复制到可写层时，修改时间仍是镜像里的旧值。
+ * 只统计 overlay 上层的增量。镜像解包会跨过 1 号进程启动时刻，尾部大约再写半秒。
+ * 上层目录在宿主机上，容器里看不到，所以从启动 1 秒之后开始算。
+ * 字节数用磁盘块，和 Sealos 计入 100MB 的方式一致。挂载卷不计入。
  */
 const SCAN_COMMAND = `
-start=$(stat -c %Y /proc/1 2>/dev/null || echo 0)
-if ! find / -maxdepth 0 -printf . >/dev/null 2>&1 \\
-  || ! find / -maxdepth 0 -newerct @0 -printf . >/dev/null 2>&1; then
+hz=$(getconf CLK_TCK)
+btime=$(awk '/^btime /{print $2}' /proc/stat)
+ticks=$(awk '{print $22}' /proc/1/stat)
+start=$(awk -v b="$btime" -v t="$ticks" -v h="$hz" 'BEGIN{printf "%.6f", b + t / h}')
+if ! find / -maxdepth 0 -printf . >/dev/null 2>&1; then
   echo UNSUPPORTED
   exit 0
 fi
@@ -42,9 +44,9 @@ while IFS= read -r mp; do
 done <<EOF
 $(awk '$5 != "/" { mp = $5; gsub(/\\\\040/, " ", mp); if (!seen[mp]++) print mp }' /proc/self/mountinfo)
 EOF
-set -- "$@" -type f -newerct "@$((start - 1))" -printf '%s\\t%p\\n' ')'
+set -- "$@" '(' -type f -o -type d ')' -printf '%C@\\t%b\\t%p\\n' ')'
 
-find "$@" 2>/dev/null | awk -F '\\t' '
+find "$@" 2>/dev/null | awk -F '\\t' -v start="$start" '
 function bucket(path,   n, a, i, dirs, b) {
   n = split(path, a, "/")
   dirs = n - 2
@@ -54,15 +56,18 @@ function bucket(path,   n, a, i, dirs, b) {
   for (i = 2; i < 2 + dirs; i++) b = b "/" a[i]
   return b
 }
+$1+0 <= start+1 { next }
 {
-  bytes = $1 + 0
+  path = $3
+  if (path == "/") next
+  bytes = ($2 + 0) * 512
   total += bytes
-  key = bucket($2)
+  key = bucket(path)
   sums[key] += bytes
 }
 END {
   print (total + 0) "\\tTOTAL"
-  for (k in sums) print sums[k] "\\t" k
+  for (k in sums) if (sums[k] > 0) print sums[k] "\\t" k
 }
 '
 `.trim();
@@ -131,7 +136,7 @@ export async function inspectEphemeralDisk(
   let detail: string | null = null;
   if (parsed.unsupported) {
     detail =
-      "沙箱里的 find 无法按状态变更时间筛选，暂时列不出目录。上方数字仍是节点统计的可写层占用。";
+      "沙箱里的 find 无法列出文件时间，暂时列不出目录。上方数字仍是节点统计的可写层占用。";
   } else if (
     scan.exitCode !== 0 &&
     parsed.directories.length === 0 &&

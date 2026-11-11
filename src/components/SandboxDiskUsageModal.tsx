@@ -172,11 +172,11 @@ export function SandboxDiskUsageModal({
         <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
           可写层 {formatBytes(report.writableBytes ?? 0)}
           {report.logBytes ? `，容器日志 ${formatBytes(report.logBytes)}` : ""}
-          。目录从 entrypoint 启动开始统计可写层里新增或改动的文件，不含镜像原有内容和挂载卷。
+          。目录是 overlay 上层从 entrypoint 启动后新增的磁盘占用，不含镜像原有内容和挂载卷。
         </Typography.Paragraph>
       ) : report ? (
         <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
-          节点没有返回可写层统计。上面的数字从 entrypoint 启动开始，统计可写层里新增或改动的文件，不含镜像原有内容和挂载卷。
+          节点没有返回可写层统计。上面的数字是 overlay 上层从 entrypoint 启动后的磁盘占用，不含镜像原有内容和挂载卷。
         </Typography.Paragraph>
       ) : null}
       {report?.detail ? (
@@ -191,7 +191,7 @@ export function SandboxDiskUsageModal({
         loading={loading && !report}
         dataSource={rows}
         locale={{
-          emptyText: report ? "没有发现 entrypoint 启动后写入可写层的文件" : "检查中…",
+          emptyText: report ? "overlay 上层还没有新增占用" : "检查中…",
         }}
         columns={[
           { title: "目录", dataIndex: "path", ellipsis: true },
