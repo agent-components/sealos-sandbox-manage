@@ -130,6 +130,7 @@ export default function SandboxesPage() {
     async (
       page: { current: number; pageSize: number },
       filters: SandboxFilters,
+      sort?: { field?: string; order?: "ascend" | "descend" | null },
     ) => {
       try {
         const res = await sandboxClient.listSandboxes({
@@ -139,6 +140,9 @@ export default function SandboxesPage() {
           ...(filters.tag?.trim() ? { q: filters.tag.trim() } : {}),
           ...(filters.state ? { state: filters.state } : {}),
           ...(filters.templateId ? { templateId: filters.templateId } : {}),
+          ...(sort?.field === "lastActivityAt" && sort.order
+            ? { sort: "lastActivityAt", order: sort.order }
+            : {}),
         });
         return { list: res.list, total: res.total };
       } catch (err) {

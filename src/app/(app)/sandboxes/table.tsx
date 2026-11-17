@@ -4,8 +4,11 @@ import {
   useListPageContext,
   type ListPageColumnType,
 } from "listpage-components/ListPage";
+import { Space } from "antd";
 import { HydratedProTable } from "@/components/list-page";
 import type { Sandbox } from "@/lib/sandbox/schema";
+import { BatchStopButton } from "./batch-stop";
+import { BatchUpdateButton } from "./batch-update";
 import type { SandboxFilters } from "./filters";
 
 export function SandboxTable({
@@ -24,9 +27,28 @@ export function SandboxTable({
     <HydratedProTable
       columns={columns}
       widthKey="sandbox-sandboxes-width"
-      columnKey="sandbox-sandboxes-columns"
-      scroll={{ x: 1532 }}
+      columnKey="sandbox-sandboxes-columns-v2"
+      scroll={{ x: 1492 }}
       loadingWhenEmpty
+      selectable
+      toolbar={(selection) => (
+        <Space size={8}>
+          <BatchStopButton
+            rows={selection.selectedRows}
+            onDone={() => {
+              selection.clearSelection();
+              ctx.refreshTable();
+            }}
+          />
+          <BatchUpdateButton
+            rows={selection.selectedRows}
+            onDone={() => {
+              selection.clearSelection();
+              ctx.refreshTable();
+            }}
+          />
+        </Space>
+      )}
       tableProps={{
         locale: {
           emptyText: ctx.loading

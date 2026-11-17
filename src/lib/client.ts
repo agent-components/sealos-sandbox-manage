@@ -120,6 +120,8 @@ export type ListSandboxesQuery = PageQuery & {
   keyword?: string;
   state?: Sandbox["state"];
   templateId?: string;
+  sort?: "lastActivityAt";
+  order?: "ascend" | "descend";
 };
 
 function appendPage(q: URLSearchParams, query?: PageQuery) {
@@ -211,6 +213,8 @@ export const sandboxClient = {
     if (query?.keyword?.trim()) q.set("keyword", query.keyword.trim());
     if (query?.state) q.set("state", query.state);
     if (query?.templateId) q.set("templateId", query.templateId);
+    if (query?.sort) q.set("sort", query.sort);
+    if (query?.order) q.set("order", query.order);
     appendPage(q, query);
     const qs = q.toString();
     return request<PageResult<Sandbox>>(

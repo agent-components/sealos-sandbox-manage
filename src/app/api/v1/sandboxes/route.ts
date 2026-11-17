@@ -86,6 +86,17 @@ export async function GET(req: NextRequest) {
           sandboxFromRecord(record, templateById.get(record.templateId))
         );
 
+        const sort = req.nextUrl.searchParams.get("sort");
+        const order = req.nextUrl.searchParams.get("order");
+        if (sort === "lastActivityAt" && (order === "ascend" || order === "descend")) {
+          const dir = order === "ascend" ? 1 : -1;
+          sandboxes.sort((a, b) => {
+            const at = a.lastActivityAt ? Date.parse(a.lastActivityAt) : 0;
+            const bt = b.lastActivityAt ? Date.parse(b.lastActivityAt) : 0;
+            return (at - bt) * dir;
+          });
+        }
+
         const paged = slicePage(sandboxes, page);
         const body = { list: paged.list, total: paged.total };
         return { status: 200, result: body, value: jsonOk(body) };

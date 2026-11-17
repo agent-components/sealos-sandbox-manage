@@ -3,6 +3,7 @@ import {
   resolveSandboxRegion,
 } from "@/lib/auth/resolve";
 import { assertSandboxAllowed } from "@/lib/apikey/access";
+import { touchSandboxActivity } from "@/lib/sandbox/idle";
 import { assertOwnedBy } from "@/lib/sandbox/ownership";
 import { setSandboxState } from "@/lib/sandbox/record";
 import { createLaunchpadClient } from "@/lib/sealos/launchpad";
@@ -92,6 +93,7 @@ export async function resolveSandboxForCommand(
 
   if (state === "stopped" || state === "error") {
     await client.startApp(id);
+    await touchSandboxActivity(id);
     lastWritten = "starting";
     await setSandboxState(id, "starting");
   }

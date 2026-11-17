@@ -156,7 +156,7 @@ function SandboxActions({
     record.state === "starting" || record.state === "running";
 
   return (
-    <Space size={8}>
+    <Space size={8} style={{ whiteSpace: "nowrap" }}>
       <Button
         type="link"
         size="small"
@@ -315,6 +315,7 @@ export function sandboxColumns(
       dataIndex: "lastActivityAt",
       key: "lastActivityAt",
       width: 170,
+      sorter: true,
       render: (value?: string) => (
         <Typography.Text type="secondary">{formatTime(value)}</Typography.Text>
       ),
@@ -331,7 +332,7 @@ export function sandboxColumns(
     {
       title: "操作",
       key: "actions",
-      width: 220,
+      width: 132,
       align: "right",
       fixed: "right",
       component: ({ record, ctx }) => (

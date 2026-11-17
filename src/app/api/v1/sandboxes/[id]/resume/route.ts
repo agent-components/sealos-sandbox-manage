@@ -39,9 +39,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         const templateId = await assertOwnedBy(existing, user.username);
         assertSandboxAllowed(user, id);
         await client.startApp(id);
+        await touchSandboxActivity(id);
         const app = await client.getApp(id);
         await setSandboxState(id, mapLaunchpadStatus(app.status));
-        await touchSandboxActivity(id);
         await reconcileSandboxUsage(snapshotFromApp(app, user.username));
         const [sandbox] = await withSandboxIdle(
           user.username,

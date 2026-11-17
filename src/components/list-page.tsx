@@ -6,7 +6,7 @@ import {
   useListPageContext,
   type ListPageColumnType,
 } from "listpage-components/ListPage";
-import { ProTable } from "listpage-components/ProTable";
+import { ProTable, type ProTableToolbarRender } from "listpage-components/ProTable";
 
 export const listPagination = {
   showSizeChanger: true,
@@ -100,6 +100,8 @@ function FillBodyProTable<
     scroll?: TableProps<R>["scroll"];
     tableProps?: TableProps<R>;
     loadingWhenEmpty?: boolean;
+    selectable?: boolean;
+    toolbar?: ProTableToolbarRender<R>;
   },
 ) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -126,6 +128,16 @@ function FillBodyProTable<
         columnResize={{ persistenceKey: props.widthKey }}
         columnSetting={{ persistenceKey: props.columnKey }}
         extra={(columnSetting) => columnSetting?.trigger ?? null}
+        rowSelection={
+          props.selectable
+            ? {
+              selectedRowKeys: ctx.selection.selectedRowKeys,
+              selectedRows: ctx.selection.selectedRows as R[],
+              onChange: (keys, rows) => ctx.onSelectionChange(keys, rows),
+            }
+            : false
+        }
+        toolbar={props.toolbar}
         scroll={scroll}
         sort={{ ...ctx.sort, onChange: ctx.updateSort }}
         pagination={{
@@ -152,6 +164,8 @@ export function HydratedProTable<
   scroll,
   tableProps,
   loadingWhenEmpty = false,
+  selectable = false,
+  toolbar,
 }: {
   columns: ListPageColumnType<R, F>[];
   title?: string;
@@ -160,6 +174,8 @@ export function HydratedProTable<
   scroll?: TableProps<R>["scroll"];
   tableProps?: TableProps<R>;
   loadingWhenEmpty?: boolean;
+  selectable?: boolean;
+  toolbar?: ProTableToolbarRender<R>;
 }) {
   return (
     <ClientOnly>
@@ -171,6 +187,8 @@ export function HydratedProTable<
         scroll={scroll}
         tableProps={tableProps}
         loadingWhenEmpty={loadingWhenEmpty}
+        selectable={selectable}
+        toolbar={toolbar}
       />
     </ClientOnly>
   );
