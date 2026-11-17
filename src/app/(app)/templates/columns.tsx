@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { MoreOutlined } from "@ant-design/icons";
-import { App, Button, Col, Dropdown, Empty, Flex, Pagination, Row, Tag, Typography } from "antd";
+import { CodeSandboxOutlined, MoreOutlined } from "@ant-design/icons";
+import { App, Button, Col, Dropdown, Empty, Flex, Pagination, Row, Tag, Tooltip, Typography } from "antd";
 import {
   useListPageContext,
   type ListPageContextValue,
@@ -182,6 +182,14 @@ function TemplateCard({
             {portText}
           </Typography.Paragraph>
         ) : null}
+      </div>
+      <div style={{ marginTop: "auto" }}>
+        <Tooltip title="引用的沙箱">
+          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+            <CodeSandboxOutlined style={{ marginRight: 6 }} />
+            {record.sandboxCount ?? 0}
+          </Typography.Text>
+        </Tooltip>
       </div>
     </div>
   );

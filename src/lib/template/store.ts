@@ -99,8 +99,21 @@ export async function listTemplatesPage(opts?: {
         }
       : {}),
   });
+  const counts = rows.length
+    ? await prisma.sandboxRecord.groupBy({
+        by: ["templateId"],
+        where: { templateId: { in: rows.map((row) => row.id) } },
+        _count: { _all: true },
+      })
+    : [];
+  const countById = new Map(
+    counts.map((item) => [item.templateId, item._count._all]),
+  );
   return {
-    list: rows.map((row) => toTemplate(row)),
+    list: rows.map((row) => ({
+      ...toTemplate(row),
+      sandboxCount: countById.get(row.id) ?? 0,
+    })),
     total,
   };
 }

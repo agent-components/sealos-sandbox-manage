@@ -80,6 +80,8 @@ export const TemplateSchema = z.object({
   configMap: z.array(TemplateConfigMapSchema).default([]),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
+  /** 引用该模板的沙箱数量，仅列表返回 */
+  sandboxCount: z.number().int().nonnegative().optional(),
 });
 
 export type Template = z.infer<typeof TemplateSchema>;
