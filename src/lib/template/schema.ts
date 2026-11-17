@@ -64,6 +64,7 @@ export const TemplateSchema = z.object({
   id: z.string(),
   name: z.string().min(1).max(64),
   description: z.string().max(200).optional(),
+  icon: z.string().max(280_000).nullable().optional(),
   image: z.string().min(1).max(256),
   imageRegistry: TemplateImageRegistrySchema.nullable().optional(),
   launchCommand: TemplateLaunchCommandSchema.optional(),
@@ -80,6 +81,10 @@ export const TemplateSchema = z.object({
   configMap: z.array(TemplateConfigMapSchema).default([]),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
+  owner: z.string().default(""),
+  /** 创建人的显示名，仅列表返回 */
+  ownerName: z.string().optional(),
+  isPublic: z.boolean().default(false),
   /** 引用该模板的沙箱数量，仅列表返回 */
   sandboxCount: z.number().int().nonnegative().optional(),
 });
@@ -95,6 +100,7 @@ export const CreateTemplateSchema = z.object({
   id: slugSchema.optional(),
   name: z.string().min(1).max(64),
   description: z.string().max(200).optional(),
+  icon: z.string().max(280_000).nullable().optional(),
   image: z.string().min(1).max(256),
   imageRegistry: TemplateImageRegistrySchema.nullable().optional(),
   launchCommand: TemplateLaunchCommandSchema.optional(),
@@ -110,6 +116,8 @@ export const CreateTemplateSchema = z.object({
   env: z.array(TemplateEnvSchema).default([]),
   storage: z.array(TemplateStorageSchema).default([]),
   configMap: z.array(TemplateConfigMapSchema).default([]),
+  /** 创建时直接公开。不会影响之后把私有模板公开（那是复制一条新模板）。 */
+  isPublic: z.boolean().default(false),
 });
 
 export const UpdateTemplateSchema = CreateTemplateSchema.omit({

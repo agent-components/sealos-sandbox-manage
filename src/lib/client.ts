@@ -131,7 +131,7 @@ function appendPage(q: URLSearchParams, query?: PageQuery) {
 
 export type CreateTemplateBody = Omit<
   Template,
-  "id" | "createdAt" | "updatedAt"
+  "id" | "createdAt" | "updatedAt" | "owner" | "sandboxCount"
 > & { id?: string };
 
 export type UpdateTemplateBody = Partial<Omit<CreateTemplateBody, "id">>;
@@ -289,9 +289,11 @@ export const sandboxClient = {
     }>(`/api/v1/sandboxes/${encodeURIComponent(id)}/logs${qs ? `?${qs}` : ""}`);
   },
 
-  listTemplates: (query?: PageQuery & { q?: string }) => {
+  listTemplates: (query?: PageQuery & { q?: string; isPublic?: boolean }) => {
     const q = new URLSearchParams();
     if (query?.q?.trim()) q.set("q", query.q.trim());
+    if (query?.isPublic === true) q.set("isPublic", "true");
+    if (query?.isPublic === false) q.set("isPublic", "false");
     appendPage(q, query);
     const qs = q.toString();
     return request<PageResult<Template>>(
@@ -316,6 +318,11 @@ export const sandboxClient = {
     request<{ ok: true }>(`/api/v1/templates/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
+  publishTemplate: (id: string) =>
+    request<{ template: Template }>(
+      `/api/v1/templates/${encodeURIComponent(id)}/publish`,
+      { method: "POST" },
+    ),
 
   listMcpLogs: (
     query?: PageQuery & {

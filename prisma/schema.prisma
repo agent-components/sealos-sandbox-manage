@@ -30,6 +30,8 @@ model Template {
   id            String   @id
   name          String
   description   String?
+  /// 可选图标，data URL（base64），原文件不超过 200KB
+  icon          String?  @db.Text
   image         String
   imageRegistry Json?    @map("image_registry")
   launchCommand Json?    @map("launch_command")
@@ -42,6 +44,10 @@ model Template {
   env           Json     @default("[]")
   storage       Json     @default("[]")
   configMap     Json     @default("[]") @map("config_map")
+  /// 创建人用户名。空表示尚未指定。
+  owner         String   @default("")
+  /// 公共模板全员可用来创建沙箱；只有创建人能编辑。公开后不能改回私有。
+  isPublic      Boolean  @default(false) @map("is_public")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 

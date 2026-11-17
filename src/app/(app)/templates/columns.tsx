@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { CodeSandboxOutlined, MoreOutlined } from "@ant-design/icons";
+import { useEffect, useState } from "react";
+import { CodeSandboxOutlined, MoreOutlined, UserOutlined } from "@ant-design/icons";
 import { App, Button, Col, Dropdown, Empty, Flex, Pagination, Row, Tag, Tooltip, Typography } from "antd";
 import {
   useListPageContext,
@@ -12,7 +12,7 @@ import { sandboxClient, type CreateTemplateBody } from "@/lib/client";
 import { memoryLabel } from "@/lib/sealos/resources";
 import type { Template } from "@/lib/template/schema";
 
-export type TemplateFilters = { q?: string };
+export type TemplateFilters = { q?: string; visibility?: "public" | "private" };
 
 /** 用列表里已有的模板数据组创建请求，不传 ID，由服务端生成新 ID。 */
 function templateCopyBody(record: Template): CreateTemplateBody {
@@ -31,6 +31,8 @@ function templateCopyBody(record: Template): CreateTemplateBody {
     env: record.env ?? [],
     storage: record.storage ?? [],
     configMap: record.configMap ?? [],
+    icon: record.icon ?? null,
+    isPublic: false,
   };
 }
 
@@ -64,11 +66,28 @@ function TemplateActions({
       menu={{
         items: [
           { key: "copy", label: "复制", disabled: copying },
+          ...(record.isPublic
+            ? []
+            : [{ key: "publish", label: "公开" }]),
           { key: "delete", danger: true, label: "删除" },
         ],
         onClick: ({ key, domEvent }) => {
           domEvent.stopPropagation();
           if (key === "copy") void copyTemplate();
+          if (key === "publish") {
+            modal.confirm({
+              title: "公开模板？",
+              content:
+                "会复制一份新的公共模板，全员可用。当前模板仍保持私有，之后两边互不影响，公开后不能改回私有。",
+              okText: "公开",
+              cancelText: "取消",
+              onOk: async () => {
+                await sandboxClient.publishTemplate(record.id);
+                message.success("已公开一份新模板");
+                ctx.refreshTable();
+              },
+            });
+          }
           if (key === "delete") {
             modal.confirm({
               title: "删除模板",
@@ -97,10 +116,6 @@ function TemplateActions({
   );
 }
 
-function formatPort(port: Template["ports"][number]) {
-  return `${port.number}/${port.protocol}${port.isPublic ? " · 公网" : ""}`;
-}
-
 const avatarColors = ["#1677ff", "#13c2c2", "#722ed1", "#eb2f96", "#fa8c16", "#52c41a"];
 
 function avatarColor(name: string) {
@@ -112,52 +127,82 @@ function avatarColor(name: string) {
 function TemplateCard({
   record,
   ctx,
+  username,
 }: {
   record: Template;
   ctx: ListPageContextValue<Template, TemplateFilters>;
+  username: string;
 }) {
-  const ports = record.ports ?? [];
-  const summary = record.description?.trim() || record.image;
-  const portText = ports.map(formatPort).join("，");
+  const summary = record.description?.trim() || "";
+  const mine = record.owner === username;
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={() => ctx.showFloat("editor", record)}
+      role={mine ? "button" : undefined}
+      tabIndex={mine ? 0 : undefined}
+      onClick={() => {
+        if (mine) ctx.showFloat("editor", record);
+      }}
       onKeyDown={(event) => {
-        if (event.key === "Enter") ctx.showFloat("editor", record);
+        if (mine && event.key === "Enter") ctx.showFloat("editor", record);
       }}
       className="template-card"
+      style={mine ? undefined : { cursor: "default" }}
     >
       <Flex align="flex-start" gap={12}>
-        <span
-          aria-hidden
-          style={{
-            flex: "none",
-            width: 44,
-            height: 44,
-            borderRadius: 12,
-            background: avatarColor(record.name),
-            color: "#fff",
-            fontWeight: 600,
-            fontSize: 18,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {record.name.trim().slice(0, 1) || "模"}
-        </span>
+        {record.icon ? (
+          <img
+            src={record.icon}
+            alt=""
+            width={44}
+            height={44}
+            style={{ flex: "none", width: 44, height: 44, borderRadius: 12, objectFit: "cover" }}
+          />
+        ) : (
+          <span
+            aria-hidden
+            style={{
+              flex: "none",
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              background: avatarColor(record.name),
+              color: "#fff",
+              fontWeight: 600,
+              fontSize: 18,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {record.name.trim().slice(0, 1) || "模"}
+          </span>
+        )}
         <div style={{ minWidth: 0, flex: 1 }}>
           <Flex align="flex-start" justify="space-between" gap={8}>
-            <Typography.Text strong ellipsis={{ tooltip: record.name }} style={{ fontSize: 16 }}>
-              {record.name}
-            </Typography.Text>
-            <span onClick={(event) => event.stopPropagation()}>
-              <TemplateActions record={record} ctx={ctx} />
-            </span>
+            <div style={{ minWidth: 0 }}>
+              <Typography.Text strong ellipsis={{ tooltip: record.name }} style={{ fontSize: 16 }}>
+                {record.name}
+              </Typography.Text>
+              <Typography.Text
+                type="secondary"
+                ellipsis={{ tooltip: record.image }}
+                style={{ display: "block", fontSize: 12 }}
+              >
+                {record.image}
+              </Typography.Text>
+            </div>
+            {mine ? (
+              <span onClick={(event) => event.stopPropagation()}>
+                <TemplateActions record={record} ctx={ctx} />
+              </span>
+            ) : null}
           </Flex>
           <Flex gap={6} wrap style={{ marginTop: 6 }}>
+            {record.isPublic ? (
+              <Tag color="blue" style={{ marginInlineEnd: 0, borderRadius: 999 }}>
+                公共
+              </Tag>
+            ) : null}
             <Tag style={{ marginInlineEnd: 0, borderRadius: 999 }}>CPU {record.cpu} 核</Tag>
             <Tag style={{ marginInlineEnd: 0, borderRadius: 999 }}>
               内存 {memoryLabel(record.memoryGi)}
@@ -166,37 +211,44 @@ function TemplateCard({
         </div>
       </Flex>
       <div style={{ minHeight: 44 }}>
-        <Typography.Paragraph
-          type="secondary"
-          ellipsis={{ rows: 2, tooltip: summary }}
-          style={{ margin: 0 }}
-        >
-          {summary}
-        </Typography.Paragraph>
-        {portText ? (
+        {summary ? (
           <Typography.Paragraph
             type="secondary"
-            ellipsis={{ rows: 1, tooltip: portText }}
-            style={{ margin: "4px 0 0" }}
+            ellipsis={{ rows: 2, tooltip: summary }}
+            style={{ margin: 0 }}
           >
-            {portText}
+            {summary}
           </Typography.Paragraph>
-        ) : null}
+        ) : (
+          <Typography.Text type="secondary">暂无描述</Typography.Text>
+        )}
       </div>
-      <div style={{ marginTop: "auto" }}>
+      <Flex align="center" gap={16} style={{ marginTop: "auto" }}>
         <Tooltip title="引用的沙箱">
           <Typography.Text type="secondary" style={{ fontSize: 13 }}>
             <CodeSandboxOutlined style={{ marginRight: 6 }} />
             {record.sandboxCount ?? 0}
           </Typography.Text>
         </Tooltip>
-      </div>
+        <Tooltip title="创建人">
+          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+            <UserOutlined style={{ marginRight: 6 }} />
+            {record.ownerName || record.owner || "—"}
+          </Typography.Text>
+        </Tooltip>
+      </Flex>
     </div>
   );
 }
 
 export function TemplateCardList() {
   const ctx = useListPageContext<Template, TemplateFilters>();
+  const [username, setUsername] = useState("");
+  useEffect(() => {
+    void sandboxClient.me().then((res) => {
+      if (res.user?.username) setUsername(res.user.username);
+    });
+  }, []);
   const filtering = Boolean(ctx.filters.q?.trim());
   return (
     <div>
@@ -211,7 +263,7 @@ export function TemplateCardList() {
         <Row gutter={[16, 16]}>
           {ctx.dataSource.map((record) => (
             <Col key={record.id} xs={24} md={12} xl={8} style={{ minWidth: 0 }}>
-              <TemplateCard record={record} ctx={ctx} />
+              <TemplateCard record={record} ctx={ctx} username={username} />
             </Col>
           ))}
         </Row>

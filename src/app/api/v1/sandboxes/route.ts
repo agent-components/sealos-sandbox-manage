@@ -29,7 +29,7 @@ import {
 } from "@/lib/billing/meter";
 import { mapLaunchpadStatus, toSandbox } from "@/lib/sealos/map";
 import { getDefaultRegion, getRegion } from "@/lib/sealos/regions";
-import { getTemplate, listTemplates } from "@/lib/template/store";
+import { getVisibleTemplate, listTemplates } from "@/lib/template/store";
 
 export async function GET(req: NextRequest) {
   try {
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
           keyword: text || undefined,
         });
 
-        const templates = await listTemplates();
+        const templates = await listTemplates(user.username);
         const templateById = new Map(templates.map((item) => [item.id, item]));
 
         const sandboxes = records.map((record) =>
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
           ? await getRegion(input.regionId)
           : await getDefaultRegion();
 
-        const template = await getTemplate(input.templateId);
+        const template = await getVisibleTemplate(input.templateId, user.username);
         if (!template) {
           const body = {
             error: `模板「${input.templateId}」不存在，请先创建模板`,

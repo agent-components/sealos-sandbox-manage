@@ -66,6 +66,7 @@ function nextStoragePath(count: number): string {
 type FormState = {
   name: string;
   description: string;
+  icon: string;
   image: string;
   privateImage: boolean;
   registryUsername: string;
@@ -81,11 +82,13 @@ type FormState = {
   envText: string;
   storage: StorageDraft[];
   configMap: Template["configMap"];
+  isPublic: boolean;
 };
 
 const emptyForm = (): FormState => ({
   name: "",
   description: "",
+  icon: "",
   image: "",
   privateImage: false,
   registryUsername: "",
@@ -101,12 +104,14 @@ const emptyForm = (): FormState => ({
   envText: "",
   storage: [],
   configMap: [],
+  isPublic: false,
 });
 
 function fromTemplate(tpl: Template): FormState {
   return {
     name: tpl.name,
     description: tpl.description ?? "",
+    icon: tpl.icon ?? "",
     image: tpl.image,
     privateImage: !!tpl.imageRegistry,
     registryUsername: tpl.imageRegistry?.username ?? "",
@@ -128,6 +133,7 @@ function fromTemplate(tpl: Template): FormState {
     envText: formatEnvText(tpl.env ?? []),
     storage: (tpl.storage ?? []).map(storageDraft),
     configMap: tpl.configMap ?? [],
+    isPublic: tpl.isPublic ?? false,
   };
 }
 
@@ -140,6 +146,7 @@ function toPayload(form: FormState) {
   return {
     name: form.name.trim(),
     description: form.description.trim() || undefined,
+    icon: form.icon || null,
     image: form.image.trim(),
     imageRegistry: form.privateImage
       ? {
@@ -171,7 +178,24 @@ function toPayload(form: FormState) {
   };
 }
 
-type TemplateFilters = { q?: string };
+type TemplateFilters = { q?: string; visibility?: "public" | "private" };
+
+const ICON_LIMIT = 200 * 1024;
+
+function readIconFile(file: File): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    return Promise.reject(new Error("请上传图片"));
+  }
+  if (file.size > ICON_LIMIT) {
+    return Promise.reject(new Error("图标不能超过 200KB"));
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("读取图标失败"));
+    reader.readAsDataURL(file);
+  });
+}
 
 function focusTemplateTab(key: string) {
   document
@@ -276,7 +300,10 @@ export function TemplateEditor({
         await sandboxClient.updateTemplate(editingId, payload);
         message.success("模板已更新");
       } else {
-        await sandboxClient.createTemplate(payload);
+        await sandboxClient.createTemplate({
+          ...payload,
+          isPublic: form.isPublic,
+        });
         message.success("模板已创建");
       }
       onClose();
@@ -315,6 +342,70 @@ export function TemplateEditor({
           label: "基本信息",
           children: (
             <TemplateForm saving={saving}>
+              <div style={{ textAlign: "center", marginBottom: 20 }}>
+                <div
+                  tabIndex={0}
+                  role="button"
+                  aria-label="上传或粘贴图标"
+                  onPaste={(event) => {
+                    const file = [...event.clipboardData.files].find((item) =>
+                      item.type.startsWith("image/"),
+                    );
+                    if (!file) return;
+                    event.preventDefault();
+                    void readIconFile(file)
+                      .then((icon) => setForm((current) => ({ ...current, icon })))
+                      .catch((err: unknown) => {
+                        message.error(err instanceof Error ? err.message : "图标无效");
+                      });
+                  }}
+                  onClick={() => {
+                    const input = document.createElement("input");
+                    input.type = "file";
+                    input.accept = "image/*";
+                    input.onchange = () => {
+                      const file = input.files?.[0];
+                      if (!file) return;
+                      void readIconFile(file)
+                        .then((icon) => setForm((current) => ({ ...current, icon })))
+                        .catch((err: unknown) => {
+                          message.error(err instanceof Error ? err.message : "图标无效");
+                        });
+                    };
+                    input.click();
+                  }}
+                  style={{
+                    width: 72,
+                    height: 72,
+                    margin: "0 auto",
+                    borderRadius: 16,
+                    border: "1px dashed #d9d9d9",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                    cursor: "pointer",
+                    background: "#fafafa",
+                  }}
+                >
+                  {form.icon ? (
+                    <img src={form.icon} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      图标
+                    </Typography.Text>
+                  )}
+                </div>
+                {form.icon ? (
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => setForm((current) => ({ ...current, icon: "" }))}
+                  >
+                    移除
+                  </Button>
+                ) : null}
+              </div>
               {editingId ? (
                 <Form.Item label="模板 ID">
                   <Input value={editingId} disabled />
@@ -344,6 +435,19 @@ export function TemplateEditor({
                   }
                 />
               </Form.Item>
+              {editingId ? null : (
+                <Form.Item label="公开模板">
+                  <Switch
+                    checked={form.isPublic}
+                    onChange={(checked) =>
+                      setForm((current) => ({ ...current, isPublic: checked }))
+                    }
+                  />
+                  <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
+                    创建后全员可用，且不能再改为私有
+                  </Typography.Text>
+                </Form.Item>
+              )}
             </TemplateForm>
           ),
         },

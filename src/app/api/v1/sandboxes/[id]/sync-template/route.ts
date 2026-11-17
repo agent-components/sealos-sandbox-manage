@@ -18,7 +18,7 @@ import {
 } from "@/lib/billing/meter";
 import { AuthError } from "@/lib/sealos/errors";
 import { mapLaunchpadStatus, toSandbox } from "@/lib/sealos/map";
-import { getTemplate } from "@/lib/template/store";
+import { getVisibleTemplate } from "@/lib/template/store";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           throw new AuthError("该沙箱未关联模板，无法从模板更新", 400);
         }
 
-        const template = await getTemplate(templateId);
+        const template = await getVisibleTemplate(templateId, user.username);
         if (!template) {
           throw new AuthError(`模板「${templateId}」不存在或已删除`, 404);
         }

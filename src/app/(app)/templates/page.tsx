@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { PlusOutlined } from "@ant-design/icons";
-import { App, Button, Typography } from "antd";
+import { App, Button, Select, Typography } from "antd";
 import {
   ListPage,
   useListPageContext,
@@ -41,6 +41,11 @@ export default function TemplatesPage() {
           current: page.current,
           pageSize: page.pageSize,
           ...(filters.q?.trim() ? { q: filters.q.trim() } : {}),
+          ...(filters.visibility === "public"
+            ? { isPublic: true }
+            : filters.visibility === "private"
+              ? { isPublic: false }
+              : {}),
         });
         return { list: res.list, total: res.total };
       } catch (err) {
@@ -85,6 +90,20 @@ export default function TemplatesPage() {
             name: "q",
             label: "关键词",
             placeholder: "名称、ID 或镜像",
+          },
+          {
+            name: "visibility",
+            label: "可见范围",
+            component: (
+              <Select
+                allowClear
+                placeholder="全部"
+                options={[
+                  { value: "public", label: "公开" },
+                  { value: "private", label: "私有" },
+                ]}
+              />
+            ),
           },
         ],
       }}

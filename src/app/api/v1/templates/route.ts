@@ -12,12 +12,17 @@ import {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireUser(req);
+    const user = await requireUser(req);
     const page = parsePageQuery(req.nextUrl.searchParams);
     const q = req.nextUrl.searchParams.get("q")?.trim() || undefined;
+    const visibility = req.nextUrl.searchParams.get("isPublic");
+    const isPublic =
+      visibility === "true" ? true : visibility === "false" ? false : undefined;
     return jsonOk(
       await listTemplatesPage({
+        viewer: user.username,
         q,
+        isPublic,
         current: page.current,
         pageSize: page.pageSize,
       }),
@@ -29,7 +34,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireUser(req);
+    const user = await requireUser(req);
     const input = CreateTemplateSchema.parse(await req.json());
 
     let id = input.id?.trim() || createTemplateId();
@@ -45,7 +50,12 @@ export async function POST(req: NextRequest) {
       return jsonOk({ error: "无法生成唯一模板 ID，请重试" }, { status: 500 });
     }
 
-    const template = await createTemplate({ ...input, id });
+    const template = await createTemplate({
+      ...input,
+      id,
+      owner: user.username,
+      isPublic: input.isPublic ?? false,
+    });
     return jsonOk({ template }, { status: 201 });
   } catch (error) {
     return jsonError(error);
