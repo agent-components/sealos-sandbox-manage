@@ -91,6 +91,17 @@ model SealosRegion {
   @@schema("sandbox")
 }
 
+/// 全站系统设置，单行 id = default。管理员修改后对所有用户生效。
+model SystemSetting {
+  id               String   @id @default("default")
+  /// 调用日志保留天数。null 或小于 1 表示不自动清理。
+  logRetentionDays Int?     @map("log_retention_days")
+  updatedAt        DateTime @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("system_settings")
+  @@schema("sandbox")
+}
+
 model McpLog {
   id          String   @id
   username    String?

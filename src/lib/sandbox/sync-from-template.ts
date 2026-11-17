@@ -14,7 +14,7 @@ function currentDiskGi(app: LaunchpadApp): number {
   return clampDiskGi(undefined);
 }
 
-/** 合并环境变量：先保留沙箱已有，同名再以模板覆盖 */
+/** 合并环境变量：沙箱已有同名变量保持不变，只补上模板里沙箱没有的项。 */
 export function mergeEnvWithTemplate(
   appEnv: Array<{ name: string; value?: string }> | undefined,
   templateEnv: Template["env"] | undefined,
@@ -27,7 +27,7 @@ export function mergeEnvWithTemplate(
   }
   for (const item of templateEnv ?? []) {
     const name = item.name.trim();
-    if (!name) continue;
+    if (!name || envMap.has(name)) continue;
     envMap.set(name, item.value ?? "");
   }
   return [...envMap.entries()].map(([name, value]) => ({ name, value }));
@@ -47,7 +47,7 @@ export type SyncFromTemplateOptions = {
 
 /**
  * 按模板最新配置生成 Sealos PATCH body。
- * CPU / 内存 / 磁盘 / 实例数保持沙箱当前值；环境变量合并（同名以模板为准）；其余字段以模板为准。
+ * CPU / 内存 / 磁盘 / 实例数保持沙箱当前值；环境变量合并（同名以沙箱为准）；其余字段以模板为准。
  */
 export function buildSyncFromTemplateBody(
   app: LaunchpadApp,

@@ -450,4 +450,18 @@ export const sandboxClient = {
       `/api/v1/admin/regions/${encodeURIComponent(id)}/default`,
       { method: "POST" },
     ),
+
+  getAdminSettings: () =>
+    request<{ settings: SystemSettings }>("/api/v1/admin/settings"),
+
+  updateAdminSettings: (body: { logRetentionDays: number | null }) =>
+    request<{ settings: SystemSettings }>("/api/v1/admin/settings", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+};
+
+export type SystemSettings = {
+  logRetentionDays: number | null;
+  updatedAt: string | null;
 };

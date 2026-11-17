@@ -12,6 +12,7 @@ import { Layout, useLayoutTabs } from "listpage-components/Layout";
 import { useSandboxTheme } from "@/components/AntdProvider";
 import { BillingModal } from "@/components/BillingModal";
 import { ClusterSettingsModal } from "@/components/ClusterSettingsModal";
+import { SystemSettingsModal } from "@/components/SystemSettingsModal";
 import { sandboxClient, type SandboxUser } from "@/lib/client";
 import { PRODUCT_NAME } from "@/lib/product";
 
@@ -53,6 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const theme = useSandboxTheme();
   const [user, setUser] = useState<SandboxUser | null>(null);
   const [clusterOpen, setClusterOpen] = useState(false);
+  const [systemOpen, setSystemOpen] = useState(false);
   const [billingOpen, setBillingOpen] = useState(false);
   const tabPath = tabPathOf(pathname);
 
@@ -115,11 +117,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       theme.themeUserProfileItem,
     ];
     if (user?.role === "ADMIN") {
-      items.unshift({
-        key: "cluster-settings",
-        label: "集群设置",
-        onClick: () => setClusterOpen(true),
-      });
+      items.unshift(
+        {
+          key: "system-settings",
+          label: "系统设置",
+          onClick: () => setSystemOpen(true),
+        },
+        {
+          key: "cluster-settings",
+          label: "集群设置",
+          onClick: () => setClusterOpen(true),
+        },
+      );
     }
     return items;
   }, [theme.themeUserProfileItem, user?.role]);
@@ -180,10 +189,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </Layout>
       <BillingModal open={billingOpen} onClose={() => setBillingOpen(false)} />
       {user?.role === "ADMIN" ? (
-        <ClusterSettingsModal
-          open={clusterOpen}
-          onClose={() => setClusterOpen(false)}
-        />
+        <>
+          <ClusterSettingsModal
+            open={clusterOpen}
+            onClose={() => setClusterOpen(false)}
+          />
+          <SystemSettingsModal
+            open={systemOpen}
+            onClose={() => setSystemOpen(false)}
+          />
+        </>
       ) : null}
     </>
   );
