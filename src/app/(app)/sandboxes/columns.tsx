@@ -8,8 +8,10 @@ import type {
   ListPageContextValue,
 } from "listpage-components/ListPage";
 import { StateBadge } from "@/components/StateBadge";
+import { TemplateDiffList } from "@/components/TemplateDiffList";
 import { sandboxClient } from "@/lib/client";
 import { cursorIdeUrl } from "@/lib/sandbox/ide";
+import { previewTemplateApply } from "@/lib/sandbox/template-apply-diff";
 import type { Sandbox } from "@/lib/sandbox/schema";
 import type { SandboxFilters } from "./filters";
 
@@ -78,7 +80,50 @@ function SandboxActions({
   record: Sandbox;
   ctx: ListPageContextValue<Sandbox, SandboxFilters>;
 }) {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
+  const [syncing, setSyncing] = useState(false);
+
+  async function applyLatestTemplate() {
+    if (!record.templateId) {
+      message.warning("该沙箱未关联模板");
+      return;
+    }
+    setSyncing(true);
+    try {
+      const [{ sandbox }, { template }] = await Promise.all([
+        sandboxClient.getSandbox(record.id),
+        sandboxClient.getTemplate(record.templateId),
+      ]);
+      const { diffs } = previewTemplateApply(sandbox, template);
+      if (diffs.length === 0) {
+        message.info("已经是最新模板状态");
+        return;
+      }
+      modal.confirm({
+        title: "应用最新模板？",
+        width: 560,
+        content: (
+          <div>
+            <p style={{ marginBottom: 8 }}>
+              与最新模板有 {diffs.length} 处差异。确认后会立即同步到 Sealos。资源配置（CPU / 内存 / 磁盘 / 实例数）保持不变。
+            </p>
+            <TemplateDiffList items={diffs} />
+          </div>
+        ),
+        okText: "应用",
+        cancelText: "取消",
+        onOk: async () => {
+          await sandboxClient.syncSandboxFromTemplate(record.id);
+          message.success("已按最新模板更新");
+          ctx.refreshTable();
+        },
+      });
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "应用最新模板失败");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function openIde() {
     try {
@@ -119,6 +164,15 @@ function SandboxActions({
         onClick={() => ctx.showFloat("detail", record)}
       >
         编辑
+      </Button>
+      <Button
+        type="link"
+        size="small"
+        style={{ paddingInline: 0 }}
+        loading={syncing}
+        onClick={() => void applyLatestTemplate()}
+      >
+        应用最新模板
       </Button>
       <Dropdown
         trigger={["click"]}
@@ -277,7 +331,7 @@ export function sandboxColumns(
     {
       title: "操作",
       key: "actions",
-      width: 104,
+      width: 220,
       align: "right",
       fixed: "right",
       component: ({ record, ctx }) => (
