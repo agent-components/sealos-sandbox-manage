@@ -1,6 +1,6 @@
 "use client";
 
-import { CopyOutlined, EllipsisOutlined } from "@ant-design/icons";
+import { ApiOutlined, CopyOutlined, EditOutlined, EllipsisOutlined } from "@ant-design/icons";
 import { App, Button, Dropdown, Space, Tag, Tooltip, Typography } from "antd";
 import type {
   ListPageColumnType,
@@ -147,17 +147,25 @@ function ApiKeyActions({
   }
 
   return (
-    <Space size={8}>
-      <Button
-        type="primary"
-        size="small"
-        onClick={() => copySecret(record.id, mcpConnectJson, "已复制 MCP 接入配置", message)}
-      >
-        复制 MCP
-      </Button>
-      <Button size="small" onClick={() => ctx.showFloat("editor", record)}>
-        编辑
-      </Button>
+    <Space size={4}>
+      <Tooltip title="复制 MCP">
+        <Button
+          type="link"
+          size="small"
+          icon={<ApiOutlined />}
+          aria-label="复制 MCP"
+          onClick={() => copySecret(record.id, mcpConnectJson, "已复制 MCP 接入配置", message)}
+        />
+      </Tooltip>
+      <Tooltip title="编辑">
+        <Button
+          type="link"
+          size="small"
+          icon={<EditOutlined />}
+          aria-label="编辑"
+          onClick={() => ctx.showFloat("editor", record)}
+        />
+      </Tooltip>
       <Dropdown
         trigger={["click"]}
         placement="bottomRight"
@@ -168,7 +176,9 @@ function ApiKeyActions({
           },
         }}
       >
-        <Button size="small" icon={<EllipsisOutlined />} aria-label="更多操作" />
+        <Tooltip title="更多">
+          <Button type="link" size="small" icon={<EllipsisOutlined />} aria-label="更多" />
+        </Tooltip>
       </Dropdown>
     </Space>
   );
@@ -227,7 +237,7 @@ export function apiKeyColumns(): ListPageColumnType<ApiKey, ApiKeyFilters>[] {
     {
       title: "操作",
       key: "actions",
-      width: 240,
+      width: 108,
       align: "right",
       fixed: "right",
       component: ({ record, ctx }) => <ApiKeyActions record={record} ctx={ctx} />,

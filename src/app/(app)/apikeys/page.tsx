@@ -91,7 +91,7 @@ export default function ApiKeysPage() {
             title="令牌列表"
             widthKey="sandbox-apikeys-width"
             columnKey="sandbox-apikeys-columns"
-            scroll={{ x: 1220 }}
+            scroll={{ x: 1088 }}
           />
         ),
       }}

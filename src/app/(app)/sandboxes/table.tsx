@@ -27,8 +27,8 @@ export function SandboxTable({
     <HydratedProTable
       columns={columns}
       widthKey="sandbox-sandboxes-width"
-      columnKey="sandbox-sandboxes-columns-v2"
-      scroll={{ x: 1492 }}
+      columnKey="sandbox-sandboxes-columns-v6"
+      scroll={{ x: 1298 }}
       loadingWhenEmpty
       selectable
       toolbar={(selection) => (

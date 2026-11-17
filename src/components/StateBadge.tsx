@@ -1,11 +1,10 @@
-import { Tag } from "antd";
 import type { SandboxState } from "@/lib/sandbox/schema";
 
 const config: Record<SandboxState, { color: string; label: string }> = {
-  running: { color: "processing", label: "运行中" },
-  starting: { color: "warning", label: "启动中" },
-  stopped: { color: "default", label: "已停止" },
-  error: { color: "error", label: "异常" },
+  running: { color: "#52c41a", label: "运行中" },
+  starting: { color: "#faad14", label: "启动中" },
+  stopped: { color: "rgba(0, 0, 0, 0.25)", label: "已停止" },
+  error: { color: "#ff4d4f", label: "异常" },
 };
 
 export const sandboxStateOptions: { value: SandboxState; label: string }[] = (
@@ -14,5 +13,27 @@ export const sandboxStateOptions: { value: SandboxState; label: string }[] = (
 
 export function StateBadge({ state }: { state: SandboxState }) {
   const item = config[state];
-  return <Tag color={item.color}>{item.label}</Tag>;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        color: "rgba(0, 0, 0, 0.65)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 2,
+          background: item.color,
+          flex: "none",
+        }}
+      />
+      {item.label}
+    </span>
+  );
 }

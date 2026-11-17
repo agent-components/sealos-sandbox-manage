@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { App, Button, Flex, Space, Tag, Tooltip, Typography } from "antd";
-import type {
-  ListPageColumnType,
-  ListPageContextValue,
+import { MoreOutlined } from "@ant-design/icons";
+import { App, Button, Col, Dropdown, Empty, Flex, Pagination, Row, Tag, Typography } from "antd";
+import {
+  useListPageContext,
+  type ListPageContextValue,
 } from "listpage-components/ListPage";
+import { listPagination } from "@/components/list-page";
 import { sandboxClient, type CreateTemplateBody } from "@/lib/client";
 import { memoryLabel } from "@/lib/sealos/resources";
 import type { Template } from "@/lib/template/schema";
@@ -56,131 +58,165 @@ function TemplateActions({
   }
 
   return (
-    <Space size={0}>
+    <Dropdown
+      trigger={["click"]}
+      placement="bottomRight"
+      menu={{
+        items: [
+          { key: "copy", label: "复制", disabled: copying },
+          { key: "delete", danger: true, label: "删除" },
+        ],
+        onClick: ({ key, domEvent }) => {
+          domEvent.stopPropagation();
+          if (key === "copy") void copyTemplate();
+          if (key === "delete") {
+            modal.confirm({
+              title: "删除模板",
+              content: `确认删除模板「${record.name}」（${record.id}）？`,
+              okText: "删除",
+              okButtonProps: { danger: true },
+              cancelText: "取消",
+              onOk: async () => {
+                await sandboxClient.deleteTemplate(record.id);
+                message.success("已删除");
+                ctx.refreshTable();
+              },
+            });
+          }
+        },
+      }}
+    >
       <Button
         type="link"
         size="small"
-        style={{ paddingInline: 4 }}
-        onClick={() => ctx.showFloat("editor", record)}
-      >
-        编辑
-      </Button>
-      <Button
-        type="link"
-        size="small"
-        style={{ paddingInline: 4 }}
-        loading={copying}
-        onClick={() => void copyTemplate()}
-      >
-        复制
-      </Button>
-      <Button
-        type="link"
-        size="small"
-        danger
-        style={{ paddingInline: 4 }}
-        onClick={() =>
-          modal.confirm({
-            title: "删除模板",
-            content: `确认删除模板「${record.name}」（${record.id}）？`,
-            okText: "删除",
-            okButtonProps: { danger: true },
-            cancelText: "取消",
-            onOk: async () => {
-              await sandboxClient.deleteTemplate(record.id);
-              message.success("已删除");
-              ctx.refreshTable();
-            },
-          })
-        }
-      >
-        删除
-      </Button>
-    </Space>
+        icon={<MoreOutlined />}
+        aria-label="更多"
+        onClick={(event) => event.stopPropagation()}
+      />
+    </Dropdown>
   );
 }
 
-export function templateColumns(): ListPageColumnType<Template, TemplateFilters>[] {
-  return [
-    {
-      title: "ID",
-      dataIndex: "id",
-      width: 180,
-      fixed: "left",
-      render: (id: string) => (
-        <Typography.Text style={{ fontFamily: "var(--font-mono)" }}>
-          {id}
-        </Typography.Text>
-      ),
-    },
-    { title: "名称", dataIndex: "name", width: 160 },
-    {
-      title: "镜像",
-      dataIndex: "image",
-      width: 280,
-      render: (image: string) => (
-        <Typography.Text
-          type="secondary"
-          ellipsis={{ tooltip: image }}
-          style={{ fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}
+function formatPort(port: Template["ports"][number]) {
+  return `${port.number}/${port.protocol}${port.isPublic ? " · 公网" : ""}`;
+}
+
+const avatarColors = ["#1677ff", "#13c2c2", "#722ed1", "#eb2f96", "#fa8c16", "#52c41a"];
+
+function avatarColor(name: string) {
+  let hash = 0;
+  for (const char of name) hash = (hash + char.charCodeAt(0)) % avatarColors.length;
+  return avatarColors[hash] ?? avatarColors[0];
+}
+
+function TemplateCard({
+  record,
+  ctx,
+}: {
+  record: Template;
+  ctx: ListPageContextValue<Template, TemplateFilters>;
+}) {
+  const ports = record.ports ?? [];
+  const summary = record.description?.trim() || record.image;
+  const portText = ports.map(formatPort).join("，");
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => ctx.showFloat("editor", record)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") ctx.showFloat("editor", record);
+      }}
+      className="template-card"
+    >
+      <Flex align="flex-start" gap={12}>
+        <span
+          aria-hidden
+          style={{
+            flex: "none",
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            background: avatarColor(record.name),
+            color: "#fff",
+            fontWeight: 600,
+            fontSize: 18,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
         >
-          {image}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: "网络",
-      key: "ports",
-      width: 180,
-      render: (_, tpl) => {
-        const ports = tpl.ports ?? [];
-        if (!ports.length) return "—";
-        const formatPort = (p: (typeof ports)[number]) =>
-          `${p.number}/${p.protocol}${p.isPublic ? " · 公网" : ""}`;
-        const first = ports[0]!;
-        const rest = ports.slice(1);
-        return (
-          <Flex align="center" gap={6} wrap={false}>
-            <Typography.Text style={{ fontSize: 13 }} ellipsis>
-              {formatPort(first)}
+          {record.name.trim().slice(0, 1) || "模"}
+        </span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <Flex align="flex-start" justify="space-between" gap={8}>
+            <Typography.Text strong ellipsis={{ tooltip: record.name }} style={{ fontSize: 16 }}>
+              {record.name}
             </Typography.Text>
-            {rest.length > 0 ? (
-              <Tooltip
-                title={
-                  <div style={{ whiteSpace: "pre-line" }}>
-                    {rest.map(formatPort).join("\n")}
-                  </div>
-                }
-              >
-                <Tag style={{ marginInlineEnd: 0, cursor: "default" }}>
-                  +{rest.length}
-                </Tag>
-              </Tooltip>
-            ) : null}
+            <span onClick={(event) => event.stopPropagation()}>
+              <TemplateActions record={record} ctx={ctx} />
+            </span>
           </Flex>
-        );
-      },
-    },
-    {
-      title: "资源",
-      key: "spec",
-      width: 160,
-      render: (_, tpl) => (
-        <Typography.Text type="secondary">
-          {tpl.cpu} 核 · {memoryLabel(tpl.memoryGi)}
-          {tpl.replicas > 1 ? ` · ×${tpl.replicas}` : ""}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: "操作",
-      key: "actions",
-      width: 160,
-      align: "right",
-      fixed: "right",
-      component: ({ record, ctx }) => (
-        <TemplateActions record={record} ctx={ctx} />
-      ),
-    },
-  ];
+          <Flex gap={6} wrap style={{ marginTop: 6 }}>
+            <Tag style={{ marginInlineEnd: 0, borderRadius: 999 }}>CPU {record.cpu} 核</Tag>
+            <Tag style={{ marginInlineEnd: 0, borderRadius: 999 }}>
+              内存 {memoryLabel(record.memoryGi)}
+            </Tag>
+          </Flex>
+        </div>
+      </Flex>
+      <div style={{ minHeight: 44 }}>
+        <Typography.Paragraph
+          type="secondary"
+          ellipsis={{ rows: 2, tooltip: summary }}
+          style={{ margin: 0 }}
+        >
+          {summary}
+        </Typography.Paragraph>
+        {portText ? (
+          <Typography.Paragraph
+            type="secondary"
+            ellipsis={{ rows: 1, tooltip: portText }}
+            style={{ margin: "4px 0 0" }}
+          >
+            {portText}
+          </Typography.Paragraph>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export function TemplateCardList() {
+  const ctx = useListPageContext<Template, TemplateFilters>();
+  const filtering = Boolean(ctx.filters.q?.trim());
+  return (
+    <div>
+      {ctx.dataSource.length === 0 ? (
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={
+            ctx.loading ? "加载中…" : filtering ? "没有匹配的模板" : "还没有模板"
+          }
+        />
+      ) : (
+        <Row gutter={[16, 16]}>
+          {ctx.dataSource.map((record) => (
+            <Col key={record.id} xs={24} md={12} xl={8} style={{ minWidth: 0 }}>
+              <TemplateCard record={record} ctx={ctx} />
+            </Col>
+          ))}
+        </Row>
+      )}
+      <Flex justify="flex-end" style={{ marginTop: 16 }}>
+        <Pagination
+          current={ctx.pagination.current}
+          pageSize={ctx.pagination.pageSize}
+          total={ctx.pagination.total}
+          {...listPagination}
+          onChange={ctx.updatePagination}
+        />
+      </Flex>
+    </div>
+  );
 }

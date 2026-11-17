@@ -8,10 +8,9 @@ import {
   useListPageContext,
   type FloatComponentProps,
 } from "listpage-components/ListPage";
-import { HydratedProTable } from "@/components/list-page";
 import { sandboxClient } from "@/lib/client";
 import type { Template } from "@/lib/template/schema";
-import { templateColumns, type TemplateFilters } from "./columns";
+import { TemplateCardList, type TemplateFilters } from "./columns";
 import { TemplateEditor } from "./editor";
 
 function TemplateEditorFloat({
@@ -52,7 +51,6 @@ export default function TemplatesPage() {
     [message],
   );
 
-  const columns = useMemo(() => templateColumns(), []);
   const floats = useMemo(
     () => [
       {
@@ -90,17 +88,7 @@ export default function TemplatesPage() {
           },
         ],
       }}
-      table={{
-        render: () => (
-          <HydratedProTable
-            columns={columns}
-            title="模板列表"
-            widthKey="sandbox-templates-width"
-            columnKey="sandbox-templates-columns"
-            scroll={{ x: 1120 }}
-          />
-        ),
-      }}
+      table={{ render: () => <TemplateCardList /> }}
       request={request}
       float={{ floats }}
       initialValues={{ pageSize: 20 }}

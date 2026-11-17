@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { EllipsisOutlined } from "@ant-design/icons";
-import { App, Button, Dropdown, Space, Switch, Tag, Typography } from "antd";
+import { EditOutlined, EllipsisOutlined, SyncOutlined } from "@ant-design/icons";
+import { App, Button, Dropdown, Space, Switch, Tag, Tooltip, Typography } from "antd";
 import type {
   ListPageColumnType,
   ListPageContextValue,
@@ -156,24 +156,26 @@ function SandboxActions({
     record.state === "starting" || record.state === "running";
 
   return (
-    <Space size={8} style={{ whiteSpace: "nowrap" }}>
-      <Button
-        type="link"
-        size="small"
-        style={{ paddingInline: 0 }}
-        onClick={() => ctx.showFloat("detail", record)}
-      >
-        编辑
-      </Button>
-      <Button
-        type="link"
-        size="small"
-        style={{ paddingInline: 0 }}
-        loading={syncing}
-        onClick={() => void applyLatestTemplate()}
-      >
-        更新
-      </Button>
+    <Space size={4} style={{ whiteSpace: "nowrap" }}>
+      <Tooltip title="编辑">
+        <Button
+          type="link"
+          size="small"
+          icon={<EditOutlined />}
+          aria-label="编辑"
+          onClick={() => ctx.showFloat("detail", record)}
+        />
+      </Tooltip>
+      <Tooltip title="更新">
+        <Button
+          type="link"
+          size="small"
+          icon={<SyncOutlined />}
+          aria-label="更新"
+          loading={syncing}
+          onClick={() => void applyLatestTemplate()}
+        />
+      </Tooltip>
       <Dropdown
         trigger={["click"]}
         placement="bottomRight"
@@ -195,13 +197,14 @@ function SandboxActions({
           },
         }}
       >
-        <Button
-          type="link"
-          size="small"
-          style={{ paddingInline: 0 }}
-          icon={<EllipsisOutlined />}
-          aria-label="更多"
-        />
+        <Tooltip title="更多">
+          <Button
+            type="link"
+            size="small"
+            icon={<EllipsisOutlined />}
+            aria-label="更多"
+          />
+        </Tooltip>
       </Dropdown>
     </Space>
   );
@@ -237,6 +240,13 @@ export function sandboxColumns(
           {id}
         </Typography.Text>
       ),
+    },
+    {
+      title: "状态",
+      dataIndex: "state",
+      key: "state",
+      width: 100,
+      render: (state: Sandbox["state"]) => <StateBadge state={state} />,
     },
     {
       title: "模板",
@@ -289,13 +299,6 @@ export function sandboxColumns(
         ),
     },
     {
-      title: "状态",
-      dataIndex: "state",
-      key: "state",
-      width: 100,
-      render: (state: Sandbox["state"]) => <StateBadge state={state} />,
-    },
-    {
       title: "进行中",
       dataIndex: "inflight",
       key: "inflight",
@@ -321,18 +324,9 @@ export function sandboxColumns(
       ),
     },
     {
-      title: "创建时间",
-      dataIndex: "createdAt",
-      key: "createdAt",
-      width: 170,
-      render: (value?: string) => (
-        <Typography.Text type="secondary">{formatTime(value)}</Typography.Text>
-      ),
-    },
-    {
       title: "操作",
       key: "actions",
-      width: 132,
+      width: 108,
       align: "right",
       fixed: "right",
       component: ({ record, ctx }) => (
