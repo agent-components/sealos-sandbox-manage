@@ -649,14 +649,6 @@ export function SandboxDetailModal({
                           value ? value.toUpperCase() : "—",
                       },
                       {
-                        title: "公网",
-                        dataIndex: "isPublic",
-                        width: 72,
-                        onCell: () => ({ style: { verticalAlign: "top" } }),
-                        render: (value?: boolean) =>
-                          value === undefined ? "—" : value ? "是" : "否",
-                      },
-                      {
                         title: "公网地址",
                         dataIndex: "publicAddress",
                         ellipsis: true,
@@ -705,12 +697,6 @@ export function SandboxDetailModal({
                     dataSource={view?.storage ?? []}
                     locale={{ emptyText: "暂无目录映射" }}
                     columns={[
-                      {
-                        title: "名称",
-                        dataIndex: "name",
-                        width: 140,
-                        render: (value?: string) => value || "—",
-                      },
                       {
                         title: "挂载路径",
                         dataIndex: "path",
