@@ -33,7 +33,9 @@ export function draftFromTemplate(
       ? {
           username: template.imageRegistry.username,
           serverAddress: template.imageRegistry.serverAddress,
-          hasPassword: Boolean(template.imageRegistry.password),
+          hasPassword: Boolean(
+            template.imageRegistry.password || template.imageRegistry.hasPassword,
+          ),
         }
       : null,
     launchCommand: template.launchCommand,

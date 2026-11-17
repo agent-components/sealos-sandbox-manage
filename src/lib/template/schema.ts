@@ -47,11 +47,22 @@ export const TemplateConfigMapSchema = z.object({
   value: z.string().max(1024 * 512).default(""),
 });
 
-/** 对齐 Sealos ImageSchema.imageRegistry */
-export const TemplateImageRegistrySchema = z.object({
+/** 写入模板时的私有镜像账号（完整凭据） */
+export const TemplateImageRegistryWriteSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1),
   serverAddress: z.string().min(1),
+});
+
+/**
+ * 对外返回的镜像仓库信息。
+ * 非创建人看不到 username / password，只保留 serverAddress 与 hasPassword。
+ */
+export const TemplateImageRegistrySchema = z.object({
+  username: z.string().min(1).optional(),
+  password: z.string().min(1).optional(),
+  serverAddress: z.string().min(1).optional(),
+  hasPassword: z.boolean().optional(),
 });
 
 /** 对齐 Sealos LaunchCommandSchema */
@@ -102,7 +113,7 @@ export const CreateTemplateSchema = z.object({
   description: z.string().max(200).optional(),
   icon: z.string().max(280_000).nullable().optional(),
   image: z.string().min(1).max(256),
-  imageRegistry: TemplateImageRegistrySchema.nullable().optional(),
+  imageRegistry: TemplateImageRegistryWriteSchema.nullable().optional(),
   launchCommand: TemplateLaunchCommandSchema.optional(),
   cpu: ResourceSpecSchema.shape.cpu.default(0.5),
   memoryGi: ResourceSpecSchema.shape.memoryGi.default(0.5),

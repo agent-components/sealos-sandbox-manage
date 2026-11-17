@@ -83,6 +83,23 @@ export function templateReadableBy(
   return template.isPublic === true || template.owner === username;
 }
 
+/** 非创建人看不到私有镜像账号；创建 / 同步沙箱仍用库里的完整记录。 */
+export function redactTemplateForViewer(
+  template: Template,
+  viewer?: string,
+): Template {
+  if (!viewer || template.owner === viewer) return template;
+  const registry = template.imageRegistry;
+  if (!registry) return template;
+  return {
+    ...template,
+    imageRegistry: {
+      serverAddress: registry.serverAddress,
+      hasPassword: Boolean(registry.password || registry.hasPassword),
+    },
+  };
+}
+
 export async function listTemplates(viewer: string): Promise<Template[]> {
   const page = await listTemplatesPage({ viewer });
   return page.list;
@@ -150,11 +167,14 @@ export async function listTemplatesPage(opts?: {
     ]),
   );
   return {
-    list: rows.map((row) => ({
-      ...toTemplate(row),
-      sandboxCount: countById.get(row.id) ?? 0,
-      ownerName: nameByAccount.get(row.owner) || row.owner || undefined,
-    })),
+    list: rows.map((row) => {
+      const template = {
+        ...toTemplate(row),
+        sandboxCount: countById.get(row.id) ?? 0,
+        ownerName: nameByAccount.get(row.owner) || row.owner || undefined,
+      };
+      return redactTemplateForViewer(template, opts?.viewer);
+    }),
     total,
   };
 }
@@ -167,10 +187,11 @@ export async function getTemplate(id: string): Promise<Template | null> {
 export async function getVisibleTemplate(
   id: string,
   viewer: string,
+  opts?: { redact?: boolean },
 ): Promise<Template | null> {
   const template = await getTemplate(id);
   if (!template || !templateReadableBy(template, viewer)) return null;
-  return template;
+  return opts?.redact ? redactTemplateForViewer(template, viewer) : template;
 }
 
 export async function createTemplate(
@@ -183,8 +204,14 @@ export async function createTemplate(
       description: input.description ?? null,
       icon: input.icon ?? null,
       image: input.image,
-      imageRegistry: input.imageRegistry
-        ? toJson(input.imageRegistry)
+      imageRegistry: input.imageRegistry?.username &&
+        input.imageRegistry.password &&
+        input.imageRegistry.serverAddress
+        ? toJson({
+            username: input.imageRegistry.username,
+            password: input.imageRegistry.password,
+            serverAddress: input.imageRegistry.serverAddress,
+          })
         : Prisma.JsonNull,
       launchCommand: input.launchCommand
         ? toJson(input.launchCommand)
@@ -216,7 +243,17 @@ export async function updateTemplate(
   if (patch.image !== undefined) data.image = patch.image;
   if (patch.imageRegistry !== undefined) {
     data.imageRegistry =
-      patch.imageRegistry == null ? Prisma.JsonNull : toJson(patch.imageRegistry);
+      patch.imageRegistry == null
+        ? Prisma.JsonNull
+        : patch.imageRegistry.username &&
+            patch.imageRegistry.password &&
+            patch.imageRegistry.serverAddress
+          ? toJson({
+              username: patch.imageRegistry.username,
+              password: patch.imageRegistry.password,
+              serverAddress: patch.imageRegistry.serverAddress,
+            })
+          : Prisma.JsonNull;
   }
   if (patch.launchCommand !== undefined) {
     data.launchCommand =

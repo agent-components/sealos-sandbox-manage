@@ -22,7 +22,9 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   try {
     const user = await requireUser(req);
     const { id } = await ctx.params;
-    const template = await getVisibleTemplate(id, user.username);
+    const template = await getVisibleTemplate(id, user.username, {
+      redact: true,
+    });
     if (!template) {
       return jsonOk({ error: "模板不存在" }, { status: 404 });
     }
