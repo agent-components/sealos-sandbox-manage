@@ -172,7 +172,7 @@ function SandboxActions({
         loading={syncing}
         onClick={() => void applyLatestTemplate()}
       >
-        应用最新模板
+        更新
       </Button>
       <Dropdown
         trigger={["click"]}
