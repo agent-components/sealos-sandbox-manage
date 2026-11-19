@@ -5,7 +5,7 @@ import {
   SandboxStateSchema,
   TagsSchema,
   UpdateSandboxSchema,
-} from '../../lib/sandbox/schema';
+} from './schema';
 
 export const listSandboxesInputSchema = z.object({
   tag: z.array(z.string()).optional(),

@@ -3,8 +3,8 @@ import {
   clearUserToken,
   issueUserToken,
   type PublicUser,
-} from '../../lib/auth/users';
-import { AuthError } from '../../lib/sealos/errors';
+} from '../auth/users';
+import { AuthError } from '../sealos/errors';
 
 export async function loginWithPassword(
   username: string,

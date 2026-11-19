@@ -11,10 +11,9 @@
     "dev": "pnpm run dev:server & pnpm run dev:web; wait",
     "build": "pnpm -r build",
     "build:dist": "node scripts/build.mjs",
-    "db:generate": "pnpm --filter @boat/prisma generate",
-    "db:push": "pnpm --filter @boat/prisma db:push",
-    "db:indexes": "pnpm --filter @boat/prisma db:indexes",
-    "db:init": "pnpm run db:generate && pnpm run db:push && pnpm run db:indexes",
+    "db:generate": "pnpm --filter @sealos-sandbox-manage/prisma generate",
+    "db:push": "pnpm --filter @sealos-sandbox-manage/prisma db:push",
+    "db:init": "pnpm run db:generate && pnpm run db:push",
     "lint": "pnpm -r lint"
   },
   "pnpm": {

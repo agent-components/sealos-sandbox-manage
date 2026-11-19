@@ -5,7 +5,7 @@
 ```text
 apps/web          Vite 控制台（开发端口 8080）
 apps/server       tRPC + OpenAPI（开发端口 3000）
-packages/prisma   Prisma schema 与 client（@boat/prisma）
+packages/prisma   Prisma schema 与 client（@sealos-sandbox-manage/prisma）
 ```
 
 控制台走 tRPC。对外沙箱接口在 `/api/openapi`（文档：`/api/openapi.json`）。登录会话写在 `sandbox.users`。
@@ -65,8 +65,7 @@ OpenAPI 调用会写入 `sandbox.call_logs`；结果正文可选存到 MinIO。
 ```bash
 pnpm db:generate
 pnpm db:push
-pnpm db:indexes
-pnpm db:init      # 以上三步
+pnpm db:init      # generate + push
 ```
 
 业务表在 schema `sandbox`。登录账号是 `sandbox.users`。

@@ -1,6 +1,6 @@
-import { AuthError } from '../../lib/sealos/errors';
-import { createTemplateId } from '../../lib/template/id';
-import { CreateTemplateSchema, UpdateTemplateSchema } from '../../lib/template/schema';
+import { AuthError } from '../sealos/errors';
+import { createTemplateId } from './id';
+import { CreateTemplateSchema, UpdateTemplateSchema } from './schema';
 import {
   createTemplate,
   deleteTemplate,
@@ -9,7 +9,7 @@ import {
   listTemplatesPage,
   publishTemplate,
   updateTemplate,
-} from '../../lib/template/store';
+} from './store';
 
 function assertOwner(template: { owner?: string }, username: string) {
   if (template.owner !== username) {

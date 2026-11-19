@@ -1,5 +1,5 @@
 {
-  "name": "@boat/prisma",
+  "name": "@sealos-sandbox-manage/prisma",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -13,8 +13,7 @@
     "generate": "prisma generate",
     "build": "prisma generate && rm -rf dist && tsc -p tsconfig.build.json",
     "db:pull": "prisma db pull",
-    "db:push": "prisma db push",
-    "db:indexes": "prisma db execute --file extra-indexes.sql"
+    "db:push": "prisma db push"
   },
   "dependencies": {
     "@prisma/client": "7.10.1"

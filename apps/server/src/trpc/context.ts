@@ -1,6 +1,6 @@
 import type { CreateHTTPContextOptions } from '@trpc/server/adapters/standalone';
-import type { PrismaClient } from '@boat/prisma';
-import { findUserByToken, type PublicUser } from '../lib/auth/users';
+import type { PrismaClient } from '@sealos-sandbox-manage/prisma';
+import { findUserByToken, type PublicUser } from '../modules/auth/users';
 import { readBearerToken } from '../modules/auth/token';
 import { db } from '../infrastructure/database';
 

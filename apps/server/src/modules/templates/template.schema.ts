@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CreateTemplateSchema, UpdateTemplateSchema } from '../../lib/template/schema';
+import { CreateTemplateSchema, UpdateTemplateSchema } from './schema';
 
 export const listTemplatesInputSchema = z.object({
   q: z.string().optional(),

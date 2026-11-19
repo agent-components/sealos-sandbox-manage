@@ -6,16 +6,16 @@ import {
 import { App as AntdApp } from 'antd';
 import { Layout, useLayoutTabs, type LayoutMenuSection } from 'listpage-components';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { BillingModal } from '@/components/BillingModal';
-import { ClusterSettingsModal } from '@/components/ClusterSettingsModal';
-import { SystemSettingsModal } from '@/components/SystemSettingsModal';
 import { useSandboxTheme, AntdProvider } from '@/components/AntdProvider';
-import { PRODUCT_NAME } from '@/lib/product';
-import { useLogin } from '../modules/auth/useLogin';
-import { LoginPage } from '../pages/login/LoginPage';
-import { CallLogListPage } from '../pages/call-logs/CallLogListPage';
-import { SandboxListPage } from '../pages/sandboxes/SandboxListPage';
-import { TemplateListPage } from '../pages/templates/TemplateListPage';
+import { PRODUCT_NAME } from '@/modules/product';
+import { useLogin } from '@/modules/auth/useLogin';
+import { BillingModal } from './components/BillingModal';
+import { ClusterSettingsModal } from './components/ClusterSettingsModal';
+import { SystemSettingsModal } from './components/SystemSettingsModal';
+import { LoginPage } from '@/pages/login/LoginPage';
+import { CallLogListPage } from '@/pages/call-logs/CallLogListPage';
+import { SandboxListPage } from '@/pages/sandboxes/SandboxListPage';
+import { TemplateListPage } from '@/pages/templates/TemplateListPage';
 
 type MenuKey = 'sandboxes' | 'templates' | 'call-logs';
 
@@ -140,7 +140,7 @@ function Shell() {
   }
 
   return (
-  <>
+    <>
       <Layout
         title={PRODUCT_NAME}
         logo={<img src="/logo.png" alt="" className="sandbox-logo" />}

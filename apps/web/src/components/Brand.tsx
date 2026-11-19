@@ -1,4 +1,4 @@
-import { PRODUCT_NAME } from "@/lib/product";
+import { PRODUCT_NAME } from "@/modules/product";
 
 export function Brand({ large = false }: { large?: boolean }) {
   if (large) {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RegionIdSchema } from '../../lib/sealos/region-catalog';
+import { RegionIdSchema } from '../sealos/region-catalog';
 
 const PriceSchema = z.number().finite().min(0);
 

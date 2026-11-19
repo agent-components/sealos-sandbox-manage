@@ -5,7 +5,7 @@ import {
   nearestCpu,
   nearestMemoryGi,
   type ResourceSpec,
-} from "@/lib/sealos/resources";
+} from "@/modules/sealos/resources";
 
 type Props = {
   value: ResourceSpec;

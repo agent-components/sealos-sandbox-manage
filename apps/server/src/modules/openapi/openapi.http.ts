@@ -1,12 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { findUserByToken, type PublicUser } from '../../lib/auth/users';
-import { jsonError, jsonOk, sendJson } from '../../lib/api/response';
-import { recordCall } from '../../lib/logs/audit';
-import { openApiDocument } from '../../lib/openapi/document';
-import { parsePageQuery } from '../../lib/api/page';
-import { AuthError } from '../../lib/sealos/errors';
+import { findUserByToken, type PublicUser } from '../auth/users';
+import { jsonError, jsonOk, sendJson } from '../errors/response';
+import { recordCall } from '../callLogs/audit';
+import { openApiDocument } from './document';
+import { parsePageQuery } from '../../infrastructure/page';
+import { AuthError } from '../sealos/errors';
 import { bindBearerToken } from '../auth/bind-request';
 import { readBearerToken } from '../auth/token';
 import * as billingService from '../billing/billing.service';

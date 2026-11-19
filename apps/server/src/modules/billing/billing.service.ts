@@ -1,7 +1,7 @@
 import {
   defaultBillingRange,
   getBillingReport,
-} from '../../lib/billing/report';
+} from './report';
 
 function parseInstant(
   raw: string | undefined,

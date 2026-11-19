@@ -32,12 +32,12 @@ async function exists(path) {
 }
 
 console.log('构建 Prisma、服务端和前端');
-await run(['--filter', '@boat/prisma', 'build']);
+await run(['--filter', '@sealos-sandbox-manage/prisma', 'build']);
 await run(['--filter', 'server', 'build']);
 await run(['--filter', 'web', 'build'], { VITE_TRPC_URL: '/trpc' });
 
 console.log('组装 dist');
-const staging = await mkdtemp(resolve(tmpdir(), 'boat-'));
+const staging = await mkdtemp(resolve(tmpdir(), 'sealos-sandbox-manage-'));
 const skipNodeModules = (source) => !source.split(sep).includes('node_modules');
 
 try {
@@ -59,7 +59,7 @@ try {
   await rm(staging, { recursive: true, force: true });
 }
 
-const prismaPackage = await realpath(resolve(output, 'node_modules/@boat/prisma'));
+const prismaPackage = await realpath(resolve(output, 'node_modules/@sealos-sandbox-manage/prisma'));
 if (!(await exists(resolve(prismaPackage, 'dist/client.js')))) {
   await cp(resolve(root, 'packages/prisma/dist'), resolve(prismaPackage, 'dist'), {
     recursive: true,

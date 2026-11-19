@@ -1,6 +1,6 @@
 import { Brand } from '@/components/Brand';
-import { PRODUCT_NAME } from '@/lib/product';
-import { LoginForm } from '../../modules/auth/LoginForm';
+import { PRODUCT_NAME } from '@/modules/product';
+import { LoginForm } from './components/LoginForm';
 
 type LoginPageProps = {
   error: string;

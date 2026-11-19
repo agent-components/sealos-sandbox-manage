@@ -1,7 +1,7 @@
 import './infrastructure/env';
 import { createServer } from './server';
-import { startIdleSweeper } from './lib/sandbox/idle-sweeper';
-import { startLogRetention } from './lib/logs/retention';
+import { startIdleSweeper } from './modules/sandboxes/idle-sweeper';
+import { startLogRetention } from './modules/callLogs/retention';
 
 const port = Number(process.env.PORT ?? 3000);
 const server = createServer();

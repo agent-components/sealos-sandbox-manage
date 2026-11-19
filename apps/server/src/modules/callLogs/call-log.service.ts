@@ -2,7 +2,7 @@ import {
   getCallLog,
   listCallLogs,
   readCallLogResult,
-} from '../../lib/logs/store';
+} from './store';
 
 function parseTime(value: string | undefined): Date | undefined {
   if (!value?.trim()) return undefined;

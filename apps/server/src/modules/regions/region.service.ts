@@ -1,11 +1,11 @@
-import { RegionIdSchema } from '../../lib/sealos/region-catalog';
+import { RegionIdSchema } from '../sealos/region-catalog';
 import {
   clearRegionConfig,
   listRegionsAdmin,
   listRegionsPublic,
   setDefaultRegion,
   upsertRegionConfig,
-} from '../../lib/sealos/regions';
+} from '../sealos/regions';
 export type UpsertRegionBody = {
   launchpadBase: string;
   kubeconfig?: string | null;

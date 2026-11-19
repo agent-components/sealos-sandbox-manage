@@ -11,12 +11,12 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/add-import-extensions.mjs",
     "start": "node dist/main.js",
-    "start:dev": "pnpm --filter @boat/prisma build && tsx watch src/main.ts",
+    "start:dev": "pnpm --filter @sealos-sandbox-manage/prisma build && tsx watch src/main.ts",
     "start:prod": "node dist/main.js",
     "lint": "oxlint --type-aware src/"
   },
   "dependencies": {
-    "@boat/prisma": "workspace:*",
+    "@sealos-sandbox-manage/prisma": "workspace:*",
     "@prisma/adapter-pg": "7.10.1",
     "@trpc/server": "^11.29.4",
     "cors": "^2.8.6",

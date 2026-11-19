@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { ZodError } from 'zod';
-import { AuthError, SealosApiError } from '../../lib/sealos/errors';
-import { jsonError, type JsonResponse } from '../../lib/api/response';
+import { AuthError, SealosApiError } from '../sealos/errors';
+import { jsonError, type JsonResponse } from './response';
 
 function trpcCodeFromStatus(status: number): TRPCError['code'] {
   if (status === 401) return 'UNAUTHORIZED';

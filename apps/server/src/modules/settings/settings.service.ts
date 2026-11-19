@@ -1,4 +1,4 @@
-import { getSystemSettings, setLogRetentionDays } from '../../lib/settings/store';
+import { getSystemSettings, setLogRetentionDays } from './store';
 
 export async function getSettings() {
   return { settings: await getSystemSettings() };

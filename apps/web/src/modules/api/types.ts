@@ -1,6 +1,6 @@
-import type { Sandbox } from '../../lib/sandbox/schema';
-import type { ResourceSpec } from '../../lib/sealos/resources';
-import type { Template } from '../../lib/template/schema';
+import type { Sandbox } from '../sandbox/schema';
+import type { ResourceSpec } from '../sealos/resources';
+import type { Template } from '../template/schema';
 
 export type SandboxUser = {
   username: string;

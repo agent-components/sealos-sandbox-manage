@@ -1,21 +1,21 @@
-import { parsePageQuery, slicePage } from '../../lib/api/page';
+import { parsePageQuery, slicePage } from '../../infrastructure/page';
 import { bindBearerToken } from '../auth/bind-request';
-import { resolveSandboxRegion } from '../../lib/auth/resolve';
-import { AuthError } from '../../lib/sealos/errors';
-import { mapLaunchpadStatus, toSandbox } from '../../lib/sealos/map';
-import { getPodLogs, listAppPods, execInPod } from '../../lib/sealos/kube';
-import { getVisibleTemplate, listTemplates } from '../../lib/template/store';
-import { createSandboxId } from '../../lib/sandbox/id';
+import { resolveSandboxRegion } from '../auth/resolve';
+import { AuthError } from '../sealos/errors';
+import { mapLaunchpadStatus, toSandbox } from '../sealos/map';
+import { getPodLogs, listAppPods, execInPod } from '../sealos/kube';
+import { getVisibleTemplate, listTemplates } from '../templates/store';
+import { createSandboxId } from './id';
 import {
   setSandboxIdleConfig,
   touchSandboxActivity,
   withSandboxIdle,
-} from '../../lib/sandbox/idle';
-import { sandboxFromRecord } from '../../lib/sandbox/from-record';
+} from './idle';
+import { sandboxFromRecord } from './from-record';
 import {
   attachRegion,
   launchpadClientFor,
-} from '../../lib/sandbox/region-fields';
+} from './region-fields';
 import {
   CreateSandboxSchema,
   DEFAULT_IDLE_CONFIG,
@@ -24,28 +24,28 @@ import {
   TagsSchema,
   UpdateSandboxSchema,
   RunSandboxCommandSchema,
-} from '../../lib/sandbox/schema';
+} from './schema';
 import {
   deleteSandboxRecord,
   listSandboxRecords,
   saveSandboxRecord,
   setSandboxState,
-} from '../../lib/sandbox/record';
-import { assertOwnedBy } from '../../lib/sandbox/ownership';
-import { setSandboxTags, withSandboxTags } from '../../lib/sandbox/tags';
+} from './record';
+import { assertOwnedBy } from './ownership';
+import { setSandboxTags, withSandboxTags } from './tags';
 import {
   reconcileSandboxUsage,
   snapshotFromApp,
-} from '../../lib/billing/meter';
-import { getDefaultRegion, getRegion } from '../../lib/sealos/regions';
-import { resolveSandboxForCommand } from '../../lib/sandbox/command';
-import { inspectEphemeralDisk } from '../../lib/sandbox/ephemeral-disk';
+} from '../billing/meter';
+import { getDefaultRegion, getRegion } from '../sealos/regions';
+import { resolveSandboxForCommand } from './command';
+import { inspectEphemeralDisk } from './ephemeral-disk';
 import {
   contentDisposition,
   openSandboxArtifact,
-} from '../../lib/sandbox/artifact';
-import type { JsonResponse } from '../../lib/api/response';
-import { jsonOk } from '../../lib/api/response';
+} from './artifact';
+import type { JsonResponse } from '../errors/response';
+import { jsonOk } from '../errors/response';
 
 async function withSandboxExtras(
   owner: string,
