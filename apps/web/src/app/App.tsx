@@ -5,9 +5,10 @@ import {
 } from '@ant-design/icons';
 import { App as AntdApp } from 'antd';
 import { Layout, useLayoutTabs, type LayoutMenuSection } from 'listpage-components';
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSandboxTheme, AntdProvider } from '@/components/AntdProvider';
 import { PRODUCT_NAME } from '@/modules/product';
+import { getAppMode } from '@/modules/runtime/embed';
 import { useLogin } from '@/modules/auth/useLogin';
 import { BillingModal } from './components/BillingModal';
 import { ClusterSettingsModal } from './components/ClusterSettingsModal';
@@ -40,18 +41,48 @@ const ROUTES = [
 
 const TAB_ROUTES = ROUTES.map((route) => ({ ...route, path: `/${route.key}` }));
 
+function menuKeyFromPath(pathname: string): MenuKey {
+  const key = pathname.replace(/^\//, '') as MenuKey;
+  return ROUTES.some((item) => item.key === key) ? key : 'sandboxes';
+}
+
+function PageSuspense({ children }: { children: ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: 14 }}>
+          加载中…
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  );
+}
+
 function Shell() {
+  const appMode = useMemo(() => getAppMode(), []);
+  const embedded = appMode === 'embedded';
   const { session, error, pending, ready, login, logout } = useLogin();
   const theme = useSandboxTheme();
-  const [menuKey, setMenuKey] = useState<MenuKey>('sandboxes');
+  const [menuKey, setMenuKey] = useState<MenuKey>(() =>
+    typeof window === 'undefined' ? 'sandboxes' : menuKeyFromPath(window.location.pathname),
+  );
   const [clusterOpen, setClusterOpen] = useState(false);
   const [systemOpen, setSystemOpen] = useState(false);
   const [billingOpen, setBillingOpen] = useState(false);
   const [openSandboxViewId, setOpenSandboxViewId] = useState<string | null>(null);
 
+  useEffect(() => {
+    document.documentElement.dataset.appMode = appMode;
+  }, [appMode]);
+
   const navigateTab = useCallback((path: string) => {
-    const key = path.replace(/^\//, '') as MenuKey;
-    if (ROUTES.some((item) => item.key === key)) setMenuKey(key);
+    const key = menuKeyFromPath(path);
+    setMenuKey(key);
+    if (window.location.pathname !== `/${key}`) {
+      window.history.replaceState(null, '', `/${key}${window.location.search}`);
+    }
   }, []);
 
   const { tabs, activeKey, activateTab, closeTab, reorderTabs } = useLayoutTabs({
@@ -70,7 +101,7 @@ function Shell() {
     setOpenSandboxViewId(view);
     params.delete('view');
     const qs = params.toString();
-    const next = `${window.location.pathname}${qs ? `?${qs}` : ''}`;
+    const next = `/${'sandboxes'}${qs ? `?${qs}` : ''}`;
     window.history.replaceState(null, '', next);
   }, [session]);
 
@@ -113,6 +144,49 @@ function Shell() {
     );
   }
 
+  const goTemplates = () => {
+    setMenuKey('templates');
+    window.history.replaceState(null, '', `/templates${window.location.search}`);
+  };
+
+  let content: ReactNode = null;
+  if (menuKey === 'sandboxes') {
+    content = (
+      <SandboxListPage
+        initialViewSandboxId={openSandboxViewId}
+        onConsumedInitialView={() => setOpenSandboxViewId(null)}
+        onNavigateTemplates={goTemplates}
+      />
+    );
+  } else if (menuKey === 'templates') {
+    content = <TemplateListPage />;
+  } else if (menuKey === 'call-logs') {
+    content = <CallLogListPage />;
+  }
+
+  const shellModals = (
+    <>
+      <BillingModal open={billingOpen} onClose={() => setBillingOpen(false)} />
+      {session.role === 'ADMIN' ? (
+        <>
+          <ClusterSettingsModal open={clusterOpen} onClose={() => setClusterOpen(false)} />
+          <SystemSettingsModal open={systemOpen} onClose={() => setSystemOpen(false)} />
+        </>
+      ) : null}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <>
+        <div className="app-embed">
+          <PageSuspense>{content}</PageSuspense>
+        </div>
+        {shellModals}
+      </>
+    );
+  }
+
   const menuSections: LayoutMenuSection[] = [
     {
       key: 'main',
@@ -123,21 +197,6 @@ function Shell() {
       })),
     },
   ];
-
-  let content = null;
-  if (menuKey === 'sandboxes') {
-    content = (
-      <SandboxListPage
-        initialViewSandboxId={openSandboxViewId}
-        onConsumedInitialView={() => setOpenSandboxViewId(null)}
-        onNavigateTemplates={() => setMenuKey('templates')}
-      />
-    );
-  } else if (menuKey === 'templates') {
-    content = <TemplateListPage />;
-  } else if (menuKey === 'call-logs') {
-    content = <CallLogListPage />;
-  }
 
   return (
     <>
@@ -152,7 +211,7 @@ function Shell() {
         selectedMenuKey={menuKey}
         onMenuChange={(key) => {
           if (ROUTES.some((item) => item.key === key)) {
-            setMenuKey(key as MenuKey);
+            navigateTab(`/${key}`);
           }
         }}
         userProfile={{
@@ -178,23 +237,9 @@ function Shell() {
           onReorder: reorderTabs,
         }}
       >
-        <Suspense
-          fallback={
-            <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: 14 }}>
-              加载中…
-            </div>
-          }
-        >
-          {content}
-        </Suspense>
+        <PageSuspense>{content}</PageSuspense>
       </Layout>
-      <BillingModal open={billingOpen} onClose={() => setBillingOpen(false)} />
-      {session.role === 'ADMIN' ? (
-        <>
-          <ClusterSettingsModal open={clusterOpen} onClose={() => setClusterOpen(false)} />
-          <SystemSettingsModal open={systemOpen} onClose={() => setSystemOpen(false)} />
-        </>
-      ) : null}
+      {shellModals}
     </>
   );
 }
