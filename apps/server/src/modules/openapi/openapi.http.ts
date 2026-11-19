@@ -387,42 +387,42 @@ async function dispatchOpenApi(
         ) => Promise<{ status: number; body: unknown }>;
       }
     > = {
-      read: {
+      read_file: {
         operation: 'fsRead',
         run: async (user, token) => ({
           status: 200,
           body: await sandboxService.fsRead(user.username, token, sandboxId, raw),
         }),
       },
-      write: {
+      write_file: {
         operation: 'fsWrite',
         run: async (user, token) => ({
           status: 200,
           body: await sandboxService.fsWrite(user.username, token, sandboxId, raw),
         }),
       },
-      edit: {
+      edit_file: {
         operation: 'fsEdit',
         run: async (user, token) => ({
           status: 200,
           body: await sandboxService.fsEdit(user.username, token, sandboxId, raw),
         }),
       },
-      delete: {
+      delete_file: {
         operation: 'fsDelete',
         run: async (user, token) => ({
           status: 200,
           body: await sandboxService.fsDelete(user.username, token, sandboxId, raw),
         }),
       },
-      grep: {
+      grep_file: {
         operation: 'fsGrep',
         run: async (user, token) => ({
           status: 200,
           body: await sandboxService.fsGrep(user.username, token, sandboxId, raw),
         }),
       },
-      glob: {
+      glob_file: {
         operation: 'fsGlob',
         run: async (user, token) => ({
           status: 200,
@@ -433,12 +433,7 @@ async function dispatchOpenApi(
         operation: 'fsExec',
         run: async (user, token) => ({
           status: 200,
-          body: await sandboxService.runSandboxCommand(
-            user.username,
-            token,
-            sandboxId,
-            raw,
-          ),
+          body: await sandboxService.fsExec(user.username, token, sandboxId, raw),
         }),
       },
     };
