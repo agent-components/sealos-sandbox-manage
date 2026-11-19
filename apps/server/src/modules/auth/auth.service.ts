@@ -5,6 +5,7 @@ import {
   type PublicUser,
 } from '../auth/users';
 import { AuthError } from '../sealos/errors';
+import { loginWithHarnessSso as exchangeHarnessSso } from './harness-sso';
 
 export async function loginWithPassword(
   username: string,
@@ -16,6 +17,12 @@ export async function loginWithPassword(
   }
   const token = await issueUserToken(user.username);
   return { user, token };
+}
+
+export async function loginWithHarnessSso(
+  code: string,
+): Promise<{ user: PublicUser; token: string }> {
+  return exchangeHarnessSso(code);
 }
 
 export async function logoutWithToken(token: string | null): Promise<void> {

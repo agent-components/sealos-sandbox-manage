@@ -14,3 +14,12 @@ export function requireDatabaseUrl() {
   }
   return connectionString;
 }
+
+/**
+ * Harness Admin 根地址（无尾斜杠）。可选：仅嵌入子应用做 SSO 兑换时需要；
+ * 独立运行可不配置。
+ */
+export function getHarnessOrigin(): string | null {
+  const origin = process.env.HARNESS_ORIGIN?.trim().replace(/\/+$/, '');
+  return origin || null;
+}

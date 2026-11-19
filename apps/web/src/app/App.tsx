@@ -13,6 +13,7 @@ import { useLogin } from '@/modules/auth/useLogin';
 import { BillingModal } from './components/BillingModal';
 import { ClusterSettingsModal } from './components/ClusterSettingsModal';
 import { SystemSettingsModal } from './components/SystemSettingsModal';
+import { EmbeddedBlockedPage } from '@/pages/login/EmbeddedBlockedPage';
 import { LoginPage } from '@/pages/login/LoginPage';
 import { CallLogListPage } from '@/pages/call-logs/CallLogListPage';
 import { SandboxListPage } from '@/pages/sandboxes/SandboxListPage';
@@ -137,6 +138,9 @@ function Shell() {
   }
 
   if (!session) {
+    if (embedded) {
+      return <EmbeddedBlockedPage message={error || '请从 Harness Admin 打开'} />;
+    }
     return (
       <AntdApp>
         <LoginPage error={error} pending={pending} onLogin={login} />

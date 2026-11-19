@@ -4,3 +4,7 @@ export const loginInputSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1),
 });
+
+export const harnessSsoInputSchema = z.object({
+  code: z.string().min(1),
+});

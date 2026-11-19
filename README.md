@@ -10,6 +10,8 @@ packages/prisma   Prisma schema 与 client（@sealos-sandbox-manage/prisma）
 
 控制台走 tRPC。对外沙箱接口在 `/api/openapi`（文档：`/api/openapi.json`）。登录会话写在 `sandbox.users`。
 
+作为 Harness 子应用时需配置 `HARNESS_ORIGIN`：iframe 带 `harness_sso` / `theme`，服务端向宿主兑票建会话；公开菜单 `GET /api/harness/menus`、工具 `GET /api/harness/tools`。独立运行可不配该项，仍用账号密码登录。
+
 ## 环境要求
 
 - Node.js 22.17+（或 24.22+）
@@ -25,6 +27,7 @@ cd sealos-sandbox-manage
 cp apps/server/.env.example apps/server/.env
 cp packages/prisma/.env.example packages/prisma/.env
 # 两个文件填同一个 DATABASE_URL；服务端还可填 MinIO（调用日志结果）
+# 嵌入 Harness 时再配 HARNESS_ORIGIN；独立运行可不配
 
 pnpm install
 pnpm db:init

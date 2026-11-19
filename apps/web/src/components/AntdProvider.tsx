@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { AppProvider, useProTheme } from 'listpage-components';
+import { getAppMode } from '@/modules/runtime/embed';
+import { readHarnessThemeId } from '@/modules/runtime/harness-query';
 
 const THEME_STORAGE_KEY = 'sandbox-pro-theme';
 
@@ -15,6 +17,12 @@ function readStoredThemeId() {
   }
 }
 
+function readInitialThemeId() {
+  const hostTheme = readHarnessThemeId();
+  if (hostTheme) return hostTheme;
+  return readStoredThemeId();
+}
+
 export function useSandboxTheme() {
   const theme = useContext(SandboxThemeContext);
   if (!theme) {
@@ -24,17 +32,19 @@ export function useSandboxTheme() {
 }
 
 export function AntdProvider({ children }: { children: ReactNode }) {
-  const defaultThemeId = useMemo(() => readStoredThemeId(), []);
+  const defaultThemeId = useMemo(() => readInitialThemeId(), []);
   const theme = useProTheme({ defaultThemeId });
   const { themeId } = theme;
+  const embedded = useMemo(() => getAppMode() === 'embedded', []);
 
   useEffect(() => {
+    if (embedded) return;
     try {
       localStorage.setItem(THEME_STORAGE_KEY, themeId);
     } catch {
       // ignore
     }
-  }, [themeId]);
+  }, [embedded, themeId]);
 
   return (
     <SandboxThemeContext.Provider value={theme}>
