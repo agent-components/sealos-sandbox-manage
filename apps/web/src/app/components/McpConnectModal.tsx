@@ -10,7 +10,6 @@ function mcpConnectJson(token: string) {
           url: `${window.location.origin}/api/mcp`,
           headers: {
             Authorization: `Bearer ${token}`,
-            "x-sandbox-id": "<sandbox-id>",
           },
         },
       },

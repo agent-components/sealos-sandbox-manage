@@ -117,11 +117,38 @@ function protocolFrom(params: unknown) {
   return typeof version === 'string' && supportedProtocols.has(version) ? version : defaultProtocol;
 }
 
+const sandboxIdParam = 'sandbox_id';
+
+/** 本服务自己的 MCP 把 x-sandbox-id 放进工具参数，不要求客户端带这个请求头。 */
+function mcpInputSchema(tool: HarnessTool): Record<string, unknown> {
+  const header = tool.headers?.find((item) => item.name.toLowerCase() === 'x-sandbox-id');
+  const base = tool.inputSchema ?? { type: 'object', properties: {} };
+  if (!header) return base;
+
+  const current = asObject(base.properties) ?? {};
+  const required = Array.isArray(base.required)
+    ? base.required.filter((item): item is string => typeof item === 'string')
+    : [];
+  return {
+    ...base,
+    properties: {
+      [sandboxIdParam]: {
+        type: 'string',
+        minLength: 1,
+        ...(header.schema ?? {}),
+        description: header.description ?? '目标沙箱 ID',
+      },
+      ...current,
+    },
+    required: required.includes(sandboxIdParam) ? required : [sandboxIdParam, ...required],
+  };
+}
+
 function mcpToolList() {
   return harnessTools.map((tool) => ({
     name: tool.name,
     description: tool.description,
-    inputSchema: tool.inputSchema ?? { type: 'object', properties: {} },
+    inputSchema: mcpInputSchema(tool),
   }));
 }
 
@@ -242,13 +269,27 @@ async function callHarnessTool(
   const headers: Record<string, string> = {};
   const authorization = headerValue(incoming, 'authorization');
   if (authorization) headers.authorization = authorization;
+  const headerMissing: string[] = [];
   for (const header of tool.headers ?? []) {
+    if (header.name.toLowerCase() === 'x-sandbox-id') {
+      const sandboxId = rest[sandboxIdParam];
+      if (typeof sandboxId === 'string' && sandboxId.trim()) {
+        headers['x-sandbox-id'] = sandboxId.trim();
+        delete rest[sandboxIdParam];
+      } else if (header.required) {
+        missing.push(sandboxIdParam);
+      }
+      continue;
+    }
     const value = headerValue(incoming, header.name);
     if (value) headers[header.name.toLowerCase()] = value;
-    else if (header.required) missing.push(header.name);
+    else if (header.required) headerMissing.push(header.name);
   }
   if (missing.length) {
-    return { status: 400, body: { error: `缺少请求头 ${missing.join(', ')}` } };
+    return { status: 400, body: { error: `缺少参数 ${missing.join(', ')}` } };
+  }
+  if (headerMissing.length) {
+    return { status: 400, body: { error: `缺少请求头 ${headerMissing.join(', ')}` } };
   }
 
   let url = path;
@@ -280,7 +321,7 @@ async function handleRpc(request: RpcRequest, incoming: IncomingMessage): Promis
         serverInfo: { name: PRODUCT_NAME, version: '0.0.1' },
         instructions: [
           `可用工具：${names}。`,
-          '文件与命令工具（read_file、write_file、edit_file、delete_file、grep_file、glob_file、exec）的目标沙箱由请求头 x-sandbox-id 指定。',
+          '文件与命令工具（read_file、write_file、edit_file、delete_file、grep_file、glob_file、exec）用参数 sandbox_id 指定目标沙箱。',
           '读、写、搜文件用专用工具，不要用 exec 代替。',
         ].join('\n'),
       },
