@@ -13,7 +13,8 @@
     "generate": "prisma generate",
     "build": "prisma generate && rm -rf dist && tsc -p tsconfig.build.json",
     "db:pull": "prisma db pull",
-    "db:push": "prisma db push"
+    "db:push": "prisma db push",
+    "db:seed-admin": "prisma db execute --file sql/init-admin.sql"
   },
   "dependencies": {
     "@prisma/client": "7.10.1"

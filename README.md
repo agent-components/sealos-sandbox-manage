@@ -30,10 +30,13 @@ cp packages/prisma/.env.example packages/prisma/.env
 # 嵌入 Harness 时再配 HARNESS_ORIGIN；独立运行可不配
 
 pnpm install
-pnpm db:init
+pnpm db:init      # 建表并写入初始管理员 admin / admin123
 pnpm dev:server   # http://localhost:3000
 pnpm dev:web      # http://localhost:8080
 ```
+
+仅补管理员：`pnpm db:seed-admin`（脚本：`packages/prisma/sql/init-admin.sql`）。
+
 
 生产：
 
