@@ -11,6 +11,9 @@ import { bindBearerToken } from '../auth/bind-request';
 import { readBearerToken } from '../auth/token';
 import * as billingService from '../billing/billing.service';
 import * as sandboxService from '../sandboxes/sandbox.service';
+import * as templateService from '../templates/template.service';
+import { primaryDiskGi } from '../templates/schema';
+import type { Template } from '../templates/schema';
 
 const maxBodyBytes = 2_000_000;
 
@@ -146,6 +149,29 @@ function requireSandboxIdHeader(req: IncomingMessage): string {
   return value;
 }
 
+function parseOptionalBool(value: string | null): boolean | undefined {
+  if (value == null || value.trim() === '') return undefined;
+  const text = value.trim().toLowerCase();
+  if (text === 'true' || text === '1') return true;
+  if (text === 'false' || text === '0') return false;
+  return undefined;
+}
+
+function templateListItem(template: Template) {
+  return {
+    id: template.id,
+    name: template.name,
+    description: template.description ?? null,
+    image: template.image,
+    cpu: template.cpu,
+    memoryGi: template.memoryGi,
+    diskGi: primaryDiskGi(template.storage),
+    isPublic: template.isPublic,
+    owner: template.owner,
+    ownerName: template.ownerName ?? null,
+  };
+}
+
 function parseListQuery(url: URL) {
   const tag = url.searchParams
     .getAll('tag')
@@ -189,6 +215,35 @@ async function dispatchOpenApi(
           return { status: result.status, body: { error: result.error } };
         }
         return { status: 200, body: result.report };
+      },
+    });
+    sendJson(res, jsonOk(outcome.body, { status: outcome.status }));
+    return true;
+  }
+
+  if (segments[0] === 'templates' && segments.length === 1 && method === 'GET') {
+    const url = new URL(req.url ?? '/', 'http://localhost');
+    const page = parsePageQuery(url.searchParams);
+    const args = {
+      q: url.searchParams.get('q') ?? undefined,
+      isPublic: parseOptionalBool(url.searchParams.get('isPublic')),
+      current: page.current,
+      pageSize: page.pageSize ?? undefined,
+    };
+    const outcome = await runOpenApi(req, {
+      operation: 'listTemplates',
+      method: 'GET',
+      path: '/templates',
+      arguments: args,
+      run: async (user) => {
+        const pageResult = await templateService.listTemplates(user.username, args);
+        return {
+          status: 200,
+          body: {
+            list: pageResult.list.map(templateListItem),
+            total: pageResult.total,
+          },
+        };
       },
     });
     sendJson(res, jsonOk(outcome.body, { status: outcome.status }));

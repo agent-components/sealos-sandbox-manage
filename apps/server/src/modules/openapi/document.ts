@@ -277,6 +277,78 @@ export function openApiDocument() {
     },
     servers: [{ url: "/api/openapi" }],
     paths: {
+      "/templates": {
+        get: {
+          operationId: "listTemplates",
+          summary: "查看可用模板",
+          description:
+            "返回当前用户自己的模板和公开模板。id 用于创建沙箱时的 templateId。不含图标和镜像仓库凭据。",
+          security: userAuth,
+          parameters: [
+            {
+              name: "q",
+              in: "query",
+              description: "匹配模板 ID、名称或镜像，不区分大小写",
+              schema: { type: "string" },
+            },
+            {
+              name: "isPublic",
+              in: "query",
+              description:
+                "true 只返回公开模板；false 只返回当前用户的私有模板。省略则两者都返回",
+              schema: { type: "boolean" },
+            },
+            {
+              name: "current",
+              in: "query",
+              description: "页码，从 1 开始。未传 pageSize 时忽略，返回全部",
+              schema: { type: "integer", minimum: 1, default: 1 },
+            },
+            {
+              name: "pageSize",
+              in: "query",
+              description: "每页条数，最大 100。省略时返回全部匹配结果",
+              schema: { type: "integer", minimum: 1, maximum: 100 },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "可用模板。list 为当前页，total 为符合筛选条件的总数",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["list", "total"],
+                    properties: {
+                      list: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          required: ["id", "name", "image", "cpu", "memoryGi", "diskGi", "isPublic"],
+                          properties: {
+                            id: { type: "string" },
+                            name: { type: "string" },
+                            description: { type: "string", nullable: true },
+                            image: { type: "string" },
+                            cpu: { type: "number" },
+                            memoryGi: { type: "number" },
+                            diskGi: { type: "integer" },
+                            isPublic: { type: "boolean" },
+                            owner: { type: "string" },
+                            ownerName: { type: "string", nullable: true },
+                          },
+                        },
+                      },
+                      total: { type: "integer", minimum: 0 },
+                    },
+                  },
+                },
+              },
+            },
+            ...errors(401, 500),
+          },
+        },
+      },
       "/sandboxes": {
         get: {
           operationId: "listSandboxes",

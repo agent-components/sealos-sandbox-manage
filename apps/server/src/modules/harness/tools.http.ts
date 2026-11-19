@@ -79,8 +79,36 @@ const createSandboxInput = {
   },
 } as const;
 
-/** Host catalog: sandbox lifecycle + agent FS tools. */
+/** Host catalog: sandbox lifecycle, templates, and agent FS tools. */
 export const harnessTools: HarnessTool[] = [
+  {
+    name: 'list_templates',
+    description:
+      'List templates the current user can create sandboxes from: templates they own and public templates. Returns id, name, image, and default CPU, memory, and disk. Pass id as templateId to create.',
+    method: 'GET',
+    path: '/api/openapi/templates',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        q: {
+          type: 'string',
+          description: 'Match template id, name, or image',
+        },
+        isPublic: {
+          type: 'boolean',
+          description:
+            'true: only public templates. false: only private templates owned by the user. Omit to return both.',
+        },
+        current: { type: 'integer', minimum: 1, default: 1, description: 'Page number (1-based)' },
+        pageSize: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 100,
+          description: 'Page size. Omit to return all matches.',
+        },
+      },
+    },
+  },
   {
     name: 'list',
     description:
