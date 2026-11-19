@@ -1,0 +1,41 @@
+{
+  "name": "server",
+  "version": "0.0.1",
+  "description": "tRPC API server",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    "./router": "./src/router.ts"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/add-import-extensions.mjs",
+    "start": "node dist/main.js",
+    "start:dev": "pnpm --filter @boat/prisma build && tsx watch src/main.ts",
+    "start:prod": "node dist/main.js",
+    "lint": "oxlint --type-aware src/"
+  },
+  "dependencies": {
+    "@boat/prisma": "workspace:*",
+    "@prisma/adapter-pg": "7.10.1",
+    "@trpc/server": "^11.29.4",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "js-yaml": "^5.4.3",
+    "minio": "^8.0.7",
+    "node-cron": "^4.6.0",
+    "pg": "^8.23.1",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^24.0.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.15.6",
+    "oxlint": "^1.58.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.2"
+  }
+}

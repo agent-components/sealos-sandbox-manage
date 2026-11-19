@@ -1,0 +1,27 @@
+{
+  "name": "sealos-sandbox-manage",
+  "private": true,
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": ">=22.17.0 <23 || >=24.22.1 <25"
+  },
+  "scripts": {
+    "dev:server": "pnpm --filter server start:dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev": "pnpm run dev:server & pnpm run dev:web; wait",
+    "build": "pnpm -r build",
+    "build:dist": "node scripts/build.mjs",
+    "db:generate": "pnpm --filter @boat/prisma generate",
+    "db:push": "pnpm --filter @boat/prisma db:push",
+    "db:indexes": "pnpm --filter @boat/prisma db:indexes",
+    "db:init": "pnpm run db:generate && pnpm run db:push && pnpm run db:indexes",
+    "lint": "pnpm -r lint"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "prisma",
+      "@prisma/engines"
+    ]
+  }
+}

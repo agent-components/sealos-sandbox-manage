@@ -1,0 +1,250 @@
+import {
+  buildSyncFromTemplateBody,
+  type SyncFromTemplateOptions,
+} from "../sandbox/sync-from-template";
+import { SealosApiError } from "./errors";
+import type { LaunchpadApp } from "./map";
+import type { ResourceSpec } from "./resources";
+import type { Template } from "../template/schema";
+import { assignStorageNames } from "./storage-name";
+import { primaryDiskGi } from "../template/schema";
+
+export type LaunchpadClientOptions = {
+  kubeconfig: string;
+  /** 区域 Launchpad 根地址，必填 */
+  baseUrl: string;
+};
+
+async function launchpadFetch<T>(
+  kubeconfig: string,
+  path: string,
+  init: RequestInit = {},
+  baseUrl?: string,
+): Promise<T> {
+  if (!baseUrl?.trim()) {
+    throw new SealosApiError("缺少 Launchpad 地址", 500);
+  }
+  const url = `${baseUrl.replace(/\/$/, "")}${path}`;
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", encodeURIComponent(kubeconfig));
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const res = await fetch(url, { ...init, headers });
+  const text = await res.text();
+  let json: unknown = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = text;
+    }
+  }
+
+  if (!res.ok) {
+    const message =
+      typeof json === "object" &&
+      json &&
+      "message" in json &&
+      typeof (json as { message: unknown }).message === "string"
+        ? (json as { message: string }).message
+        : `Sealos Launchpad 错误 ${res.status}`;
+    throw new SealosApiError(message, res.status, json);
+  }
+
+  return json as T;
+}
+
+export type CreateFromTemplateInput = {
+  name: string;
+  template: Template;
+  resources?: Partial<ResourceSpec>;
+  /** 创建时追加/覆盖的环境变量（同名覆盖模板） */
+  env?: { name: string; value: string }[];
+};
+
+export function createLaunchpadClient(opts: LaunchpadClientOptions) {
+  const { kubeconfig, baseUrl } = opts;
+
+  return {
+    async listApps(): Promise<LaunchpadApp[]> {
+      return launchpadFetch<LaunchpadApp[]>(
+        kubeconfig,
+        "/api/v2alpha/apps",
+        { method: "GET" },
+        baseUrl,
+      );
+    },
+
+    async getApp(name: string): Promise<LaunchpadApp> {
+      return launchpadFetch<LaunchpadApp>(
+        kubeconfig,
+        `/api/v2alpha/apps/${encodeURIComponent(name)}`,
+        { method: "GET" },
+        baseUrl,
+      );
+    },
+
+    async createAppFromTemplate(
+      input: CreateFromTemplateInput,
+    ): Promise<LaunchpadApp> {
+      const { template } = input;
+      const cpu = input.resources?.cpu ?? template.cpu;
+      const memoryGi = input.resources?.memoryGi ?? template.memoryGi;
+      const diskGi =
+        input.resources?.diskGi ?? primaryDiskGi(template.storage);
+
+      const storage = assignStorageNames(
+        (template.storage ?? []).map((item, index) =>
+          index === 0 && input.resources?.diskGi
+            ? { ...item, size: `${diskGi}Gi` }
+            : item,
+        ),
+      );
+
+      const envMap = new Map<string, string>();
+      for (const e of [...(template.env ?? []), ...(input.env ?? [])]) {
+        const name = e.name.trim();
+        if (!name) continue;
+        envMap.set(name, e.value ?? "");
+      }
+
+      const body = {
+        name: input.name,
+        image: {
+          imageName: template.image,
+          ...(template.imageRegistry
+            ? { imageRegistry: template.imageRegistry }
+            : {}),
+        },
+        launchCommand: {
+          ...(template.launchCommand?.command
+            ? { command: template.launchCommand.command }
+            : {}),
+          ...(template.launchCommand?.args?.length
+            ? { args: template.launchCommand.args }
+            : {}),
+        },
+        quota: {
+          cpu,
+          memory: memoryGi,
+          replicas: template.replicas ?? 1,
+        },
+        ports:
+          template.ports.length > 0
+            ? template.ports.map((p) => ({
+                number: p.number,
+                protocol: p.protocol,
+                isPublic: p.isPublic,
+              }))
+            : [{ number: 80, protocol: "http", isPublic: true }],
+        env: [...envMap.entries()].map(([name, value]) => ({ name, value })),
+        storage,
+        configMap: (template.configMap ?? [])
+          .filter((c) => c.path.trim())
+          .map((c) => ({
+            path: c.path.trim(),
+            value: c.value ?? "",
+          })),
+      };
+
+      return launchpadFetch<LaunchpadApp>(
+        kubeconfig,
+        "/api/v2alpha/apps",
+        { method: "POST", body: JSON.stringify(body) },
+        baseUrl,
+      );
+    },
+
+    async updateApp(
+      name: string,
+      patch: {
+        resources?: ResourceSpec;
+        env?: { name: string; value: string }[];
+      },
+    ): Promise<LaunchpadApp> {
+      const body: Record<string, unknown> = {};
+      if (patch.resources) {
+        body.quota = {
+          cpu: patch.resources.cpu,
+          memory: patch.resources.memoryGi,
+          replicas: 1,
+        };
+        body.storage = [
+          {
+            path: "/data",
+            size: `${patch.resources.diskGi}Gi`,
+          },
+        ];
+      }
+      if (patch.env !== undefined) {
+        body.env = patch.env.map((item) => ({
+          name: item.name,
+          value: item.value ?? "",
+        }));
+      }
+      if (Object.keys(body).length === 0) {
+        return this.getApp(name);
+      }
+      await launchpadFetch(
+        kubeconfig,
+        `/api/v2alpha/apps/${encodeURIComponent(name)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        },
+        baseUrl,
+      );
+      return this.getApp(name);
+    },
+
+    /** 按模板最新配置更新远程应用（保留当前资源配置，环境变量合并） */
+    async syncAppFromTemplate(
+      name: string,
+      app: LaunchpadApp,
+      template: Template,
+      opts?: SyncFromTemplateOptions,
+    ): Promise<LaunchpadApp> {
+      await launchpadFetch(
+        kubeconfig,
+        `/api/v2alpha/apps/${encodeURIComponent(name)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(buildSyncFromTemplateBody(app, template, opts)),
+        },
+        baseUrl,
+      );
+      return this.getApp(name);
+    },
+
+    async deleteApp(name: string): Promise<void> {
+      await launchpadFetch(
+        kubeconfig,
+        `/api/v2alpha/apps/${encodeURIComponent(name)}`,
+        { method: "DELETE" },
+        baseUrl,
+      );
+    },
+
+    async pauseApp(name: string): Promise<void> {
+      await launchpadFetch(
+        kubeconfig,
+        `/api/pauseApp?appName=${encodeURIComponent(name)}`,
+        { method: "GET" },
+        baseUrl,
+      );
+    },
+
+    async startApp(name: string): Promise<void> {
+      await launchpadFetch(
+        kubeconfig,
+        `/api/startApp?appName=${encodeURIComponent(name)}`,
+        { method: "GET" },
+        baseUrl,
+      );
+    },
+  };
+}
+
+export type LaunchpadClient = ReturnType<typeof createLaunchpadClient>;

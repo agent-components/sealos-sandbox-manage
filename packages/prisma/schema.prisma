@@ -1,0 +1,173 @@
+// 业务表在 schema sandbox。登录账号是 sandbox.users。
+
+generator client {
+  provider = "prisma-client"
+  output   = "src"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["sandbox"]
+}
+
+model Template {
+  id            String   @id
+  name          String
+  description   String?
+  /// 可选图标，data URL（base64），原文件不超过 200KB
+  icon          String?  @db.Text
+  image         String
+  imageRegistry Json?    @map("image_registry")
+  launchCommand Json?    @map("launch_command")
+  cpu           Float
+  memoryGi      Float    @map("memory_gi")
+  replicas      Int      @default(1)
+  autoShutdown  Boolean  @default(false) @map("auto_shutdown")
+  idleMinutes   Int      @default(5) @map("idle_minutes")
+  ports         Json     @default("[]")
+  env           Json     @default("[]")
+  storage       Json     @default("[]")
+  configMap     Json     @default("[]") @map("config_map")
+  /// 创建人用户名。空表示尚未指定。
+  owner         String   @default("")
+  /// 公共模板全员可用来创建沙箱；只有创建人能编辑。公开后不能改回私有。
+  isPublic      Boolean  @default(false) @map("is_public")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("templates")
+  @@schema("sandbox")
+}
+
+model SandboxRecord {
+  sandboxId      String   @id @map("sandbox_id")
+  owner          String
+  templateId     String   @map("template_id")
+  /// 区域枚举：gzg | hzh | bja
+  regionId       String   @default("gzg") @map("region_id")
+  tags           String[] @default([])
+  state          String   @default("starting")
+  autoShutdown   Boolean  @default(false) @map("auto_shutdown")
+  idleMinutes    Int      @default(5) @map("idle_minutes")
+  lastActivityAt DateTime @default(now()) @map("last_activity_at") @db.Timestamptz(6)
+  inflight       Int      @default(0)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([owner], map: "records_owner_idx")
+  @@index([regionId], map: "records_region_idx")
+  @@index([tags], type: Gin, map: "records_tags_idx")
+  @@map("records")
+  @@schema("sandbox")
+}
+
+/// Sealos 区域凭证。id 仅允许目录中的 gzg / hzh / bja。
+model SealosRegion {
+  id            String   @id
+  launchpadBase String   @map("launchpad_base")
+  kubeconfig    String   @db.Text
+  isDefault     Boolean  @default(false) @map("is_default")
+  /// 清空凭证后为 false；创建与 sweeper 只用 enabled 且已配置的区域
+  enabled       Boolean  @default(true)
+  /// 用量单价（元）；写入 usage_segments 时快照
+  priceCpu      Float    @default(0.01742) @map("price_cpu")
+  priceMemory   Float    @default(0.008786) @map("price_memory")
+  priceStorage  Float    @default(0.000532) @map("price_storage")
+  pricePort     Float    @default(0.007) @map("price_port")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("sealos_regions")
+  @@schema("sandbox")
+}
+
+/// 全站系统设置，单行 id = default。管理员修改后对所有用户生效。
+model SystemSetting {
+  id               String   @id @default("default")
+  /// 调用日志保留天数。null 或小于 1 表示不自动清理。
+  logRetentionDays Int?     @map("log_retention_days")
+  updatedAt        DateTime @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("system_settings")
+  @@schema("sandbox")
+}
+
+/// OpenAPI 调用日志。元数据在库里，结果正文在对象存储。
+model CallLog {
+  id          String   @id
+  username    String?
+  operation   String
+  method      String
+  path        String
+  arguments   Json
+  status      Int
+  ok          Boolean
+  resultKey   String?  @map("result_key")
+  resultError String?  @map("result_error")
+  startedAt   DateTime @map("started_at") @db.Timestamptz(6)
+  completedAt DateTime @map("completed_at") @db.Timestamptz(6)
+  durationMs  Int      @map("duration_ms")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([startedAt(sort: Desc)], map: "call_logs_started_idx")
+  @@index([operation, startedAt(sort: Desc)], map: "call_logs_operation_started_idx")
+  @@index([username, startedAt(sort: Desc)], map: "call_logs_username_started_idx")
+  @@map("call_logs")
+  @@schema("sandbox")
+}
+
+/// 用量段：规格或运行状态变化时切段；endedAt 为空表示当前段仍在进行。
+model UsageSegment {
+  id            BigInt    @id @default(autoincrement())
+  sandboxId     String    @map("sandbox_id")
+  owner         String
+  computeActive Boolean   @map("compute_active")
+  cpu           Float
+  memoryGi      Float     @map("memory_gi")
+  diskGi        Float     @map("disk_gi")
+  publicPorts   Int       @map("public_ports")
+  priceCpu      Float     @map("price_cpu")
+  priceMemory   Float     @map("price_memory")
+  priceStorage  Float     @map("price_storage")
+  pricePort     Float     @map("price_port")
+  startedAt     DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  endedAt       DateTime? @map("ended_at") @db.Timestamptz(6)
+
+  @@index([owner, startedAt(sort: Desc)], map: "usage_segments_owner_started_idx")
+  @@index([sandboxId, startedAt(sort: Desc)], map: "usage_segments_sandbox_started_idx")
+  @@map("usage_segments")
+  @@schema("sandbox")
+}
+
+enum UserRole {
+  ADMIN
+  USER
+
+  @@schema("sandbox")
+}
+
+enum UserStatus {
+  ACTIVE
+  RESIGNED
+
+  @@schema("sandbox")
+}
+
+/// 登录账号。登录名是 account。
+model User {
+  id             String     @id @default(uuid())
+  account        String     @unique
+  password       String
+  displayName    String     @map("display_name")
+  phone          String?
+  email          String?
+  role           UserRole   @default(USER)
+  status         UserStatus @default(ACTIVE)
+  token          String?    @unique
+  tokenExpiredAt DateTime?  @map("token_expired_at") @db.Timestamptz(6)
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("users")
+  @@schema("sandbox")
+}
