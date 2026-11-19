@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { CPU_OPTIONS, MEMORY_OPTIONS } from '../sealos/resources';
 
 export type HarnessToolHeader = {
   name: string;
@@ -17,201 +16,209 @@ export type HarnessTool = {
   headers?: HarnessToolHeader[];
 };
 
-const idProp = {
-  type: 'string',
-  minLength: 1,
-  description: 'Sandbox ID',
-} as const;
+const sandboxIdHeader: HarnessToolHeader = {
+  name: 'x-sandbox-id',
+  description: 'Target sandbox ID',
+  required: true,
+  schema: { type: 'string', minLength: 1 },
+};
 
-const createSandboxInput = {
-  type: 'object',
-  required: ['templateId'],
-  properties: {
-    templateId: { type: 'string', minLength: 1, description: 'Template ID to create from' },
-    regionId: {
-      type: 'string',
-      enum: ['gzg', 'hzh', 'bja'],
-      description: 'Region: gzg (Guangzhou), hzh (Hangzhou), or bja (Beijing). Defaults to cluster setting.',
-    },
-    name: {
-      type: 'string',
-      minLength: 1,
-      maxLength: 48,
-      description: 'Sandbox name. Auto-generated if omitted.',
-    },
-    cpu: { type: 'number', enum: [...CPU_OPTIONS], description: 'CPU cores' },
-    memoryGi: {
-      type: 'number',
-      enum: MEMORY_OPTIONS.map((item) => item.gi),
-      description: 'Memory in GiB',
-    },
-    diskGi: {
-      type: 'integer',
-      minimum: 1,
-      maximum: 1000,
-      description: 'Disk size in GiB',
-    },
-    env: {
-      type: 'array',
-      items: {
-        type: 'object',
-        required: ['name'],
-        properties: {
-          name: { type: 'string', description: 'Environment variable name' },
-          value: { type: 'string', description: 'Environment variable value' },
-        },
-      },
-      description: 'Extra environment variables',
-    },
-    tags: {
-      type: 'array',
-      maxItems: 20,
-      items: { type: 'string' },
-      description: 'Tags for filtering',
-    },
-  },
-} as const;
-
-/** Public catalog for the host; `{id}` is filled from inputSchema.id. */
+/** Agent FS tools for the host; sandbox selected via x-sandbox-id. */
 export const harnessTools: HarnessTool[] = [
   {
-    name: 'list',
+    name: 'read',
     description:
-      'List sandboxes owned by the current user. Filter by tags, keyword, state, or template. Returns id, state, resources, and public URL.',
-    method: 'GET',
-    path: '/api/openapi/sandboxes',
+      'Read a text file from the sandbox by absolute path. Optional offset/limit select line ranges (1-based; negative offset counts from the end). Max 32MB.',
+    method: 'POST',
+    path: '/api/openapi/fs/read',
+    headers: [sandboxIdHeader],
     inputSchema: {
       type: 'object',
+      required: ['path'],
       properties: {
-        tag: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Require all of these exact tags',
-        },
-        q: {
-          type: 'string',
-          description: 'Tag keyword search (space or comma separated)',
-        },
-        keyword: {
-          type: 'string',
-          description: 'Match sandbox id, template image, or template name',
-        },
-        state: {
-          type: 'string',
-          enum: ['starting', 'running', 'stopped', 'error'],
-          description: 'Filter by sandbox state',
-        },
-        templateId: { type: 'string', description: 'Filter by template ID' },
-        current: { type: 'integer', minimum: 1, default: 1, description: 'Page number (1-based)' },
-        pageSize: {
-          type: 'integer',
-          minimum: 1,
-          maximum: 100,
-          description: 'Page size. Omit to return all matches.',
-        },
-      },
-    },
-  },
-  {
-    name: 'create',
-    description:
-      'Create a sandbox from a template. Optionally override CPU, memory, disk, name, region, env, and tags.',
-    method: 'POST',
-    path: '/api/openapi/sandboxes',
-    inputSchema: createSandboxInput,
-  },
-  {
-    name: 'get',
-    description: 'Get one sandbox by id, including state, resources, ports, and public URL.',
-    method: 'GET',
-    path: '/api/openapi/sandboxes/{id}',
-    inputSchema: {
-      type: 'object',
-      required: ['id'],
-      properties: { id: idProp },
-    },
-  },
-  {
-    name: 'delete',
-    description: 'Permanently delete a sandbox and its cloud resources.',
-    method: 'DELETE',
-    path: '/api/openapi/sandboxes/{id}',
-    inputSchema: {
-      type: 'object',
-      required: ['id'],
-      properties: { id: idProp },
-    },
-  },
-  {
-    name: 'sync_from_template',
-    description:
-      'Apply the linked template to this sandbox (image, command, ports, mounts, idle shutdown). Keeps current CPU/memory/disk/replicas; merges env with sandbox values winning on conflict.',
-    method: 'POST',
-    path: '/api/openapi/sandboxes/{id}/sync-template',
-    inputSchema: {
-      type: 'object',
-      required: ['id'],
-      properties: { id: idProp },
-    },
-  },
-  {
-    name: 'stop',
-    description: 'Stop a running sandbox to free compute. Data on disk is kept.',
-    method: 'POST',
-    path: '/api/openapi/sandboxes/{id}/stop',
-    inputSchema: {
-      type: 'object',
-      required: ['id'],
-      properties: { id: idProp },
-    },
-  },
-  {
-    name: 'resume',
-    description: 'Start a stopped sandbox so it becomes reachable again.',
-    method: 'POST',
-    path: '/api/openapi/sandboxes/{id}/resume',
-    inputSchema: {
-      type: 'object',
-      required: ['id'],
-      properties: { id: idProp },
-    },
-  },
-  {
-    name: 'run_command',
-    description:
-      'Run a shell command inside the sandbox and return exit code, stdout, and stderr. Starts the sandbox first if it is stopped. Times out after about 60 seconds.',
-    method: 'POST',
-    path: '/api/openapi/sandboxes/{id}/commands',
-    inputSchema: {
-      type: 'object',
-      required: ['id', 'command'],
-      properties: {
-        id: idProp,
-        command: {
-          type: 'string',
-          minLength: 1,
-          maxLength: 16384,
-          description: 'Shell command to run',
-        },
-      },
-    },
-  },
-  {
-    name: 'get_artifact',
-    description:
-      'Read a file from the running sandbox by absolute path (max 32MB). Text is returned as text; images as base64 JSON; other types as a binary download.',
-    method: 'GET',
-    path: '/api/openapi/sandboxes/{id}/artifacts',
-    inputSchema: {
-      type: 'object',
-      required: ['id', 'path'],
-      properties: {
-        id: idProp,
         path: {
           type: 'string',
           minLength: 1,
           maxLength: 4096,
           description: 'Absolute path inside the sandbox',
+        },
+        offset: {
+          type: 'integer',
+          description: 'Start line (1-based). Negative counts from the end.',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Max number of lines to return',
+        },
+      },
+    },
+  },
+  {
+    name: 'write',
+    description:
+      'Create or overwrite a text file in the sandbox. Parent directories are created automatically. Max 32MB.',
+    method: 'POST',
+    path: '/api/openapi/fs/write',
+    headers: [sandboxIdHeader],
+    inputSchema: {
+      type: 'object',
+      required: ['path', 'contents'],
+      properties: {
+        path: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 4096,
+          description: 'Absolute path inside the sandbox',
+        },
+        contents: {
+          type: 'string',
+          description: 'Full file contents to write',
+        },
+      },
+    },
+  },
+  {
+    name: 'edit',
+    description:
+      'Replace an exact string in a sandbox file. Fails if old_string is missing or matches multiple times unless replace_all is true.',
+    method: 'POST',
+    path: '/api/openapi/fs/edit',
+    headers: [sandboxIdHeader],
+    inputSchema: {
+      type: 'object',
+      required: ['path', 'old_string', 'new_string'],
+      properties: {
+        path: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 4096,
+          description: 'Absolute path inside the sandbox',
+        },
+        old_string: {
+          type: 'string',
+          minLength: 1,
+          description: 'Exact text to find',
+        },
+        new_string: {
+          type: 'string',
+          description: 'Replacement text',
+        },
+        replace_all: {
+          type: 'boolean',
+          description: 'Replace every match instead of requiring a unique match',
+        },
+      },
+    },
+  },
+  {
+    name: 'delete',
+    description: 'Delete a regular file in the sandbox. Directories are not allowed.',
+    method: 'POST',
+    path: '/api/openapi/fs/delete',
+    headers: [sandboxIdHeader],
+    inputSchema: {
+      type: 'object',
+      required: ['path'],
+      properties: {
+        path: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 4096,
+          description: 'Absolute path of the file to delete',
+        },
+      },
+    },
+  },
+  {
+    name: 'grep',
+    description:
+      'Search file contents in the sandbox with a regex. Can return matching lines, file paths, or match counts.',
+    method: 'POST',
+    path: '/api/openapi/fs/grep',
+    headers: [sandboxIdHeader],
+    inputSchema: {
+      type: 'object',
+      required: ['pattern'],
+      properties: {
+        pattern: {
+          type: 'string',
+          minLength: 1,
+          description: 'Regular expression to search for',
+        },
+        path: {
+          type: 'string',
+          description: 'File or directory to search (default /)',
+        },
+        glob: {
+          type: 'string',
+          description: 'Only search paths matching this glob',
+        },
+        case_insensitive: {
+          type: 'boolean',
+          description: 'Case-insensitive match',
+        },
+        output_mode: {
+          type: 'string',
+          enum: ['content', 'files_with_matches', 'count'],
+          description: 'Result shape (default content)',
+        },
+        context: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Context lines around each match',
+        },
+        head_limit: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Max matches to return',
+        },
+        multiline: {
+          type: 'boolean',
+          description: 'Allow patterns to span lines',
+        },
+      },
+    },
+  },
+  {
+    name: 'glob',
+    description:
+      'Find files in the sandbox by glob pattern. Returns matching absolute paths (capped).',
+    method: 'POST',
+    path: '/api/openapi/fs/glob',
+    headers: [sandboxIdHeader],
+    inputSchema: {
+      type: 'object',
+      required: ['glob_pattern'],
+      properties: {
+        glob_pattern: {
+          type: 'string',
+          minLength: 1,
+          description: 'Glob pattern, e.g. **/*.ts',
+        },
+        target_directory: {
+          type: 'string',
+          description: 'Directory to search under (default /)',
+        },
+      },
+    },
+  },
+  {
+    name: 'exec',
+    description:
+      'Run a shell command in the sandbox and return exit code, stdout, and stderr. Starts the sandbox first if it is stopped. Times out after about 60 seconds.',
+    method: 'POST',
+    path: '/api/openapi/fs/exec',
+    headers: [sandboxIdHeader],
+    inputSchema: {
+      type: 'object',
+      required: ['command'],
+      properties: {
+        command: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 16384,
+          description: 'Shell command to run',
         },
       },
     },

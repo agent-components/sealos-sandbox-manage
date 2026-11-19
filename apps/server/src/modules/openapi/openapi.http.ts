@@ -47,18 +47,35 @@ async function requireOpenApiUser(
   return { user, token };
 }
 
+type OpenApiRunOpts = {
+  operation: string;
+  method: string;
+  path: string;
+  arguments: RouteArgs;
+  run: (
+    user: PublicUser,
+    token: string,
+  ) => Promise<{ status: number; body: unknown; stream?: Response }>;
+};
+
+/** 普通 OpenAPI：鉴权执行，不写调用日志。 */
+async function runOpenApi(
+  req: IncomingMessage,
+  opts: OpenApiRunOpts,
+): Promise<{ status: number; body?: unknown; stream?: Response }> {
+  try {
+    const { user, token } = await requireOpenApiUser(req);
+    return await opts.run(user, token);
+  } catch (error) {
+    const mapped = jsonError(error);
+    return { status: mapped.status, body: mapped.body };
+  }
+}
+
+/** 仅 fs 七工具：鉴权执行并写入调用日志。 */
 async function runAudited(
   req: IncomingMessage,
-  opts: {
-    operation: string;
-    method: string;
-    path: string;
-    arguments: RouteArgs;
-    run: (
-      user: PublicUser,
-      token: string,
-    ) => Promise<{ status: number; body: unknown; stream?: Response }>;
-  },
+  opts: OpenApiRunOpts,
 ): Promise<{ status: number; body?: unknown; stream?: Response }> {
   const started = Date.now();
   try {
@@ -120,6 +137,15 @@ function sandboxIdFromPath(segments: string[]): string | null {
   return segments[1];
 }
 
+function requireSandboxIdHeader(req: IncomingMessage): string {
+  const raw = req.headers['x-sandbox-id'];
+  const value = (Array.isArray(raw) ? raw[0] : raw)?.trim();
+  if (!value) {
+    throw new AuthError('缺少 x-sandbox-id', 400);
+  }
+  return value;
+}
+
 function parseListQuery(url: URL) {
   const tag = url.searchParams
     .getAll('tag')
@@ -152,7 +178,7 @@ async function dispatchOpenApi(
       from: url.searchParams.get('from') ?? undefined,
       to: url.searchParams.get('to') ?? undefined,
     };
-    const outcome = await runAudited(req, {
+    const outcome = await runOpenApi(req, {
       operation: 'getBilling',
       method: 'GET',
       path: '/billing',
@@ -173,7 +199,7 @@ async function dispatchOpenApi(
     const url = new URL(req.url ?? '/', 'http://localhost');
     if (method === 'GET') {
       const args = parseListQuery(url);
-      const outcome = await runAudited(req, {
+      const outcome = await runOpenApi(req, {
         operation: 'listSandboxes',
         method: 'GET',
         path: '/sandboxes',
@@ -192,7 +218,7 @@ async function dispatchOpenApi(
         raw && typeof raw === 'object' && !Array.isArray(raw)
           ? (raw as RouteArgs)
           : {};
-      const outcome = await runAudited(req, {
+      const outcome = await runOpenApi(req, {
         operation: 'createSandbox',
         method: 'POST',
         path: '/sandboxes',
@@ -210,7 +236,7 @@ async function dispatchOpenApi(
   const id = sandboxIdFromPath(segments);
   if (id && segments.length === 2) {
     if (method === 'GET') {
-      const outcome = await runAudited(req, {
+      const outcome = await runOpenApi(req, {
         operation: 'getSandbox',
         method: 'GET',
         path: '/sandboxes/{id}',
@@ -224,7 +250,7 @@ async function dispatchOpenApi(
       return true;
     }
     if (method === 'DELETE') {
-      const outcome = await runAudited(req, {
+      const outcome = await runOpenApi(req, {
         operation: 'deleteSandbox',
         method: 'DELETE',
         path: '/sandboxes/{id}',
@@ -241,7 +267,7 @@ async function dispatchOpenApi(
 
   const action = segments[2];
   if (id && action === 'stop' && method === 'POST') {
-    const outcome = await runAudited(req, {
+    const outcome = await runOpenApi(req, {
       operation: 'stopSandbox',
       method: 'POST',
       path: '/sandboxes/{id}/stop',
@@ -256,7 +282,7 @@ async function dispatchOpenApi(
   }
 
   if (id && action === 'resume' && method === 'POST') {
-    const outcome = await runAudited(req, {
+    const outcome = await runOpenApi(req, {
       operation: 'resumeSandbox',
       method: 'POST',
       path: '/sandboxes/{id}/resume',
@@ -271,7 +297,7 @@ async function dispatchOpenApi(
   }
 
   if (id && action === 'sync-template' && method === 'POST') {
-    const outcome = await runAudited(req, {
+    const outcome = await runOpenApi(req, {
       operation: 'syncSandboxFromTemplate',
       method: 'POST',
       path: '/sandboxes/{id}/sync-template',
@@ -291,7 +317,7 @@ async function dispatchOpenApi(
     if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'command' in raw) {
       args.command = (raw as { command: unknown }).command;
     }
-    const outcome = await runAudited(req, {
+    const outcome = await runOpenApi(req, {
       operation: 'runSandboxCommand',
       method: 'POST',
       path: '/sandboxes/{id}/commands',
@@ -313,7 +339,7 @@ async function dispatchOpenApi(
   if (id && action === 'artifacts' && method === 'GET') {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const path = url.searchParams.get('path') ?? '';
-    const outcome = await runAudited(req, {
+    const outcome = await runOpenApi(req, {
       operation: 'getSandboxArtifact',
       method: 'GET',
       path: '/sandboxes/{id}/artifacts',
@@ -338,6 +364,95 @@ async function dispatchOpenApi(
       await pipeWebStream(res, outcome.stream);
       return true;
     }
+    sendJson(res, jsonOk(outcome.body, { status: outcome.status }));
+    return true;
+  }
+
+  if (segments[0] === 'fs' && segments.length === 2 && method === 'POST') {
+    const op = segments[1]!;
+    const sandboxId = requireSandboxIdHeader(req);
+    const raw = await readJsonBody(req);
+    const args =
+      raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? { ...(raw as RouteArgs), sandboxId }
+        : { sandboxId };
+
+    const runners: Record<
+      string,
+      {
+        operation: string;
+        run: (
+          user: PublicUser,
+          token: string,
+        ) => Promise<{ status: number; body: unknown }>;
+      }
+    > = {
+      read: {
+        operation: 'fsRead',
+        run: async (user, token) => ({
+          status: 200,
+          body: await sandboxService.fsRead(user.username, token, sandboxId, raw),
+        }),
+      },
+      write: {
+        operation: 'fsWrite',
+        run: async (user, token) => ({
+          status: 200,
+          body: await sandboxService.fsWrite(user.username, token, sandboxId, raw),
+        }),
+      },
+      edit: {
+        operation: 'fsEdit',
+        run: async (user, token) => ({
+          status: 200,
+          body: await sandboxService.fsEdit(user.username, token, sandboxId, raw),
+        }),
+      },
+      delete: {
+        operation: 'fsDelete',
+        run: async (user, token) => ({
+          status: 200,
+          body: await sandboxService.fsDelete(user.username, token, sandboxId, raw),
+        }),
+      },
+      grep: {
+        operation: 'fsGrep',
+        run: async (user, token) => ({
+          status: 200,
+          body: await sandboxService.fsGrep(user.username, token, sandboxId, raw),
+        }),
+      },
+      glob: {
+        operation: 'fsGlob',
+        run: async (user, token) => ({
+          status: 200,
+          body: await sandboxService.fsGlob(user.username, token, sandboxId, raw),
+        }),
+      },
+      exec: {
+        operation: 'fsExec',
+        run: async (user, token) => ({
+          status: 200,
+          body: await sandboxService.runSandboxCommand(
+            user.username,
+            token,
+            sandboxId,
+            raw,
+          ),
+        }),
+      },
+    };
+
+    const runner = runners[op];
+    if (!runner) return false;
+
+    const outcome = await runAudited(req, {
+      operation: runner.operation,
+      method: 'POST',
+      path: `/fs/${op}`,
+      arguments: args,
+      run: runner.run,
+    });
     sendJson(res, jsonOk(outcome.body, { status: outcome.status }));
     return true;
   }

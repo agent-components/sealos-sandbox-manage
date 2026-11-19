@@ -44,6 +44,14 @@ import {
   contentDisposition,
   openSandboxArtifact,
 } from './artifact';
+import {
+  deleteSandboxFile,
+  editSandboxFile,
+  globSandbox,
+  grepSandbox,
+  readSandboxText,
+  writeSandboxFile,
+} from './agent-fs';
 import type { JsonResponse } from '../errors/response';
 import { jsonOk } from '../errors/response';
 
@@ -376,6 +384,113 @@ export async function runSandboxCommand(
     stdout: result.stdout,
     stderr: result.stderr,
   };
+}
+
+function asRecord(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+  return {};
+}
+
+export async function fsRead(
+  _username: string,
+  token: string | null,
+  id: string,
+  raw: unknown,
+) {
+  bindBearerToken(token);
+  const body = asRecord(raw);
+  const path = String(body.path ?? '');
+  const offset = body.offset === undefined ? undefined : Number(body.offset);
+  const limit = body.limit === undefined ? undefined : Number(body.limit);
+  return readSandboxText(id, path, {
+    offset: Number.isFinite(offset) ? offset : undefined,
+    limit: Number.isFinite(limit) ? limit : undefined,
+  });
+}
+
+export async function fsWrite(
+  _username: string,
+  token: string | null,
+  id: string,
+  raw: unknown,
+) {
+  bindBearerToken(token);
+  const body = asRecord(raw);
+  return writeSandboxFile(id, String(body.path ?? ''), String(body.contents ?? ''));
+}
+
+export async function fsEdit(
+  _username: string,
+  token: string | null,
+  id: string,
+  raw: unknown,
+) {
+  bindBearerToken(token);
+  const body = asRecord(raw);
+  return editSandboxFile(
+    id,
+    String(body.path ?? ''),
+    String(body.old_string ?? body.oldString ?? ''),
+    String(body.new_string ?? body.newString ?? ''),
+    Boolean(body.replace_all ?? body.replaceAll ?? false),
+  );
+}
+
+export async function fsDelete(
+  _username: string,
+  token: string | null,
+  id: string,
+  raw: unknown,
+) {
+  bindBearerToken(token);
+  const body = asRecord(raw);
+  return deleteSandboxFile(id, String(body.path ?? ''));
+}
+
+export async function fsGrep(
+  _username: string,
+  token: string | null,
+  id: string,
+  raw: unknown,
+) {
+  bindBearerToken(token);
+  const body = asRecord(raw);
+  return grepSandbox(id, {
+    pattern: String(body.pattern ?? ''),
+    path: body.path === undefined ? undefined : String(body.path),
+    glob: body.glob === undefined ? undefined : String(body.glob),
+    caseInsensitive: Boolean(body.case_insensitive ?? body.caseInsensitive),
+    outputMode: (body.output_mode ?? body.outputMode) as
+      | 'content'
+      | 'files_with_matches'
+      | 'count'
+      | undefined,
+    context:
+      body.context === undefined ? undefined : Number(body.context),
+    headLimit:
+      body.head_limit === undefined && body.headLimit === undefined
+        ? undefined
+        : Number(body.head_limit ?? body.headLimit),
+    multiline: Boolean(body.multiline),
+  });
+}
+
+export async function fsGlob(
+  _username: string,
+  token: string | null,
+  id: string,
+  raw: unknown,
+) {
+  bindBearerToken(token);
+  const body = asRecord(raw);
+  const pattern = String(body.glob_pattern ?? body.globPattern ?? body.pattern ?? '');
+  const targetDirectory =
+    body.target_directory === undefined && body.targetDirectory === undefined
+      ? undefined
+      : String(body.target_directory ?? body.targetDirectory);
+  return globSandbox(id, pattern, targetDirectory);
 }
 
 export async function getSandboxLogs(username: string, id: string, query: {
