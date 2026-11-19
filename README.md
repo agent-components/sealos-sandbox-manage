@@ -10,7 +10,13 @@ packages/prisma   Prisma schema 与 client（@sealos-sandbox-manage/prisma）
 
 控制台走 tRPC。对外沙箱接口在 `/api/openapi`（文档：`/api/openapi.json`）。登录会话写在 `sandbox.users`。
 
-作为 Harness 子应用时需配置 `HARNESS_ORIGIN`：iframe 带 `harness_sso` / `theme`，服务端向宿主兑票建会话；公开菜单 `GET /api/harness/menus`、工具 `GET /api/harness/tools`。独立运行可不配该项，仍用账号密码登录。
+作为 Harness 子应用时需配置 `HARNESS_ORIGIN`：
+
+- 嵌入页：iframe 带 `harness_sso` / `theme`，组件向宿主 `POST /api/sso/exchange` 兑票
+- 宿主主动调 OpenAPI：宿主 `POST {本组件}/api/auth/sso` 换短期会话，再带 `Authorization: Bearer` 调 `/api/openapi/*`
+- 公开发现：`GET /api/harness/menus`、`GET /api/harness/tools`
+
+独立运行可不配 `HARNESS_ORIGIN`，仍用账号密码登录。需要本服务自己对外提供 MCP 时，设置 `MCP_ENABLED=true`（默认关闭），端点为 `POST /api/mcp`。工具与 `GET /api/harness/tools` 相同；文件类工具的目标沙箱仍由请求头 `x-sandbox-id` 指定，认证为登录会话的 `Authorization: Bearer`。嵌入 Harness 时由宿主调用工具，保持 `MCP_ENABLED` 关闭。
 
 ## 环境要求
 

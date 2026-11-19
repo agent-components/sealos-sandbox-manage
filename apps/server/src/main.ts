@@ -1,4 +1,4 @@
-import './infrastructure/env';
+import { isMcpEnabled } from './infrastructure/env';
 import { createServer } from './server';
 import { startIdleSweeper } from './modules/sandboxes/idle-sweeper';
 import { startLogRetention } from './modules/callLogs/retention';
@@ -10,6 +10,9 @@ server.listen(port, () => {
   console.log(`API server listening on http://localhost:${port}`);
   console.log(`tRPC endpoint: http://localhost:${port}/trpc`);
   console.log(`OpenAPI document: http://localhost:${port}/api/openapi.json`);
+  if (isMcpEnabled()) {
+    console.log(`MCP endpoint: http://localhost:${port}/api/mcp`);
+  }
   startIdleSweeper();
   startLogRetention();
 });

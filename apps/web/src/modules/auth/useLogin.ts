@@ -3,7 +3,12 @@ import { useEffect, useState } from 'react';
 import { setUnauthorizedHandler } from '../../api/errorLink';
 import { trpc } from '../../api/trpc';
 import { getAppMode } from '../runtime/embed';
-import { readHarnessSsoCode, stripHarnessSsoFromUrl } from '../runtime/harness-query';
+import {
+  exchangeHarnessSsoOnce,
+  peekHarnessSsoInflight,
+  peekHarnessSsoSuccess,
+  takeHarnessSsoCode,
+} from './harness-sso-client';
 import { clearToken, readToken, writeToken, type Session } from './session';
 
 const EMBED_OPEN_HINT = '请从 Harness Admin 打开';
@@ -23,6 +28,21 @@ function loginErrorMessage(error: unknown) {
   } catch {
     return message || '登录失败';
   }
+}
+
+async function restoreEmbeddedSession() {
+  const cached = peekHarnessSsoSuccess();
+  if (cached) return cached.user;
+
+  const pending = peekHarnessSsoInflight();
+  if (pending) {
+    const result = await pending;
+    return result.user;
+  }
+
+  const token = readToken();
+  if (!token) return null;
+  return trpc.auth.me.query(undefined, { context: { silent: true } });
 }
 
 export function useLogin() {
@@ -46,27 +66,25 @@ export function useLogin() {
 
     async function boot() {
       if (mode === 'embedded') {
-        const code = readHarnessSsoCode();
-        if (!code) {
-          clearToken();
-          if (!cancelled) {
-            setSession(null);
-            setError(EMBED_OPEN_HINT);
-            setReady(true);
-          }
-          return;
-        }
+        const code = takeHarnessSsoCode();
 
         try {
-          const result = await trpc.auth.harnessSso.mutate(
-            { code },
-            { context: { silent: true } },
-          );
-          if (cancelled) return;
-          writeToken(result.token);
-          setSession(result.user);
-          setError('');
-          stripHarnessSsoFromUrl();
+          if (code) {
+            const result = await exchangeHarnessSsoOnce(code);
+            if (cancelled) return;
+            setSession(result.user);
+            setError('');
+          } else {
+            const user = await restoreEmbeddedSession();
+            if (cancelled) return;
+            if (user) {
+              setSession(user);
+              setError('');
+            } else {
+              setSession(null);
+              setError(EMBED_OPEN_HINT);
+            }
+          }
         } catch {
           clearToken();
           if (!cancelled) {

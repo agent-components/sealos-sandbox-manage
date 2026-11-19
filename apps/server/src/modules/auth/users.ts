@@ -12,8 +12,10 @@ export type PublicUser = {
   role: UserRole;
 };
 
-/** 与现有登录一致：token 为 32 字节十六进制，30 天后过期。 */
+/** 控制台密码登录：token 为 32 字节十六进制，30 天后过期。 */
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+/** 宿主 OpenAPI / 嵌入 SSO：约 8 小时，再次兑换成功会顺延。 */
+const HARNESS_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 function isUserToken(value: string): boolean {
   return /^[a-f0-9]{64}$/i.test(value);
@@ -56,6 +58,15 @@ export async function authenticateUser(
   return toPublicUser(row);
 }
 
+/** 当前登录用户写在 sandbox.users.token 上的令牌。 */
+export async function readUserToken(username: string): Promise<string | null> {
+  const row = await prisma.user.findUnique({
+    where: { account: username },
+    select: { token: true },
+  });
+  return row?.token ?? null;
+}
+
 export async function findUser(username: string): Promise<PublicUser | null> {
   const row = await prisma.user.findUnique({
     where: { account: username },
@@ -80,6 +91,39 @@ export async function issueUserToken(username: string): Promise<string> {
 
   const token = randomBytes(32).toString("hex");
   const expiredAt = new Date(Date.now() + TOKEN_TTL_MS);
+  const updated = await prisma.user.updateMany({
+    where: { account: username, status: "ACTIVE" },
+    data: { token, tokenExpiredAt: expiredAt },
+  });
+  if (updated.count === 0) {
+    throw new Error("无法写入登录 token");
+  }
+  return token;
+}
+
+/**
+ * Harness SSO 会话：复用未过期 token 并顺延至约 8 小时；
+ * 无有效 token 则新签发。
+ */
+export async function issueHarnessSessionToken(username: string): Promise<string> {
+  const existing = await prisma.user.findFirst({
+    where: {
+      account: username,
+      status: "ACTIVE",
+    },
+    select: { token: true, tokenExpiredAt: true },
+  });
+
+  const now = Date.now();
+  const current = existing?.token;
+  const stillValid =
+    current &&
+    isUserToken(current) &&
+    existing.tokenExpiredAt != null &&
+    existing.tokenExpiredAt.getTime() > now;
+  const token = stillValid ? current : randomBytes(32).toString("hex");
+  const expiredAt = new Date(now + HARNESS_SESSION_TTL_MS);
+
   const updated = await prisma.user.updateMany({
     where: { account: username, status: "ACTIVE" },
     data: { token, tokenExpiredAt: expiredAt },

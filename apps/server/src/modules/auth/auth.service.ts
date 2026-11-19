@@ -5,7 +5,10 @@ import {
   type PublicUser,
 } from '../auth/users';
 import { AuthError } from '../sealos/errors';
-import { loginWithHarnessSso as exchangeHarnessSso } from './harness-sso';
+import {
+  loginWithHarnessSso as exchangeHarnessSso,
+  toPublicUser,
+} from './harness-sso';
 
 export async function loginWithPassword(
   username: string,
@@ -19,10 +22,12 @@ export async function loginWithPassword(
   return { user, token };
 }
 
+/** 嵌入页 tRPC：内部仍用 PublicUser（username）。 */
 export async function loginWithHarnessSso(
   code: string,
 ): Promise<{ user: PublicUser; token: string }> {
-  return exchangeHarnessSso(code);
+  const result = await exchangeHarnessSso(code);
+  return { token: result.token, user: toPublicUser(result.user) };
 }
 
 export async function logoutWithToken(token: string | null): Promise<void> {

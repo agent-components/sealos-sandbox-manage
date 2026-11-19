@@ -1,6 +1,8 @@
+import { TRPCError } from '@trpc/server';
 import { publicProcedure, protectedProcedure, router } from '../../trpc/trpc';
 import { harnessSsoInputSchema, loginInputSchema } from './auth.schema';
 import { loginWithHarnessSso, loginWithPassword, logoutWithToken } from './auth.service';
+import { readUserToken } from './users';
 import { toTrpcError } from '../errors/map';
 
 export const authRouter = router({
@@ -19,6 +21,13 @@ export const authRouter = router({
     }
   }),
   me: protectedProcedure.query(({ ctx }) => ctx.user),
+  token: protectedProcedure.query(async ({ ctx }) => {
+    const token = await readUserToken(ctx.user.username);
+    if (!token) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: '当前用户没有令牌' });
+    }
+    return { token };
+  }),
   logout: protectedProcedure.mutation(async ({ ctx }) => {
     await logoutWithToken(ctx.token);
   }),

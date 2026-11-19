@@ -3,8 +3,10 @@ import { fileURLToPath } from 'node:url';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 import cors from 'cors';
 import { servePublic } from './infrastructure/static';
+import { handleAuthSsoHttp } from './modules/auth/sso.http';
 import { handleHarnessMenusHttp } from './modules/harness/menus.http';
 import { handleHarnessToolsHttp } from './modules/harness/tools.http';
+import { handleMcpHttp } from './modules/mcp/mcp.http';
 import { handleOpenApiHttp } from './modules/openapi/openapi.http';
 import { createContext } from './trpc/context';
 import { appRouter } from './router';
@@ -16,8 +18,10 @@ export function createServer() {
   return createHTTPServer({
     middleware(req, res, next) {
       void (async () => {
+        if (await handleAuthSsoHttp(req, res)) return;
         if (await handleHarnessMenusHttp(req, res)) return;
         if (await handleHarnessToolsHttp(req, res)) return;
+        if (await handleMcpHttp(req, res)) return;
         if (await handleOpenApiHttp(req, res)) return;
         const path = (req.url ?? '/').split('?')[0] ?? '/';
         if (path === '/trpc' || path.startsWith('/trpc/')) {

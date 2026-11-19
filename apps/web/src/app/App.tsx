@@ -12,6 +12,7 @@ import { getAppMode } from '@/modules/runtime/embed';
 import { useLogin } from '@/modules/auth/useLogin';
 import { BillingModal } from './components/BillingModal';
 import { ClusterSettingsModal } from './components/ClusterSettingsModal';
+import { McpConnectModal } from './components/McpConnectModal';
 import { SystemSettingsModal } from './components/SystemSettingsModal';
 import { EmbeddedBlockedPage } from '@/pages/login/EmbeddedBlockedPage';
 import { LoginPage } from '@/pages/login/LoginPage';
@@ -72,6 +73,7 @@ function Shell() {
   const [clusterOpen, setClusterOpen] = useState(false);
   const [systemOpen, setSystemOpen] = useState(false);
   const [billingOpen, setBillingOpen] = useState(false);
+  const [mcpOpen, setMcpOpen] = useState(false);
   const [openSandboxViewId, setOpenSandboxViewId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -109,6 +111,11 @@ function Shell() {
   const { themeUserProfileItem } = theme;
   const profileItems = useMemo(() => {
     const items = [
+      {
+        key: 'mcp',
+        label: '接入 MCP',
+        onClick: () => setMcpOpen(true),
+      },
       {
         key: 'billing',
         label: '用量账单',
@@ -170,6 +177,7 @@ function Shell() {
 
   const shellModals = (
     <>
+      <McpConnectModal open={mcpOpen} onClose={() => setMcpOpen(false)} />
       <BillingModal open={billingOpen} onClose={() => setBillingOpen(false)} />
       {session.role === 'ADMIN' ? (
         <>
