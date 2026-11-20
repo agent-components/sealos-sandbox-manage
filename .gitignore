@@ -16,3 +16,4 @@ dist/
 .sealos-kubeconfig.yaml
 .data/
 apps/server/public/
+.next/
