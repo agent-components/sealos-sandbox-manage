@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { UserRole } from '@sealos-sandbox-manage/prisma';
-import { getHarnessOrigin } from '../../infrastructure/env';
+import { getHarnessComponentId, getHarnessOrigin } from '../../infrastructure/env';
 import { AuthError } from '../sealos/errors';
 import { issueHarnessSessionToken, type PublicUser } from './users';
 import { db as prisma } from '../../infrastructure/database';
@@ -44,6 +44,11 @@ async function exchangeWithHarness(code: string): Promise<ExchangeOk> {
     throw new AuthError('请从 Harness Admin 打开', 400);
   }
 
+  const componentId = getHarnessComponentId();
+  if (!componentId) {
+    throw new Error('未配置 HARNESS_COMPONENT_ID');
+  }
+
   let response: Response;
   try {
     response = await fetch(`${origin}/api/sso/exchange`, {
@@ -72,7 +77,12 @@ async function exchangeWithHarness(code: string): Promise<ExchangeOk> {
     throw new AuthError('请从 Harness Admin 打开', 400);
   }
 
-  return body as ExchangeOk;
+  const result = body as ExchangeOk;
+  if (result.componentId !== componentId) {
+    throw new AuthError('请从 Harness Admin 打开', 400);
+  }
+
+  return result;
 }
 
 /** 按宿主账号同步本地用户（不接受密码登录的占位密码）。 */

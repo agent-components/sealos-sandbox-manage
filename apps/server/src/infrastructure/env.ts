@@ -25,6 +25,15 @@ export function getHarnessOrigin(): string | null {
 }
 
 /**
+ * 本组件在 Harness Admin 中的组件标识。嵌入子应用做 SSO 兑换时必填，
+ * 用于校验宿主票据确实签发给本组件。
+ */
+export function getHarnessComponentId(): string | null {
+  const componentId = process.env.HARNESS_COMPONENT_ID?.trim();
+  return componentId || null;
+}
+
+/**
  * 独立运行时由本服务提供 MCP（POST /api/mcp）。
  * 默认关闭。嵌入 Harness 时由宿主提供工具调用，保持关闭即可。
  */

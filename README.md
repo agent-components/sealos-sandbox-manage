@@ -10,9 +10,9 @@ packages/prisma   Prisma schema 与 client（@sealos-sandbox-manage/prisma）
 
 控制台走 tRPC。对外沙箱接口在 `/api/openapi`（文档：`/api/openapi.json`）。登录会话写在 `sandbox.users`。
 
-作为 Harness 子应用时需配置 `HARNESS_ORIGIN`：
+作为 Harness 子应用时需配置 `HARNESS_ORIGIN` 与 `HARNESS_COMPONENT_ID`：
 
-- 嵌入页：iframe 带 `harness_sso` / `theme`，组件向宿主 `POST /api/sso/exchange` 兑票
+- 嵌入页：iframe 带 `harness_sso` / `theme`，组件向宿主 `POST /api/sso/exchange` 兑票，并校验返回的 `componentId` 与本组件一致
 - 宿主主动调 OpenAPI：宿主 `POST {本组件}/api/auth/sso` 换短期会话，再带 `Authorization: Bearer` 调 `/api/openapi/*`
 - 公开发现：`GET /api/harness/menus`、`GET /api/harness/tools`
 
@@ -33,7 +33,7 @@ cd sealos-sandbox-manage
 cp apps/server/.env.example apps/server/.env
 cp packages/prisma/.env.example packages/prisma/.env
 # 两个文件填同一个 DATABASE_URL；服务端还可填 MinIO（调用日志结果）
-# 嵌入 Harness 时再配 HARNESS_ORIGIN；独立运行可不配
+# 嵌入 Harness 时再配 HARNESS_ORIGIN / HARNESS_COMPONENT_ID；独立运行可不配
 
 pnpm install
 pnpm db:init      # 建表并写入初始管理员 admin / admin123
