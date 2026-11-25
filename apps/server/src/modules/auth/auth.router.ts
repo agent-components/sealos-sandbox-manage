@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { publicProcedure, protectedProcedure, router } from '../../trpc/trpc';
+import { isMcpEnabled } from '../../infrastructure/env';
 import { harnessSsoInputSchema, loginInputSchema } from './auth.schema';
 import { loginWithHarnessSso, loginWithPassword, logoutWithToken } from './auth.service';
 import { readUserToken } from './users';
@@ -21,6 +22,8 @@ export const authRouter = router({
     }
   }),
   me: protectedProcedure.query(({ ctx }) => ctx.user),
+  /** 前端运行时开关：MCP 入口不区分嵌入 / 独立模式。 */
+  config: publicProcedure.query(() => ({ mcpEnabled: isMcpEnabled() })),
   token: protectedProcedure.query(async ({ ctx }) => {
     const token = await readUserToken(ctx.user.username);
     if (!token) {

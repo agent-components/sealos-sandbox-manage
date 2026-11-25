@@ -140,15 +140,6 @@ function sandboxIdFromPath(segments: string[]): string | null {
   return segments[1];
 }
 
-function requireSandboxIdHeader(req: IncomingMessage): string {
-  const raw = req.headers['x-sandbox-id'];
-  const value = (Array.isArray(raw) ? raw[0] : raw)?.trim();
-  if (!value) {
-    throw new AuthError('缺少 x-sandbox-id', 400);
-  }
-  return value;
-}
-
 function parseOptionalBool(value: string | null): boolean | undefined {
   if (value == null || value.trim() === '') return undefined;
   const text = value.trim().toLowerCase();
@@ -425,12 +416,17 @@ async function dispatchOpenApi(
 
   if (segments[0] === 'fs' && segments.length === 2 && method === 'POST') {
     const op = segments[1]!;
-    const sandboxId = requireSandboxIdHeader(req);
     const raw = await readJsonBody(req);
-    const args =
+    const body =
       raw && typeof raw === 'object' && !Array.isArray(raw)
-        ? { ...(raw as RouteArgs), sandboxId }
-        : { sandboxId };
+        ? (raw as RouteArgs)
+        : {};
+    const sandboxId =
+      typeof body.sandbox_id === 'string' ? body.sandbox_id.trim() : '';
+    if (!sandboxId) {
+      sendJson(res, jsonOk({ error: '缺少参数 sandbox_id' }, { status: 400 }));
+      return true;
+    }
 
     const runners: Record<
       string,
@@ -500,7 +496,7 @@ async function dispatchOpenApi(
       operation: runner.operation,
       method: 'POST',
       path: `/fs/${op}`,
-      arguments: args,
+      arguments: body,
       run: runner.run,
     });
     sendJson(res, jsonOk(outcome.body, { status: outcome.status }));

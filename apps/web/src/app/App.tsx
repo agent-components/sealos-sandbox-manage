@@ -1,11 +1,13 @@
 import {
+  ApiOutlined,
   AppstoreOutlined,
   CloudServerOutlined,
   FileSearchOutlined,
 } from '@ant-design/icons';
-import { App as AntdApp } from 'antd';
+import { App as AntdApp, FloatButton } from 'antd';
 import { Layout, useLayoutTabs, type LayoutMenuSection } from 'listpage-components';
 import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { trpc } from '@/api/trpc';
 import { useSandboxTheme, AntdProvider } from '@/components/AntdProvider';
 import { PRODUCT_NAME } from '@/modules/product';
 import { getAppMode } from '@/modules/runtime/embed';
@@ -74,7 +76,23 @@ function Shell() {
   const [systemOpen, setSystemOpen] = useState(false);
   const [billingOpen, setBillingOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
+  const [mcpEnabled, setMcpEnabled] = useState(false);
   const [openSandboxViewId, setOpenSandboxViewId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    trpc.auth.config
+      .query(undefined, { context: { silent: true } })
+      .then((config) => {
+        if (!cancelled) setMcpEnabled(config.mcpEnabled);
+      })
+      .catch(() => {
+        // 读取失败按关闭处理。
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.appMode = appMode;
@@ -111,11 +129,15 @@ function Shell() {
   const { themeUserProfileItem } = theme;
   const profileItems = useMemo(() => {
     const items = [
-      {
-        key: 'mcp',
-        label: '接入 MCP',
-        onClick: () => setMcpOpen(true),
-      },
+      ...(mcpEnabled
+        ? [
+            {
+              key: 'mcp',
+              label: '接入 MCP',
+              onClick: () => setMcpOpen(true),
+            },
+          ]
+        : []),
       {
         key: 'billing',
         label: '用量账单',
@@ -138,7 +160,7 @@ function Shell() {
       );
     }
     return items;
-  }, [session?.role, themeUserProfileItem]);
+  }, [mcpEnabled, session?.role, themeUserProfileItem]);
 
   if (!ready) {
     return null;
@@ -194,6 +216,14 @@ function Shell() {
         <div className="app-embed">
           <PageSuspense>{content}</PageSuspense>
         </div>
+        {mcpEnabled ? (
+          <FloatButton
+            icon={<ApiOutlined />}
+            tooltip="接入 MCP"
+            onClick={() => setMcpOpen(true)}
+            style={{ insetInlineStart: 24, insetInlineEnd: 'auto' }}
+          />
+        ) : null}
         {shellModals}
       </>
     );
